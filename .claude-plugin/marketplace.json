@@ -1,0 +1,11 @@
+{
+  "name": "pixelfarm",
+  "owner": { "name": "Pixelfarm", "email": "info@pixelfarm.it" },
+  "plugins": [
+    {
+      "name": "fable-director",
+      "source": "./fable-director",
+      "description": "Policy di delega efficiente: il top model dirige, l'esecuzione va al mezzo più economico adeguato. Kernel always-on, corpo on-demand, playbook di apprendimento, telemetria token."
+    }
+  ]
+}
