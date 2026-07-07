@@ -1,159 +1,158 @@
 # 🎬 fable-director
 
-**Governance dei token per Claude Code.** Il top model dirige — pianifica, giudica, verifica — e manda l'esecuzione al mezzo più economico adeguato: prima uno script deterministico, poi un modello medio, il top model solo dove serve davvero.
+**Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
 ![version](https://img.shields.io/badge/version-1.6.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
-> Come nella bottega rinascimentale: il maestro disegna e rifinisce, gli apprendisti eseguono, la bottega accumula mestiere. Il plugin porta questa disciplina dentro Claude Code — in modo **misurabile** e **imposto da hook**, non affidato alla buona volontà.
+> Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
 ---
 
-## Il problema
+## The problem
 
-Un agente potente tende a fare *tutto* con sé stesso: legge file enormi, ripete lavoro deterministico che uno script farebbe a costo zero, delega a raffica senza sapere se conviene, brucia context. Il costo esplode e non te ne accorgi finché non arriva il conto (o il rate limit).
+A powerful agent tends to do *everything* itself: it reads huge files, repeats deterministic work a script would do for free, delegates in bursts without knowing whether it pays off, burns context. Cost explodes and you don't notice until the bill (or the rate limit) arrives.
 
-## La soluzione
+## The solution
 
-fable-director inietta una **policy di routing sempre attiva** e la fa **rispettare da hook deterministici**. Non è un consiglio nel prompt che il modello può ignorare: è enforcement.
+fable-director injects an **always-on routing policy** and makes it **enforced by deterministic hooks**. It's not a hint in the prompt the model can ignore: it's enforcement.
 
 ---
 
-## ⭐ Vantaggi in breve
+## ⭐ Advantages at a glance
 
-| | Vantaggio | Come |
+| | Advantage | How |
 |---|---|---|
-| 🧭 | **Ogni task va sul mezzo giusto** | Kernel a 6 assi di routing iniettato a ogni sessione (~500 token): inline vs delega vs script vs workflow, con override d'ordine chiaro |
-| 💰 | **Lavoro deterministico a costo zero** | La policy spinge a promuovere il lavoro ripetibile in script — zero token di modello invece di N chiamate |
-| 🛡️ | **Budget imposto, non suggerito** | Pre-budget machine-readable + hook `Stop` che blocca in modo deterministico a 3× e obbliga il post-mortem. Anti-Goodhart per costruzione |
-| 📊 | **Telemetria reale, zero overhead** | Hook `SessionEnd` logga token, cache hit ratio, overhead di delega su SQLite — senza spendere token di modello |
-| 🧠 | **La bottega impara** | Playbook di euristiche che sopravvive agli update: `[candidata]` → confermata alla 2ª occorrenza, contatori uses/ok/ko |
-| 📟 | **Sai sempre a che punto sei** | Statusline con modello, context %, quota piano 5h e 7d con orari di reset, stato budget |
-| 🧾 | **Rendiconto token onesto** | Report dai transcript JSONL reali: costo per modello/main/subagenti, metriche cache, flag ≥3× |
+| 🧭 | **Every task goes to the right means** | A 6-axis routing kernel injected each session (~500 tokens): inline vs delegate vs script vs workflow, with a clear precedence order |
+| 💰 | **Deterministic work at zero cost** | The policy pushes repeatable work into scripts — zero model tokens instead of N calls |
+| 🛡️ | **Budget enforced, not suggested** | Machine-readable pre-budget + a `Stop` hook that deterministically blocks at 3× and forces a post-mortem. Anti-Goodhart by construction |
+| 📊 | **Real telemetry, zero overhead** | A `SessionEnd` hook logs tokens, cache hit ratio, delegation overhead to SQLite — without spending model tokens |
+| 🧠 | **The workshop learns** | A heuristics playbook that survives updates: `[candidate]` → confirmed on the 2nd occurrence, uses/ok/ko counters |
+| 📟 | **You always know where you stand** | A statusline with model, context %, 5h and 7d plan quotas with reset times, budget state |
+| 🧾 | **Honest token accounting** | A report from real JSONL transcripts: cost per model/main/subagents, cache metrics, ≥3× flags |
 
 ---
 
-## 💸 Quanto si risparmia?
+## 💸 How much do you save?
 
-Nessun numero magico: il risparmio dipende dal tuo mix di lavoro, e questo plugin
-è il primo a rifiutare le stime inventate. Ma sai **dove** nasce e puoi **misurarlo**.
+No magic number: savings depend on your work mix, and this plugin is the first to refuse made-up estimates. But you know **where** they come from and you can **measure** them.
 
-**Da dove nasce il risparmio:**
+**Where the savings come from:**
 
-- **Lavoro deterministico → script:** un batch ripetibile eseguito da uno script costa **0 token di modello**, contro le *N* chiamate di un agente naïve. Su lavoro deterministico ricorrente il taglio è vicino al 100%.
-- **Cardinalità → modello medio:** *N* item simili vanno su un modello medio raggruppato invece del top model, con canary verificata prima del fan-out.
-- **Cache locality:** il veto di costo evita cold start di subagenti e invalidazioni di cache che spesso costano più del lavoro delegato.
-- **Kernel leggero:** ~500 token a sessione sempre attivi, corpo pesante caricato solo quando serve.
+- **Deterministic work → script:** a repeatable batch run by a script costs **0 model tokens**, versus the *N* calls of a naïve agent. On recurring deterministic work the cut is close to 100%.
+- **Cardinality → mid-tier model:** *N* similar items go to a grouped mid-tier model instead of the top model, with a canary verified before the fan-out.
+- **Cache locality:** a cost veto avoids subagent cold starts and cache invalidations that often cost more than the delegated work itself.
+- **Lightweight kernel:** ~500 tokens per session always on, the heavy body loaded only when needed.
 
-**Misuralo sul tuo lavoro reale** — invece di crederci sulla parola:
+**Measure it on your real work** — instead of taking our word for it:
 
 ```bash
 python3 fable-director/skills/delega-efficiente/tools/session-cost-report.py
 ```
 
-Legge i transcript JSONL veri e stampa costo per modello/main/subagenti, cache hit ratio
-e overhead di delega. L'hook `SessionEnd` accumula gli stessi dati su SQLite: il tuo
-risparmio è un dato che leggi, non una percentuale su un banner.
+It reads the real JSONL transcripts and prints cost per model/main/subagents, cache hit ratio
+and delegation overhead. The `SessionEnd` hook accumulates the same data to SQLite: your
+savings are a figure you read, not a percentage on a banner.
 
-> Esempio illustrativo (non un benchmark): convertire 12 file con uno script promosso →
-> ~0 token di modello, contro ~12 giri di modello se lo facesse l'agente a mano.
+> Illustrative example (not a benchmark): converting 12 files with a promoted script →
+> ~0 model tokens, versus ~12 model round-trips if the agent did it by hand.
 
-**Benchmark riproducibile.** In [`benchmarks/`](benchmarks/) c'è un harness A/B (stesso task
-*senza* e *con* la policy, token letti dall'output reale di `claude -p`, N run per lato, 3 forme
-di task). La percentuale misurata verrà pubblicata qui con metodologia, N e spread —
-non prima di averla misurata davvero.
+**Reproducible benchmark.** [`benchmarks/`](benchmarks/) contains an A/B harness (same task
+*without* and *with* the policy, tokens read from the real `claude -p` output, N runs per side,
+3 task shapes). The measured percentage will be published here with methodology, N and spread —
+not before it's actually been measured.
 
-<!-- BENCH:RESULT — sostituire quando il benchmark è stato eseguito -->
-> 📐 *Misura in corso.* Lancia tu stesso: `cd benchmarks && RUNS=3 bash run.sh`.
+<!-- BENCH:RESULT — replace once the benchmark has been run -->
+> 📐 *Measurement pending.* Run it yourself: `cd benchmarks && RUNS=3 bash run.sh`.
 
 ---
 
-## 📟 La statusline
+## 📟 The statusline
 
-Un colpo d'occhio su modello, context e quote di piano — così sai quando stai per sbattere sul rate limit **prima** che succeda:
+One glance at model, context and plan quotas — so you see the rate limit coming **before** it hits:
 
-![statusline fable-director](assets/statusline.svg)
+![fable-director statusline](assets/statusline.svg)
 
 ```
 [OPUS4.8] [CTX 5%] [5H 6%→19:40] [7D 70%→9 lug] [BDG ok]
 ```
 
-- `[OPUS4.8]` modello attivo
-- `[CTX 5%]` riempimento context window della conversazione
-- `[5H 6%→19:40]` quota piano finestra 5 ore + orario di reset locale (la "Current session" di `/usage`)
-- `[7D 70%→9 lug]` quota settimanale + data di reset
-- `[BDG ok]` stato del pre-budget fable-director (`ok` / `2×` / `3×`)
+- `[OPUS4.8]` active model
+- `[CTX 5%]` how full the conversation's context window is
+- `[5H 6%→19:40]` 5-hour plan-window quota + local reset time (the "Current session" in `/usage`)
+- `[7D 70%→9 lug]` weekly quota + reset date
+- `[BDG ok]` fable-director pre-budget state (`ok` / `2×` / `3×`)
 
-Soglie colore 60/80. Se hai il plugin **caveman**, il suo badge resta davanti.
+Color thresholds 60/80. If you have the **caveman** plugin, its badge stays in front.
 
-**Abilitala con un comando** (idempotente, merge-safe, path auto-risolto per ogni macchina):
+**Enable it with one command** (idempotent, merge-safe, path auto-resolved per machine):
 
 ```
 /fable-director:statusline
 ```
 
-Poi riavvia Claude Code. `--remove` per toglierla. Non tocca una statusLine di terzi già presente e fa backup di `settings.json`.
+Then restart Claude Code. `--remove` to take it out. It won't touch a third-party statusLine already present and it backs up `settings.json`.
 
 ---
 
-## 🚀 Installazione
+## 🚀 Installation
 
-**Da questo repo:**
+**From this repo:**
 
 ```bash
 claude plugin marketplace add frsorrentino/fable-director
 claude plugin install fable-director@pixelfarm --scope user
 ```
 
-Poi:
+Then:
 
-1. Inizializza il playbook (una tantum, vive fuori dal plugin così gli update non lo toccano):
-   copia `fable-director/playbook-template.md` in `~/.claude/delega-playbook.md`.
-2. Abilita la statusline: `/fable-director:statusline` → riavvia Claude Code.
+1. Initialize the playbook (one-off; it lives outside the plugin so updates don't touch it):
+   copy `fable-director/playbook-template.md` to `~/.claude/delega-playbook.md`.
+2. Enable the statusline: `/fable-director:statusline` → restart Claude Code.
 
-Dettagli completi, merge degli hook a mano e casi limite in **[INSTALL.md](INSTALL.md)**.
-
----
-
-## 🧭 I 6 assi di routing
-
-Il kernel decide dove va ogni task, con precedenza dall'alto (un asse più in alto vince):
-
-1. **Interattività** — live / visivo / iterazione con l'utente? → top model inline, mai delega.
-2. **Costo dell'errore** — codice in produzione, numeri/testo verso il cliente, scritture irreversibili? → top model. Nel dubbio *è* sensibile alla qualità.
-3. **Determinismo** — il cuore lo fa il codice? → script, zero token di modello.
-4. **Cardinalità** — N item simili? → workflow con modello medio raggruppato, schema JSON forzato, fan-out 1+(N-1): una canary verificata **prima** delle altre.
-5. **Verificabilità** — test oggettivo? → assert deterministici; se no → verifica avversariale per finding.
-6. **Località di cache** — ogni subagente paga un cold start; cambiare modello invalida la cache. Veto di costo sulle rotte borderline.
-
-**Mai delegare:** debugging interattivo, estetica, numeri/testo verso il cliente, scritture in produzione senza backup.
+Full details, manual hook merge and edge cases in **[INSTALL.md](INSTALL.md)**.
 
 ---
 
-## 🧩 Componenti
+## 🧭 The 6 routing axes
 
-| Pezzo | Ruolo |
+The kernel decides where each task goes, top-down (a higher axis wins):
+
+1. **Interactivity** — live / visual / iterating with the user? → top model inline, never delegate.
+2. **Cost of error** — production code, client-facing numbers/wording, irreversible writes? → top model. When in doubt, it *is* quality-sensitive.
+3. **Determinism** — is the core doable by code? → script, zero model tokens.
+4. **Cardinality** — N similar items? → a workflow with a grouped mid-tier model, forced JSON schema, fan-out 1+(N-1): one canary verified **before** the rest.
+5. **Verifiability** — an objective test? → deterministic assertions; if none → adversarial verification per finding.
+6. **Cache locality** — every subagent pays a cold start; switching model invalidates the cache. A cost veto on borderline routes.
+
+**Never delegate:** interactive debugging, aesthetics, client-facing numbers/wording, production writes without a backup.
+
+---
+
+## 🧩 Components
+
+| Piece | Role |
 |---|---|
-| **Kernel** (hook SessionStart) | Inietta i 6 assi + never-delegate a ogni sessione, ~500 token |
-| **Skill `delega-efficiente`** | Policy completa on-demand: delegation contract, pre-budget falsificabile, rule-of-3 best-of-3, promozione script, regole playbook |
-| **Hook `Stop` (budget-check)** | Enforcement deterministico del 3×: confronta token effettivi col budget aperto, blocca la chiusura del turno e impone il post-mortem |
-| **Hook `SessionEnd` (telemetria)** | Logga token e metriche cache/delega su SQLite, zero token di modello |
-| **Playbook** | Euristiche apprese che sopravvivono agli update |
-| **`session-cost-report.py`** | Rendiconto token dai transcript JSONL reali |
-| **Statusline + installer** | `/fable-director:statusline` scrive la statusLine in settings.json, idempotente e merge-safe |
+| **Kernel** (SessionStart hook) | Injects the 6 axes + never-delegate each session, ~500 tokens |
+| **Skill `delega-efficiente`** | Full policy on-demand: delegation contract, falsifiable pre-budget, rule-of-3 best-of-3, script promotion, playbook rules |
+| **`Stop` hook (budget-check)** | Deterministic 3× enforcement: compares actual tokens against the open budget, blocks the turn from closing and imposes the post-mortem |
+| **`SessionEnd` hook (telemetry)** | Logs tokens and cache/delegation metrics to SQLite, zero model tokens |
+| **Playbook** | Learned heuristics that survive updates |
+| **`session-cost-report.py`** | Token report from the real JSONL transcripts |
+| **Statusline + installer** | `/fable-director:statusline` writes the statusLine to settings.json, idempotent and merge-safe |
 
-Architettura: **kernel leggero always-on** (poco context ogni sessione) + **corpo pesante on-demand** (caricato solo quando gli assi scattano) + **enforcement esterno via hook** (deterministico, non aggirabile dal modello).
+Architecture: a **lightweight always-on kernel** (little context each session) + a **heavy on-demand body** (loaded only when the axes fire) + **external enforcement via hooks** (deterministic, not bypassable by the model).
 
 ---
 
-## 🤝 Dipendenze soft
+## 🤝 Soft dependencies
 
-Funziona da solo. Con i plugin [`caveman`](https://github.com/JuliusBrussee/caveman) (output compresso, `/caveman-stats`) e [`superpowers`](https://github.com/obra/superpowers-marketplace) (systematic-debugging, brainstorming) rende al meglio, degradando con grazia se assenti.
+Works on its own. With the [`caveman`](https://github.com/JuliusBrussee/caveman) (compressed output, `/caveman-stats`) and [`superpowers`](https://github.com/obra/superpowers-marketplace) (systematic-debugging, brainstorming) plugins it shines, degrading gracefully when absent.
 
-## Requisiti
+## Requirements
 
-- Claude Code ≥ 2.1.x (per i campi `context_window`/`rate_limits` nella statusline; su versioni prive degrada in silenzio)
-- `python3` e `bash` nel PATH
+- Claude Code ≥ 2.1.x (for the `context_window`/`rate_limits` fields in the statusline; on versions without them it degrades silently)
+- `python3` and `bash` on the PATH
 
-## Licenza
+## License
 
 [MIT](LICENSE) © 2026 Pixelfarm
