@@ -32,6 +32,33 @@ fable-director inietta una **policy di routing sempre attiva** e la fa **rispett
 
 ---
 
+## 💸 Quanto si risparmia?
+
+Nessun numero magico: il risparmio dipende dal tuo mix di lavoro, e questo plugin
+è il primo a rifiutare le stime inventate. Ma sai **dove** nasce e puoi **misurarlo**.
+
+**Da dove nasce il risparmio:**
+
+- **Lavoro deterministico → script:** un batch ripetibile eseguito da uno script costa **0 token di modello**, contro le *N* chiamate di un agente naïve. Su lavoro deterministico ricorrente il taglio è vicino al 100%.
+- **Cardinalità → modello medio:** *N* item simili vanno su un modello medio raggruppato invece del top model, con canary verificata prima del fan-out.
+- **Cache locality:** il veto di costo evita cold start di subagenti e invalidazioni di cache che spesso costano più del lavoro delegato.
+- **Kernel leggero:** ~500 token a sessione sempre attivi, corpo pesante caricato solo quando serve.
+
+**Misuralo sul tuo lavoro reale** — invece di crederci sulla parola:
+
+```bash
+python3 fable-director/skills/delega-efficiente/tools/session-cost-report.py
+```
+
+Legge i transcript JSONL veri e stampa costo per modello/main/subagenti, cache hit ratio
+e overhead di delega. L'hook `SessionEnd` accumula gli stessi dati su SQLite: il tuo
+risparmio è un dato che leggi, non una percentuale su un banner.
+
+> Esempio illustrativo (non un benchmark): convertire 12 file con uno script promosso →
+> ~0 token di modello, contro ~12 giri di modello se lo facesse l'agente a mano.
+
+---
+
 ## 📟 La statusline
 
 Un colpo d'occhio su modello, context e quote di piano — così sai quando stai per sbattere sul rate limit **prima** che succeda:
