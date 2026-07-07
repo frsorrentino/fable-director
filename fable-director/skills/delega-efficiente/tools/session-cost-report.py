@@ -9,7 +9,7 @@ Uso:
                          [--budget-input N_INPUT_TOKENS]
 
   PROJECT_DIR     dir progetto (default: quella del cwd corrente, cercata in
-                  ~/.claude/projects e ~/.claude-pixel/projects)
+                  $CLAUDE_CONFIG_DIR/projects, altrimenti ~/.claude/projects)
   --session       filtra i file il cui nome contiene SESSION_ID
   --budget        output token attesi dichiarati nel pre-budget; stampa ratio e flag ≥3×
   --budget-input  input token attesi (task read-heavy: scansioni repo, log, ricerca)
@@ -20,6 +20,7 @@ vengono lette da lì. Oltre ai totali stampa le metriche derivate di cache e
 delega (allarmi, non target: ottimizzarle al ribasso è Goodhart reentry).
 """
 import json
+import os
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -50,8 +51,10 @@ def find_usage(obj, model_hint=None, in_tool_result=False):
 def project_dirs_for_cwd():
     cwd_slug = "-" + str(Path.cwd()).strip("/").replace("/", "-").replace(".", "-")
     dirs = []
-    for base in (Path.home() / ".claude" / "projects",
-                 Path.home() / ".claude-pixel" / "projects"):
+    cfg = os.environ.get("CLAUDE_CONFIG_DIR")
+    bases = [Path(cfg) / "projects"] if cfg else []
+    bases.append(Path.home() / ".claude" / "projects")
+    for base in bases:
         if not base.is_dir():
             continue
         exact = base / cwd_slug

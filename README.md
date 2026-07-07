@@ -36,6 +36,8 @@ fable-director inietta una **policy di routing sempre attiva** e la fa **rispett
 
 Un colpo d'occhio su modello, context e quote di piano — così sai quando stai per sbattere sul rate limit **prima** che succeda:
 
+![statusline fable-director](assets/statusline.svg)
+
 ```
 [OPUS4.8] [CTX 5%] [5H 6%→19:40] [7D 70%→9 lug] [BDG ok]
 ```
