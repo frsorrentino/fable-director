@@ -57,6 +57,14 @@ risparmio è un dato che leggi, non una percentuale su un banner.
 > Esempio illustrativo (non un benchmark): convertire 12 file con uno script promosso →
 > ~0 token di modello, contro ~12 giri di modello se lo facesse l'agente a mano.
 
+**Benchmark riproducibile.** In [`benchmarks/`](benchmarks/) c'è un harness A/B (stesso task
+*senza* e *con* la policy, token letti dall'output reale di `claude -p`, N run per lato, 3 forme
+di task). La percentuale misurata verrà pubblicata qui con metodologia, N e spread —
+non prima di averla misurata davvero.
+
+<!-- BENCH:RESULT — sostituire quando il benchmark è stato eseguito -->
+> 📐 *Misura in corso.* Lancia tu stesso: `cd benchmarks && RUNS=3 bash run.sh`.
+
 ---
 
 ## 📟 La statusline
