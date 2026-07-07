@@ -14,13 +14,13 @@
 
     <!-- terminal body: faint prompt lines -->
     <text x="28" y="78" font-size="16" fill="#8b949e">$ claude</text>
-    <text x="28" y="104" font-size="16" fill="#484f58">…batch di 12 conversioni → workflow (mid-model, schema JSON)</text>
-    <text x="28" y="130" font-size="16" fill="#484f58">…canary rung-1 verificata ✓  fan-out 1+(N-1)</text>
+    <text x="28" y="104" font-size="16" fill="#484f58">…batch of 12 conversions → workflow (mid-model, JSON schema)</text>
+    <text x="28" y="130" font-size="16" fill="#484f58">…canary rung-1 verified ✓  fan-out 1+(N-1)</text>
 
     <!-- statusline strip -->
     <rect x="14" y="160" width="792" height="44" rx="8" fill="#161b22" stroke="#21262d"/>
     <text x="30" y="188" font-size="20" letter-spacing="0.3">
-      <tspan fill="#5fafff">[OPUS4.8]</tspan><tspan fill="#8b949e"> </tspan><tspan fill="#87d787">[CTX 5%]</tspan><tspan fill="#8b949e"> </tspan><tspan fill="#87d787">[5H 6%→19:40]</tspan><tspan fill="#8b949e"> </tspan><tspan fill="#ffd700">[7D 70%→9 lug]</tspan><tspan fill="#8b949e"> </tspan><tspan fill="#87d787">[BDG ok]</tspan>
+      <tspan fill="#5fafff">[OPUS4.8]</tspan><tspan fill="#8b949e"> </tspan><tspan fill="#87d787">[CTX 5%]</tspan><tspan fill="#8b949e"> </tspan><tspan fill="#87d787">[5H 6%→19:40]</tspan><tspan fill="#8b949e"> </tspan><tspan fill="#ffd700">[7D 70%→9 Jul]</tspan><tspan fill="#8b949e"> </tspan><tspan fill="#87d787">[BDG ok]</tspan>
     </text>
   </g>
 </svg>

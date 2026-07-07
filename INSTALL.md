@@ -1,118 +1,120 @@
-# Fable-director — installazione
+# Fable-director — installation
 
-> Istruzioni operative per Claude Code. Se un utente ti indica questo zip o questa cartella
-> chiedendo di installare il plugin, segui questi passi nell'ordine. Non saltare il punto 4.
+> Operating instructions for Claude Code. If a user points you at this zip or folder and asks
+> you to install the plugin, follow these steps in order. Don't skip step 4.
 
-## 1. Posizione permanente
+## 1. Permanent location
 
-La cartella `fable-director-marketplace/` deve vivere in un percorso STABILE: dopo l'installazione
-il plugin viene letto da qui, non copiato altrove. Se hai ricevuto uno zip:
+The `fable-director-marketplace/` folder must live at a STABLE path: after installation the
+plugin is read from here, not copied elsewhere. If you received a zip:
 
 ```bash
 mkdir -p ~/claude-plugins && unzip <file>.zip -d ~/claude-plugins/
 ```
 
-Percorso marketplace risultante: `~/claude-plugins/fable-director-marketplace` (deve contenere `.claude-plugin/marketplace.json`).
+Resulting marketplace path: `~/claude-plugins/fable-director-marketplace` (must contain `.claude-plugin/marketplace.json`).
 
-## 2. Registrazione marketplace + installazione
+## 2. Register marketplace + install
 
-Prova prima la via non interattiva (CLI):
+Try the non-interactive path first (CLI):
 
 ```bash
 claude plugin marketplace add ~/claude-plugins/fable-director-marketplace
 claude plugin install fable-director@pixelfarm --scope user
-claude plugin list   # verifica: fable-director presente e enabled
+claude plugin list   # check: fable-director present and enabled
 ```
 
-Se i comandi CLI non sono disponibili nella versione installata, chiedi all'utente di eseguire
-in sessione questi due slash command (sono comandi utente, non puoi lanciarli tu):
+If the CLI commands aren't available in the installed version, ask the user to run these two
+slash commands in-session (they are user commands, you can't run them yourself):
 
 ```
 /plugin marketplace add ~/claude-plugins/fable-director-marketplace
 /plugin install fable-director@pixelfarm
 ```
 
-## 3. Inizializza il playbook (MAI sovrascrivere)
+## 3. Initialize the playbook (NEVER overwrite)
 
 ```bash
 [ -f ~/.claude/delega-playbook.md ] || cp ~/claude-plugins/fable-director-marketplace/fable-director/playbook-template.md ~/.claude/delega-playbook.md
 ```
 
-Se il file esiste già, NON toccarlo: contiene euristiche accumulate dall'utente.
-Team con playbook condiviso: al posto della copia, symlink al file nel repo di team.
+If the file already exists, do NOT touch it: it holds heuristics accrued by the user.
+Teams with a shared playbook: instead of copying, symlink to the file in the team repo.
 
-## 4. Verifica
+## 4. Verify
 
-Nuova sessione Claude Code, poi controlla:
-- a SessionStart compare il blocco `FABLE-DIRECTOR KERNEL` (~500 token, 6 assi);
-- la skill è elencata come `fable-director:delega-efficiente`;
-- `python3 <marketplace>/fable-director/skills/delega-efficiente/tools/session-cost-report.py --help` non è richiesto: lo script si lancia senza argomenti dalla dir di un progetto.
+Start a new Claude Code session, then check:
+- at SessionStart the `FABLE-DIRECTOR KERNEL` block appears (~500 tokens, 6 axes);
+- the skill is listed as `fable-director:delega-efficiente`;
+- `python3 <marketplace>/fable-director/skills/delega-efficiente/tools/session-cost-report.py --help` is not required: the script runs with no arguments from a project's directory.
 
-## 5. Fallback senza sistema plugin
+## 5. Fallback without the plugin system
 
-Solo se il plugin system non è utilizzabile:
+Only if the plugin system is unusable:
 1. `cp -r fable-director/skills/delega-efficiente ~/.claude/skills/`
-2. Fondi (merge, mai sovrascrivere il file) l'hook di `fable-director/hooks/hooks.json` dentro
-   `~/.claude/settings.json`, sostituendo `${CLAUDE_PLUGIN_ROOT}` con il path assoluto
-   della cartella `fable-director/`.
-3. Punto 3 (playbook) invariato.
+2. Merge (merge, never overwrite the file) the hook from `fable-director/hooks/hooks.json` into
+   `~/.claude/settings.json`, replacing `${CLAUDE_PLUGIN_ROOT}` with the absolute path of the
+   `fable-director/` folder.
+3. Step 3 (playbook) unchanged.
 
-## 6. Statusline (opzionale)
+## 6. Statusline (optional)
 
-Mostra sempre `[MODEL]`, `[CTX %]` (context window conversazione), `[5H %→HH:MM]` (quota piano 5 ore con orario di reset, la
-"Current session" di /usage), `[7D %→reset]` (quota settimanale) e `[BDG]` (stato pre-budget fable-director).
+Always shows `[MODEL]`, `[CTX %]` (conversation context window), `[5H %→HH:MM]` (5-hour plan
+quota with reset time, the "Current session" in /usage), `[7D %→reset]` (weekly quota) and
+`[BDG]` (fable-director pre-budget state).
 
-La statusLine NON è un componente che il plugin possa auto-registrare (a differenza di
-hook/skill/command): va scritta in `settings.json`. Per rendere lo step uguale e a prova di
-errore su ogni macchina, il plugin fornisce un **installer** che la scrive da solo, risolvendo
-il path assoluto reale di QUESTA installazione (si auto-localizza accanto allo script — funziona
-sia con marketplace da GitHub sia aggiunto come directory locale).
+The statusLine is NOT a component the plugin can auto-register (unlike hooks/skills/commands):
+it must be written to `settings.json`. To make the step uniform and foolproof on every machine,
+the plugin ships an **installer** that writes it for you, resolving the real absolute path of
+THIS installation (it self-locates next to the script — works both with a marketplace installed
+from GitHub and one added as a local directory).
 
-**Via consigliata (chiunque, dopo install o update):**
+**Recommended path (anyone, after install or update):**
 
 ```
 /fable-director:statusline
 ```
 
-Idempotente: reinstalla → aggiorna il path se cambiato; se esiste già una statusLine di terzi
-NON la tocca (avvisa). Rimozione: `/fable-director:statusline --remove`. Backup automatico in
-`settings.json.bak`. **Serve riavviare Claude Code** perché la statusLine è letta all'avvio.
+Idempotent: reinstall → updates the path if it changed; if a third-party statusLine already
+exists it does NOT touch it (warns). Removal: `/fable-director:statusline --remove`. Automatic
+backup to `settings.json.bak`. **You must restart Claude Code** because the statusLine is read at startup.
 
-Equivalente senza slash command (stesso effetto):
+Equivalent without the slash command (same effect):
 
 ```bash
 bash "<installLocation>/fable-director/scripts/statusline-install.sh"
 ```
 
-Solo se preferisci l'edit manuale di settings.json (merge, non sovrascrivere una statusLine
-esistente): `"statusLine": { "type": "command", "command": "bash \"<installLocation>/fable-director/scripts/statusline-ctx.sh\"" }`.
+Only if you prefer editing settings.json by hand (merge, don't overwrite an existing statusLine):
+`"statusLine": { "type": "command", "command": "bash \"<installLocation>/fable-director/scripts/statusline-ctx.sh\"" }`.
 
-Richiede Claude Code ≥2.1.x (campi `context_window`/`rate_limits` nello stdin); su versioni
-prive dei campi degrada in silenzio. Se il plugin caveman è presente, il suo badge resta.
+Requires Claude Code ≥2.1.x (`context_window`/`rate_limits` fields in stdin); on versions without
+those fields it degrades silently. The month in the reset date follows the locale (`LANG`).
+If the caveman plugin is present, its badge stays in front.
 
-## Dipendenze soft
+## Soft dependencies
 
-La policy cita i plugin `caveman` (agenti cavecrew, /caveman-stats) e `superpowers`
-(systematic-debugging, brainstorming). Senza di essi funziona comunque, degradando con
-grazia (Explore vanilla al posto di cavecrew, niente stats hook). Consigliata l'installazione
-per comportamento 1:1.
+The policy references the `caveman` (cavecrew agents, /caveman-stats) and `superpowers`
+(systematic-debugging, brainstorming) plugins. Without them it still works, degrading
+gracefully (vanilla Explore instead of cavecrew, no stats hook). Installing them is recommended
+for 1:1 behavior.
 
-## Cosa fa il plugin, in breve
+## What the plugin does, in short
 
-- **SessionStart hook** → inietta il kernel (6 assi di routing + never-delegate, ~500 token).
-- **Skill `fable-director:delega-efficiente`** (on-demand) → policy completa: delegation contract,
-  pre-budget falsificabile con soglia 3×, rule-of-3 con best-of-3, promozione script, regole playbook,
-  telemetria a eventi oggettivi.
-- **Stop hook (`stop-budget-check.py`)** → enforcement deterministico del 3× sul budget aperto
-  (`~/.claude/fable-director/budgets/<cwd-slug>.json`, scritto da `fd-telemetry.py budget-open`):
-  a sforamento blocca la chiusura del turno finché il post-mortem non è scritto.
-- **SessionEnd hook (`fd-telemetry.py session-summary`)** → logga su SQLite
-  (`~/.claude/fable-director/telemetry.db`) totali token e metriche cache/delega, zero token di modello.
-- **`~/.claude/delega-playbook.md`** (esterno, sopravvive agli update) → euristiche apprese:
-  `[candidata]` → confermata alla 2ª occorrenza; voci `[seed]`; contatori `(uses/ok/ko)`;
-  tetto 30 con consolidamento.
-- **`tools/session-cost-report.py`** → rendiconto token reale dai transcript JSONL, metriche
-  cache/delega, flag ≥3× (legge il budget file da solo).
-- **`scripts/statusline-ctx.sh`** (opzionale, §6) → statusline con `[MODEL]`, `[CTX %]`, `[5H %→HH:MM]`, `[7D %→reset]`, `[BDG]`.
-  Abilitala con il comando **`/fable-director:statusline`** (o `scripts/statusline-install.sh`): scrive
-  la statusLine in settings.json risolvendo il path da solo, idempotente e merge-safe.
+- **SessionStart hook** → injects the kernel (6 routing axes + never-delegate, ~500 tokens).
+- **Skill `fable-director:delega-efficiente`** (on-demand) → full policy: delegation contract,
+  falsifiable pre-budget with a 3× threshold, rule-of-3 with best-of-3, script promotion, playbook
+  rules, telemetry on objective events.
+- **Stop hook (`stop-budget-check.py`)** → deterministic 3× enforcement on the open budget
+  (`~/.claude/fable-director/budgets/<cwd-slug>.json`, written by `fd-telemetry.py budget-open`):
+  on overrun it blocks the turn from closing until the post-mortem is written.
+- **SessionEnd hook (`fd-telemetry.py session-summary`)** → logs to SQLite
+  (`~/.claude/fable-director/telemetry.db`) token totals and cache/delegation metrics, zero model tokens.
+- **`~/.claude/delega-playbook.md`** (external, survives updates) → learned heuristics:
+  `[candidate]` → confirmed on the 2nd occurrence; `[seed]` entries; `(uses/ok/ko)` counters;
+  cap of 30 with consolidation.
+- **`tools/session-cost-report.py`** → real token report from the JSONL transcripts, cache/delegation
+  metrics, ≥3× flag (reads the budget file on its own).
+- **`scripts/statusline-ctx.sh`** (optional, §6) → statusline with `[MODEL]`, `[CTX %]`, `[5H %→HH:MM]`, `[7D %→reset]`, `[BDG]`.
+  Enable it with the **`/fable-director:statusline`** command (or `scripts/statusline-install.sh`): it writes
+  the statusLine to settings.json resolving the path on its own, idempotent and merge-safe.

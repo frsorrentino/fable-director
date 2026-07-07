@@ -31,14 +31,14 @@ import json,sys,os,time
 from pathlib import Path
 model=pct=rl=rlt=wk=wkt=bdg="-"
 def fmt_reset(ts):
-    # entro 24h: orario; oltre: "6 lug" (giorno + mese, indipendente dal locale)
+    # entro 24h: orario; oltre: "6 Jul"/"6 lug" (giorno + mese secondo il locale)
     try:
         ts=int(ts)
         lt=time.localtime(ts)
         if ts-time.time() < 86400: return time.strftime("%H:%M", lt)
-        mesi=["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"]
         #   = spazio unificatore: si vede come spazio ma non spezza il read shell
-        return f"{lt.tm_mday} {mesi[lt.tm_mon-1]}"
+        mon = time.strftime("%b", lt)
+        return f"{lt.tm_mday}\u00a0{mon}"
     except Exception:
         return None
 try:

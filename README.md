@@ -73,13 +73,13 @@ One glance at model, context and plan quotas — so you see the rate limit comin
 ![fable-director statusline](assets/statusline.svg)
 
 ```
-[OPUS4.8] [CTX 5%] [5H 6%→19:40] [7D 70%→9 lug] [BDG ok]
+[OPUS4.8] [CTX 5%] [5H 6%→19:40] [7D 70%→9 Jul] [BDG ok]
 ```
 
 - `[OPUS4.8]` active model
 - `[CTX 5%]` how full the conversation's context window is
 - `[5H 6%→19:40]` 5-hour plan-window quota + local reset time (the "Current session" in `/usage`)
-- `[7D 70%→9 lug]` weekly quota + reset date
+- `[7D 70%→9 Jul]` weekly quota + reset date
 - `[BDG ok]` fable-director pre-budget state (`ok` / `2×` / `3×`)
 
 Color thresholds 60/80. If you have the **caveman** plugin, its badge stays in front.

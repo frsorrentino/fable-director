@@ -1,40 +1,40 @@
 # Fable-director
 
-Policy di delega efficiente per Claude Code: il top model pianifica, giudica e verifica;
-l'esecuzione va al mezzo più economico adeguato (script > mid-model > top model).
-Come nella bottega rinascimentale: il maestro (il director) disegna e rifinisce, gli apprendisti
-eseguono, la bottega accumula mestiere.
+Efficient-delegation policy for Claude Code: the top model plans, judges and verifies;
+execution goes to the cheapest adequate means (script > mid-model > top model).
+Like a Renaissance workshop: the master (the director) sketches and refines, the apprentices
+execute, the workshop accrues craft.
 
-## Componenti
+## Components
 
-| Pezzo | Ruolo |
+| Piece | Role |
 |---|---|
-| `hooks/hooks.json` + `scripts/session-kernel.sh` | Inietta il kernel a ogni SessionStart (~500 token con header e puntatore playbook): 6 assi di routing + never-delegate + puntatore alla policy completa |
-| `kernel.md` | Il testo del kernel |
-| `skills/delega-efficiente/SKILL.md` | Policy completa, caricata on-demand: delegation contract, pre-budget falsificabile (soglia 3×, anti-Goodhart), rule-of-3 con best-of-3, promozione script, regole playbook, telemetria |
-| `skills/delega-efficiente/tools/session-cost-report.py` | Rendiconto token per modello/main/subagenti dai transcript JSONL; metriche cache/delega (allarmi, non target); legge da solo il budget file e stampa i flag ≥3× |
-| `scripts/fd-telemetry.py` | Pre-budget machine-readable (`budget-open`/`budget-close`, `--type` per la tabella densità), log eventi oggettivi su SQLite (`~/.claude/fable-director/telemetry.db`), `report` aggregato (densità codificata N≥10, allarme cache-thrash), cache idempotente opt-in (`cache-get`/`cache-put --verified`). Mai voti di qualità auto-assegnati |
-| `scripts/stop-budget-check.py` (hook Stop) | Enforcement deterministico del 3×: a ogni fine turno confronta i token effettivi col budget aperto (attribuzione per lineage: l'usage dei subagenti è dentro toolUseResult nel main transcript — niente mtime, niente double counting); a sforamento blocca la chiusura, auto-logga l'evento `budget_flag` in telemetria (deterministico, zero token: il modello deve solo il post-mortem) e impone il post-mortem. Anti-loop: stop_hook_active + status flagged; budget >24h → stale |
-| hook SessionEnd (`fd-telemetry.py session-summary`) | Logga a fine sessione totali token, cache_hit_ratio/efficiency/investment, delegation_overhead, coordination_cost — zero token di modello |
-| `playbook-template.md` | Template del playbook: va copiato in `~/.claude/delega-playbook.md` alla prima installazione (fuori dal plugin: gli update non lo toccano) |
-| `scripts/statusline-ctx.sh` (opzionale) | Statusline: `[MODEL]` attivo, `[CTX %]` context window conversazione, `[5H %→HH:MM]` quota piano 5 ore con orario di reset, `[7D %→"6 lug"]` quota settimanale con data reset, `[BDG ok/2×/3×]` stato pre-budget (sola lettura del budget file), soglie colore 60/80; badge caveman se presente. Abilitala con `/fable-director:statusline` (INSTALL §6) |
-| `commands/statusline.md` + `scripts/statusline-install.sh` | Comando `/fable-director:statusline` che scrive la statusLine in settings.json: installer idempotente e merge-safe che auto-risolve il path assoluto reale dell'installazione (GitHub o directory locale), non tocca statusLine di terzi, fa backup. `--remove` per disinstallarla |
+| `hooks/hooks.json` + `scripts/session-kernel.sh` | Injects the kernel at every SessionStart (~500 tokens with header and playbook pointer): 6 routing axes + never-delegate + pointer to the full policy |
+| `kernel.md` | The kernel text |
+| `skills/delega-efficiente/SKILL.md` | Full policy, loaded on-demand: delegation contract, falsifiable pre-budget (3× threshold, anti-Goodhart), rule-of-3 with best-of-3, script promotion, playbook rules, telemetry |
+| `skills/delega-efficiente/tools/session-cost-report.py` | Token report per model/main/subagents from JSONL transcripts; cache/delegation metrics (alarms, not targets); reads the budget file on its own and prints ≥3× flags |
+| `scripts/fd-telemetry.py` | Machine-readable pre-budget (`budget-open`/`budget-close`, `--type` for the density table), objective event logging to SQLite (`~/.claude/fable-director/telemetry.db`), aggregate `report` (encoded density N≥10, cache-thrash alarm), opt-in idempotent cache (`cache-get`/`cache-put --verified`). Never self-assigned quality scores |
+| `scripts/stop-budget-check.py` (Stop hook) | Deterministic 3× enforcement: at each turn end it compares actual tokens against the open budget (lineage attribution: subagent usage sits inside toolUseResult in the main transcript — no mtime, no double counting); on overrun it blocks closing, auto-logs the `budget_flag` event to telemetry (deterministic, zero tokens: the model only owes the post-mortem) and imposes the post-mortem. Anti-loop: stop_hook_active + flagged status; budget >24h → stale |
+| SessionEnd hook (`fd-telemetry.py session-summary`) | Logs at session end token totals, cache_hit_ratio/efficiency/investment, delegation_overhead, coordination_cost — zero model tokens |
+| `playbook-template.md` | Playbook template: copy it to `~/.claude/delega-playbook.md` on first install (outside the plugin: updates don't touch it) |
+| `scripts/statusline-ctx.sh` (optional) | Statusline: `[MODEL]` active, `[CTX %]` conversation context window, `[5H %→HH:MM]` 5-hour plan quota with reset time, `[7D %→"6 Jul"]` weekly quota with reset date (month follows the `LANG` locale), `[BDG ok/2×/3×]` pre-budget state (budget file, read-only), color thresholds 60/80; caveman badge if present. Enable it with `/fable-director:statusline` (INSTALL §6) |
+| `commands/statusline.md` + `scripts/statusline-install.sh` | The `/fable-director:statusline` command that writes the statusLine to settings.json: idempotent, merge-safe installer that auto-resolves the real absolute path of the installation (GitHub or local directory), doesn't touch third-party statusLines, backs up. `--remove` to uninstall it |
 
-## Installazione
+## Installation
 
-Vedi `INSTALL.md` nella cartella marketplace (un livello sopra). In breve:
+See `INSTALL.md` in the marketplace folder (one level up). In short:
 `claude plugin marketplace add <path>` → `claude plugin install fable-director@pixelfarm --scope user` → init playbook.
 
-## Ciclo di apprendimento
+## Learning loop
 
-1. Fallimento approach/tool alla 3ª escalation o sforamento pre-budget ≥3× → voce `[candidata]` nel playbook. Lo sforamento non dipende dalla disciplina del modello: lo rileva l'hook Stop e blocca la chiusura finché il post-mortem non è scritto.
-2. Seconda occorrenza indipendente → `confermata`.
-3. Task deterministico ricorso ≥2 volte → promosso a script (`tools/` del repo giusto) e registrato nel playbook.
-4. Le euristiche confermate di valore generale si promuovono nel plugin alla release successiva → arrivano a tutto il team.
+1. Approach/tool failure at the 3rd escalation or pre-budget overrun ≥3× → a `[candidate]` entry in the playbook. The overrun doesn't depend on the model's discipline: the Stop hook detects it and blocks closing until the post-mortem is written.
+2. Second independent occurrence → `confirmed`.
+3. Deterministic task resorted to ≥2 times → promoted to a script (`tools/` of the right repo) and recorded in the playbook.
+4. Confirmed heuristics of general value are promoted into the plugin at the next release → they reach the whole team.
 
-Tetto playbook: 30 righe, consolidare prima di appendere. Voci `[seed]` = pattern importati deliberatamente.
+Playbook cap: 30 lines, consolidate before appending. `[seed]` entries = deliberately imported patterns.
 
-## Dipendenze soft
+## Soft dependencies
 
-`caveman` (cavecrew-*, /caveman-stats) e `superpowers` (systematic-debugging, brainstorming):
-senza, la policy degrada con grazia. Consigliati per comportamento 1:1.
+`caveman` (cavecrew-*, /caveman-stats) and `superpowers` (systematic-debugging, brainstorming):
+without them, the policy degrades gracefully. Recommended for 1:1 behavior.

@@ -1,42 +1,42 @@
-# Benchmark — risparmio token fable-director
+# Benchmark — fable-director token savings
 
-Misura **riproducibile** del risparmio token, non una percentuale sbandierata.
-Confronta lo stesso task eseguito da Claude Code **senza** e **con** la policy fable-director.
+A **reproducible** measurement of token savings, not a percentage waved around.
+It compares the same task run by Claude Code **without** and **with** the fable-director policy.
 
-## Metodo
+## Method
 
-- **Arm `off`**: `claude -p "<task>"` senza kernel.
-- **Arm `on`**: identico task + kernel fable-director iniettato via `--append-system-prompt`
-  (isola l'effetto della sola policy di routing, il meccanismo con cui il plugin cambia le decisioni).
-- Token letti dall'output JSON di `claude -p` (`.usage`, `.total_cost_usd`) — nessuna stima.
-- Fixture deterministiche (seed fisso) rigenerate prima di ogni run.
-- **N run per lato** (default 3): si riportano media e spread, non un singolo run.
+- **Arm `off`**: `claude -p "<task>"` with no kernel.
+- **Arm `on`**: identical task + the fable-director kernel injected via `--append-system-prompt`
+  (isolates the effect of the routing policy alone, the mechanism by which the plugin changes decisions).
+- Tokens read from the `claude -p` JSON output (`.usage`, `.total_cost_usd`) — no estimates.
+- Deterministic fixtures (fixed seed) regenerated before each run.
+- **N runs per side** (default 3): report the mean and spread, not a single run.
 
-## Task (3 forme)
+## Tasks (3 shapes)
 
-1. `01-batch-deterministico` — 30 file di numeri → CSV di aggregati. Cuore scriptabile.
-2. `02-classificazione` — 30 stringhe → label EMAIL/URL/PHONE/OTHER. Scriptabile via regex.
-3. `03-misto` — parte deterministica (medie) + parte di giudizio (sintesi anomalie).
+1. `01-batch-deterministico` — 30 number files → CSV of aggregates. Scriptable core.
+2. `02-classificazione` — 30 strings → EMAIL/URL/PHONE/OTHER labels. Scriptable via regex.
+3. `03-misto` — a deterministic part (means) + a judgment part (anomaly summary).
 
-Il risparmio è massimo dove il lavoro è deterministico (la policy promuove a script → ~0 token
-di modello sul cuore) e tende a zero dove anche il modello base scriverebbe comunque uno script.
-Le tre forme servono proprio a mostrare il **range**, non un numero cherry-picked.
+Savings are largest where the work is deterministic (the policy promotes it to a script → ~0
+model tokens on the core) and tend to zero where even the base model would write a script anyway.
+The three shapes exist precisely to show the **range**, not a cherry-picked number.
 
-## Come lanciarlo
+## How to run it
 
 ```bash
-python3 gen_fixtures.py          # fixture deterministiche
-RUNS=3 bash run.sh               # ~18 sessioni headless (3 task × 2 arm × 3 run)
-# opzionale: MODEL=claude-opus-4-8 RUNS=3 bash run.sh
+python3 gen_fixtures.py          # deterministic fixtures
+RUNS=3 bash run.sh               # ~18 headless sessions (3 tasks × 2 arms × 3 runs)
+# optional: MODEL=claude-opus-4-8 RUNS=3 bash run.sh
 ```
 
-`run.sh` usa `--dangerously-skip-permissions` per non bloccarsi su ogni scrittura: gira solo
-dentro `benchmarks/` (fixture locali), ma leggi lo script prima di eseguirlo.
-Consuma quota del piano / API reale.
+`run.sh` uses `--dangerously-skip-permissions` so it doesn't block on every write: it runs only
+inside `benchmarks/` (local fixtures), but read the script before running it.
+It consumes real plan / API quota.
 
-Output: `results/<timestamp>/` (JSON grezzi + `summary.txt`).
+Output: `results/<timestamp>/` (raw JSON + `summary.txt`).
 
-## Onestà
+## Honesty
 
-- Il numero nel README principale viene **da questo harness**, con N, media, spread e data.
-- Se il delta è piccolo o rumoroso, si scrive quello. Nessuna estrapolazione a "ogni caso".
+- The number in the main README comes **from this harness**, with N, mean, spread and date.
+- If the delta is small or noisy, that's what gets written. No extrapolation to "every case".
