@@ -43,6 +43,10 @@ Output: `results/<timestamp>/` (raw JSON + `summary.txt`).
 
 - The number in the main README comes **from this harness**, with N, mean, spread and date.
 - If the delta is small or noisy, that's what gets written. No extrapolation to "every case".
+- 2026-07-08: fixed a systematically ambiguous shape-04 fixture — a quality-negative phrase
+  ("pannello che si stacca") that both arms read as a safety hazard while ground truth said NO
+  (the likely cause of the identical 85% safety precision in both arms). **Safety-precision
+  numbers from runs before this date are not comparable with later runs.**
 
 ### What this harness measures — and what it doesn't
 

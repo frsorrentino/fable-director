@@ -7,7 +7,9 @@ Budget file: ~/.claude/fable-director/budgets/<cwd-slug>.json (letto dall'hook S
 Eventi ammessi: task_open, task_close, budget_flag, retry, escalation, script_promotion,
 verification, session_summary, schema_anomaly (auto: sentinella formato transcript —
 molti record ma zero usage/timestamp riconosciuti = contabilità inaffidabile, fallire
-rumorosamente). MAI voti di qualità auto-assegnati: la qualità è derivata
+rumorosamente), gate_deny (auto: scritto dal gate PreToolUse a ogni delega negata —
+distingue "mai tentata delega" da "negata e ripiegata inline" nelle analisi post-hoc).
+MAI voti di qualità auto-assegnati: la qualità è derivata
 solo da indicatori oggettivi (test pass/fail, rollback, fix successivo).
 
 Sottocomandi:
@@ -481,6 +483,18 @@ def cmd_report(args):
         print(f"\n⚠ ALLARME schema: {len(anomalies)} anomalie formato transcript "
               f"(zero usage/timestamp riconosciuti) — contabilità token "
               f"inaffidabile in quelle sessioni, aggiornare il plugin")
+
+    denies = [p for e, p in events if e == "gate_deny"]
+    if denies:
+        by_kind = {}
+        for d in denies:
+            k = d.get("kind", "?")
+            by_kind[k] = by_kind.get(k, 0) + 1
+        kinds_s = ", ".join(f"{k}×{v}" for k, v in
+                            sorted(by_kind.items(), key=lambda x: -x[1]))
+        print(f"\nGate deny: {len(denies)} ({kinds_s}) — deleghe tentate e negate "
+              f"dal gate; molti no_budget = il modello salta il pre-budget, "
+              f"molti flagged = post-mortem che non vengono chiusi")
 
     flags = [p for e, p in events if e == "budget_flag"]
     opened = sum(1 for e, _ in events if e == "task_open")

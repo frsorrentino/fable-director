@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.10.3-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.10.4-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -20,6 +20,7 @@ fable-director injects an **always-on routing policy** and makes it **enforced b
 
 ## 🆕 What's new in 1.10.x
 
+- **1.10.4 — gate denials become telemetry.** Every deny from the pre-delegation gate now logs a `gate_deny` event (kind `no_budget` / `stale_budget` / `flagged`, plus tool and declared model) and `report` prints the breakdown. Without it, post-hoc analysis couldn't distinguish "never attempted delegation" from "denied and fell back inline" — the exact blind spot hit while reading the shape-04 bench. Also fixed a systematically ambiguous shape-04 fixture: a quality-negative phrase ("pannello che si stacca") both arms read as a safety hazard against a ground truth of NO — safety-precision from earlier runs is not comparable (see [benchmarks/README](benchmarks/README.md)).
 - **1.10.2 — cross-family lanes verified live.** Default Gemini model for new configs is `gemini-2.5-flash` (verified with a real call: `gemini-3-flash` doesn't exist on the AI Studio free tier, `gemini-flash-latest` answers 503 under load). Both lanes tested end-to-end — Gemini free API and Codex CLI (ChatGPT login) each returned a correct adversarial verdict. **When they fire and how to invoke them yourself: see [Cross-family verifier](#-cross-family-verifier--when-and-how) below.**
 - **1.10.1 — `[DLG]` shows effective tokens, not declared calls.** The segment now reads the session transcript **incrementally** (a state file keeps the byte offset — each refresh parses only new lines, never a rescan) and shows **output tokens per effective model** of subagent work: `[DLG SONNET-5 41k HAIKU-4-5 3k]` (`≡` = subagents inheriting the main-loop model). Immune to the quiet-fallback blind spot and it weighs work, not call counts. Where the transcript isn't exposed it degrades to the gate's declared-call registry, marked `≈` — the two modes are visually distinct by design. Also new: **`[XF]` cross-family segment** — `GEMINI▲` while a `cross-verify.py` call is in flight, `CODEX×2` for today's calls (local telemetry; free tiers expose no quota API, so this is presence, not remaining quota).
 - **1.10.0 — `[DLG]` statusline segment (declared calls).** The pre-delegation gate keeps a per-session registry of delegations counted by declared model. The registry dies at SessionEnd (48h orphan cleanup for crashed sessions).

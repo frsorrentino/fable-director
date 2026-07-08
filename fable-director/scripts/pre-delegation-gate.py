@@ -24,6 +24,7 @@ Casi budget file:
 """
 import json
 import os
+import sqlite3
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -44,6 +45,40 @@ def deny(reason):
             "permissionDecisionReason": reason,
         }
     }, ensure_ascii=False))
+
+
+def log_gate_deny(data, kind, budget=None):
+    """Evento telemetria `gate_deny`: senza, l'analisi post-hoc non distingue
+    "mai tentata delega" da "delega negata e ripiegata inline" (emerso dal
+    benchmark shape 04). Scrittura sqlite diretta invece di importare
+    fd-telemetry.py (nome con trattini, non importabile senza importlib).
+    Best-effort: un errore qui non deve mai impedire il deny."""
+    try:
+        ti = data.get("tool_input") or {}
+        payload = {
+            "kind": kind,  # no_budget | stale_budget | flagged
+            "tool": data.get("tool_name"),
+            "subagent_type": ti.get("subagent_type"),
+            "model": ti.get("model") or "inherit",
+        }
+        if isinstance(budget, dict):
+            payload["task"] = budget.get("task")
+        base = Path.home() / ".claude" / "fable-director"
+        base.mkdir(parents=True, exist_ok=True)
+        con = sqlite3.connect(base / "telemetry.db")
+        con.execute("CREATE TABLE IF NOT EXISTS events("
+                    "id INTEGER PRIMARY KEY, ts TEXT NOT NULL, session_id TEXT, "
+                    "cwd TEXT, event TEXT NOT NULL, payload TEXT)")
+        con.execute(
+            "INSERT INTO events(ts, session_id, cwd, event, payload) "
+            "VALUES(?,?,?,?,?)",
+            (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+             data.get("session_id"), str(data.get("cwd") or os.getcwd()),
+             "gate_deny", json.dumps(payload, ensure_ascii=False)))
+        con.commit()
+        con.close()
+    except Exception:
+        pass
 
 
 def record_delegation(data):
@@ -110,6 +145,7 @@ def main():
             record_delegation(data)  # registro per lo statusline [DLG]
             announce_model(data)     # riga solo se modello esplicito ≠ inherit
             return  # budget valido: allow
+        log_gate_deny(data, "stale_budget", budget)
         deny(
             "FABLE-DIRECTOR gate pre-delega: il budget aperto per questo cwd "
             f"è più vecchio di 24h (task abbandonato: '{budget.get('task')}'). "
@@ -119,6 +155,7 @@ def main():
         return
 
     if isinstance(budget, dict) and budget.get("status") == "flagged":
+        log_gate_deny(data, "flagged", budget)
         deny(
             "FABLE-DIRECTOR gate pre-delega: il budget di questo cwd è FLAGGED "
             f"(sforamento ≥3× sul task '{budget.get('task')}'). Nuove deleghe "
@@ -129,6 +166,7 @@ def main():
         )
         return
 
+    log_gate_deny(data, "no_budget")
     deny(
         "FABLE-DIRECTOR gate pre-delega: nessun pre-budget aperto per questo "
         "cwd. Ogni delega/orchestrazione richiede il pre-budget machine-"

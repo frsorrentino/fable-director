@@ -43,6 +43,10 @@ POS = {
                   "Configurazione in cinque minuti, tutto funziona al primo colpo.",
                   "Comandi semplici e ben posizionati, ergonomia ottima."],
 }
+# Vincolo: le frasi NEG non devono evocare pericolo fisico (parti che si
+# staccano, scosse, surriscaldamento) — quella dimensione è SOLO in SAFETY,
+# altrimenti la ground truth segnalazione_sicurezza=NO produce falsi positivi
+# sistematici in entrambi gli arm (visto nel run del 2026-07-08: precision 85%).
 NEG = {
     "batteria": ["La batteria si scarica in mezza giornata anche in standby.",
                  "Dopo due settimane la durata è crollata del quaranta percento.",
@@ -51,7 +55,7 @@ NEG = {
                    "Il corriere ha lasciato il pacco sotto la pioggia senza avvisare.",
                    "Tracking fermo per giorni, nessuna comunicazione."],
     "qualita": ["La plastica è sottile e dopo una settimana si è crepata sul bordo.",
-                "Viti allentate e pannello che si stacca, sembra un prototipo.",
+                "Assemblaggio grossolano e accoppiamenti imprecisi, sembra un prototipo.",
                 "Il rivestimento si è scolorito al primo lavaggio."],
     "prezzo": ["Costa troppo per quello che offre, ci sono alternative migliori a metà prezzo.",
                "Prezzo gonfiato dal marketing, il valore reale è la metà.",
