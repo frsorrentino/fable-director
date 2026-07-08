@@ -62,3 +62,13 @@ Measuring that requires the top model as the orchestrator arm
 delta is large. Publish the two numbers separately, with these exact labels: *policy effect
 (equal model)* vs *director topology (top model orchestrating)*. Reporting one as the other
 is the kind of number this project refuses to ship.
+
+**External anchor.** Anthropic's own cookbook measures exactly this topology — a `claude-fable-5`
+coordinator that plans and synthesizes while `claude-sonnet-5` workers do all the token-heavy
+reading ([`CMA_plan_big_execute_small`](https://github.com/anthropics/claude-cookbooks/blob/main/managed_agents/CMA_plan_big_execute_small.ipynb)):
+**~2.5× cheaper, ~3× faster**, 84–98% of input tokens billed at the worker rate. Two caveats
+that transfer to our number: (1) the differential only appears when the task is **read/token-heavy
+on the workers** (shape 04's per-item review qualifies; a light task shows ~nothing — consistent
+with our N=3 equal-model finding); (2) their run is on Managed Agents infrastructure, **outside**
+fable-director's local hook stack — same topology, different enforcement surface. So ~2.5× is an
+expectation anchor, not a target: we still publish our own measured number on our own stack.
