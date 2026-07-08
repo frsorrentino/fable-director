@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.7.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.8.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -18,12 +18,21 @@ fable-director injects an **always-on routing policy** and makes it **enforced b
 
 ---
 
-## 🆕 What's new in 1.7.0
+## 🆕 What's new in 1.8.0
+
+- **Cache-staleness sentinel.** Claude Code copies plugins to a cache at install time and never re-checks it: with a local marketplace the running plugin silently falls behind its source (we lived it: 1.0.0 running for days while the source was at 1.6.0). A `SessionStart` sentinel now compares the running version against every `directory`-type marketplace source and warns with the exact `claude plugin update` command. Warn only, never auto-update — a nested CLI call in a hook is slow, races the plugin registry, and the current session would stay on the old version anyway.
+- **`/fable-director:review`** — the director reads its own telemetry. The learning loop used to write heuristics only on incidents (3× busts, rule-of-3); this command has the top model read `report` + playbook and produce a brutally honest improvement plan anchored **only to objective alarms** (max 5 recommendations, each citing the datum that justifies it; "no intervention justified by the data" is a valid outcome — inventing problems is forbidden).
+
+<details><summary>1.7.0</summary>
+
+
 
 - **Pre-delegation gate (the bootstrap gap is closed).** Until 1.6.0 the 2×/3× enforcement only bit *if* a budget had been opened — and opening it was a prompt-level instruction the model could skip. A new `PreToolUse` hook now **denies any `Agent`/`Task`/`Workflow` call with no open budget** for the cwd, replying with the exact `budget-open` command to run. Also denies delegation while a budget is `flagged` (no dodging the 3× post-mortem by delegating) or older than 24h. Fail-open by design: a gate bug can never block a legitimate delegation.
 - **Transcript schema sentinel.** Token accounting reads Claude Code's undocumented JSONL transcript format; a silent field rename used to zero the counters without any error. Both the `Stop` hook and `session-summary` now detect "many valid records, zero recognized `usage`/`timestamp`" and **fail loudly**: one-time warning, `schema_anomaly` telemetry event, enforcement suspended instead of trusting zeros.
 - **5-part spec contract for delegation prompts** (Objective / Files / Interfaces / Constraints / Verification) — replaces the old 4-component contract; context-free delegation is the test that the route is delegable at all.
 - Statusline example renamed `[OPUS4.8]` → `[FABLE5]` (the director role matches the plugin's name; the model was never hardcoded).
+
+</details>
 
 ---
 
