@@ -19,10 +19,16 @@ URL e modelli vivono nel config, non nel codice: i free tier cambiano senza
 preavviso — il punto di verità deve essere modificabile senza toccare lo script.
 Chiavi API: via env var (campo api_key_env) o campo api_key nel config.
 
+Provider: HTTP OpenAI-compatibile (gemini, deepseek) o "type": "cli"
+(codex: sottoprocesso Codex CLI, login ChatGPT — spec via stdin, output su
+file mktemp unico, preflight `command -v`).
+
 Uso:
   cross-verify.py --init
+  cross-verify.py --usage        # contatore locale vs limiti dichiarati (i
+                                 # free tier non espongono la quota via API)
   cross-verify.py --claim "..." --rubric "..." [--context-file F]
-                  [--provider gemini|deepseek] [--timeout 60]
+                  [--provider gemini|deepseek|codex] [--timeout 60]
 
 Output (grep-abile):
   STATUS: ok|unavailable|error
@@ -33,12 +39,18 @@ Exit code: 0 solo su STATUS ok. Zero dipendenze: solo stdlib.
 """
 import json
 import os
+import shutil
+import sqlite3
+import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 CONFIG_PATH = Path.home() / ".claude" / "fable-director" / "cross-family.json"
+DB_PATH = Path.home() / ".claude" / "fable-director" / "telemetry.db"
 
 DEFAULT_CONFIG = {
     "default": "gemini",
@@ -47,13 +59,24 @@ DEFAULT_CONFIG = {
             "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
             "model": "gemini-3-flash",
             "api_key_env": "GEMINI_API_KEY",
+            "limits": {"rpd": 1500, "rpm": 10},
             "note": "free tier AI Studio — la subscription consumer AI Pro NON alimenta l'API"
         },
         "deepseek": {
             "base_url": "https://openrouter.ai/api/v1",
             "model": "deepseek/deepseek-v4-flash:free",
             "api_key_env": "OPENROUTER_API_KEY",
+            "limits": {"rpd": 100},
             "note": "OpenRouter free tier ~100 req/giorno per chiave"
+        },
+        "codex": {
+            "type": "cli",
+            "command": ["codex", "exec", "--model", "gpt-5.5",
+                        "-c", "model_reasoning_effort=high",
+                        "--sandbox", "read-only", "--skip-git-repo-check",
+                        "--output-last-message", "{output_file}"],
+            "model": "gpt-5.5",
+            "note": "richiede Codex CLI installata + login ChatGPT (quota finestra 5h del piano; nessuna API di lettura quota)"
         }
     }
 }
@@ -95,6 +118,44 @@ def log_verification(payload):
         pass
 
 
+def cmd_usage():
+    """Contatore LOCALE per provider vs limiti dichiarati nel config.
+    I free tier non espongono la quota via API (né Gemini né Codex/ChatGPT):
+    questo conta le chiamate loggate in telemetria da QUESTA macchina — se la
+    chiave è usata anche altrove, sottostima. Il limite vero resta rumoroso
+    comunque: HTTP 429 → STATUS unavailable."""
+    if not CONFIG_PATH.is_file():
+        sys.exit(f"config assente: cross-verify.py --init")
+    cfg = json.loads(CONFIG_PATH.read_text())
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    counts = {}
+    if DB_PATH.is_file():
+        try:
+            con = sqlite3.connect(DB_PATH)
+            rows = con.execute(
+                "SELECT payload FROM events WHERE event='verification' AND ts >= ?",
+                (today,)).fetchall()
+            con.close()
+            for (payload,) in rows:
+                try:
+                    p = json.loads(payload or "{}")
+                except json.JSONDecodeError:
+                    continue
+                if p.get("kind") == "cross-family" and p.get("provider"):
+                    counts[p["provider"]] = counts.get(p["provider"], 0) + 1
+        except sqlite3.Error:
+            pass
+    print(f"# cross-family usage — oggi {today} UTC (contatore LOCALE: "
+          f"non vede uso della chiave fuori da questa macchina)")
+    for name, prov in (cfg.get("providers") or {}).items():
+        n = counts.get(name, 0)
+        rpd = (prov.get("limits") or {}).get("rpd")
+        lim = f"/{rpd} rpd dichiarato" if rpd else " (nessun limite dichiarato nel config)"
+        print(f"  {name}: {n}{lim}")
+        if rpd and n >= rpd * 0.8:
+            print(f"    ⚠ ALLARME (non target): ≥80% del limite dichiarato")
+
+
 def cmd_init():
     if CONFIG_PATH.is_file():
         print(f"config già presente: {CONFIG_PATH} (non sovrascrivo)")
@@ -102,9 +163,12 @@ def cmd_init():
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     CONFIG_PATH.write_text(json.dumps(DEFAULT_CONFIG, ensure_ascii=False, indent=2))
     print(f"config creata: {CONFIG_PATH}")
-    print("Prossimi passi: esporta le chiavi API nell'ambiente —")
+    print("Prossimi passi —")
     for name, p in DEFAULT_CONFIG["providers"].items():
-        print(f"  {name}: export {p['api_key_env']}=...  # {p.get('note', '')}")
+        if p.get("api_key_env"):
+            print(f"  {name}: export {p['api_key_env']}=...  # {p.get('note', '')}")
+        else:
+            print(f"  {name}: {p.get('note', '')}")
     print("URL/modelli nel config sono la fotografia di luglio 2026: "
           "riverificali, i free tier cambiano senza preavviso.")
 
@@ -117,12 +181,68 @@ def parse_args(argv):
         if argv[i] == "--init":
             cmd_init()
             sys.exit(0)
+        if argv[i] == "--usage":
+            cmd_usage()
+            sys.exit(0)
         if argv[i] in opts and i + 1 < len(argv):
             opts[argv[i]] = argv[i + 1]
             i += 2
         else:
             sys.exit(f"argomento non riconosciuto: {argv[i]}\n{__doc__}")
     return opts
+
+
+def call_http(prov, name, api_key, user_msg, timeout):
+    body = json.dumps({
+        "model": prov["model"],
+        "messages": [{"role": "system", "content": VERIFIER_SYSTEM},
+                     {"role": "user", "content": user_msg}],
+        "temperature": 0,
+    }).encode()
+    req = urllib.request.Request(
+        prov["base_url"].rstrip("/") + "/chat/completions", data=body,
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {api_key}"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode(errors="replace"))
+    except urllib.error.HTTPError as e:
+        unavailable(f"HTTP {e.code} da {name} (rate limit/endpoint cambiato?)")
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        unavailable(f"rete/timeout verso {name}: {e}")
+    try:
+        return data["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError):
+        return None
+
+
+def call_cli(prov, name, user_msg, timeout):
+    """Provider a sottoprocesso (es. Codex CLI). Disciplina Appendice C:
+    preflight esplicito, spec via STDIN (niente quoting hazard), output su
+    file mktemp unico (parallel-safe), timeout, mai fallback silenzioso."""
+    cmd_template = prov.get("command") or []
+    if not cmd_template or not shutil.which(cmd_template[0]):
+        unavailable(f"CLI '{cmd_template[0] if cmd_template else '?'}' non "
+                    f"installata per '{name}' ({prov.get('note', '')})")
+    fd, out_file = tempfile.mkstemp(prefix="cross-verify-", suffix=".txt")
+    os.close(fd)
+    cmd = [a.replace("{output_file}", out_file) for a in cmd_template]
+    spec = f"{VERIFIER_SYSTEM}\n\n{user_msg}"
+    try:
+        proc = subprocess.run(cmd, input=spec.encode(), timeout=timeout,
+                              capture_output=True)
+        if proc.returncode != 0:
+            unavailable(f"CLI '{name}' exit {proc.returncode}: "
+                        f"{proc.stderr.decode(errors='replace')[:200]}")
+        content = Path(out_file).read_text(errors="replace")
+        return content if content.strip() else proc.stdout.decode(errors="replace")
+    except subprocess.TimeoutExpired:
+        unavailable(f"CLI '{name}' timeout ({timeout}s)")
+    finally:
+        try:
+            os.unlink(out_file)
+        except OSError:
+            pass
 
 
 def main():
@@ -141,10 +261,13 @@ def main():
     prov = (cfg.get("providers") or {}).get(name)
     if not prov:
         unavailable(f"provider '{name}' non definito nel config")
-    api_key = prov.get("api_key") or os.environ.get(prov.get("api_key_env", ""), "")
-    if not api_key:
-        unavailable(f"chiave API assente per '{name}' "
-                    f"(export {prov.get('api_key_env')}=... o campo api_key nel config)")
+    is_cli = prov.get("type") == "cli"
+    api_key = ""
+    if not is_cli:
+        api_key = prov.get("api_key") or os.environ.get(prov.get("api_key_env", ""), "")
+        if not api_key:
+            unavailable(f"chiave API assente per '{name}' "
+                        f"(export {prov.get('api_key_env')}=... o campo api_key nel config)")
 
     context = ""
     if opts["--context-file"]:
@@ -159,32 +282,19 @@ def main():
     if context:
         user_msg += f"\nARTIFACT:\n{context[:100_000]}\n"
 
-    body = json.dumps({
-        "model": prov["model"],
-        "messages": [{"role": "system", "content": VERIFIER_SYSTEM},
-                     {"role": "user", "content": user_msg}],
-        "temperature": 0,
-    }).encode()
-    req = urllib.request.Request(
-        prov["base_url"].rstrip("/") + "/chat/completions", data=body,
-        headers={"Content-Type": "application/json",
-                 "Authorization": f"Bearer {api_key}"})
-    try:
-        with urllib.request.urlopen(req, timeout=int(opts["--timeout"])) as resp:
-            data = json.loads(resp.read().decode(errors="replace"))
-    except urllib.error.HTTPError as e:
-        unavailable(f"HTTP {e.code} da {name} (rate limit/endpoint cambiato?)")
-    except (urllib.error.URLError, TimeoutError, OSError) as e:
-        unavailable(f"rete/timeout verso {name}: {e}")
+    timeout = int(opts["--timeout"])
+    if is_cli:
+        content = call_cli(prov, name, user_msg, timeout)
+    else:
+        content = call_http(prov, name, api_key, user_msg, timeout)
 
     try:
-        content = data["choices"][0]["message"]["content"]
         # tollera code fence attorno al JSON
         content = content.strip().strip("`").removeprefix("json").strip()
         verdict_obj = json.loads(content)
         verdict = verdict_obj.get("verdict", "uncertain")
         reasoning = verdict_obj.get("reasoning", "")
-    except (KeyError, IndexError, TypeError, json.JSONDecodeError):
+    except (AttributeError, TypeError, json.JSONDecodeError):
         # risposta fuori schema: NON è una verifica valida
         out("error", name, prov["model"], "uncertain",
             "risposta del provider fuori schema — trattala come NON verificata")
