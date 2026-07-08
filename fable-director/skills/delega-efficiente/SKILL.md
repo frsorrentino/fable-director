@@ -43,7 +43,7 @@ Axes compose rather than exclude: a batch (4) of quality-sensitive items (2) →
 
 ## Harness mechanics (learned from real waste)
 
-- NEVER read a workflow's full output/TaskOutput dump. Extract via script from `<transcriptDir>/journal.jsonl` (`{"type":"result",...}` per agent). Journal stores the RAW agent result (no wrapper fields): map agentId→item by grepping each `agent-*.jsonl` prompt for the item's identifying field; re-attach metadata from your census file.
+- NEVER read a workflow's full output/TaskOutput dump. Extract via script from `<transcriptDir>/journal.jsonl` (raw result per agent; map agentId→item by grepping each `agent-*.jsonl` prompt).
 - Run failed partway (session limit, hang): relaunch with `resumeFromRunId` — completed agents replay from cache, only failures re-run. Hung run: `TaskStop` first. Never restart from zero.
 - Subagents return path + counts + anomalies, never full content.
 - Tool output is next turn's input — the same discipline applies to YOUR tool calls: never cat whole files; grep → head → partial Read (offset/limit) → summary script. Same for `git diff` (`--stat`, `--name-only` first) and logs (`tail`, pattern filter). The harness truncates >25k, but the 2-20k band passes whole and silently bloats context.
@@ -53,6 +53,7 @@ Axes compose rather than exclude: a batch (4) of quality-sensitive items (2) →
 1. Deterministic assertions covering ~100% (counts, grep, length/schema checks, tests).
 2. Top-model spot-check on 2-3 samples.
 3. LLM verifiers only for individually risky claims — always in a fresh-context subagent that receives ONLY artifact + rubric, never the maker's reasoning trail (inline self-critique is structurally self-preferential: the maker prefers conclusions consistent with what it already wrote); per-item across a batch only when no objective test exists.
+4. (optional, rare, highest stakes) Cross-family verifier: `scripts/cross-verify.py --claim ... --rubric ...` — a different model family has uncorrelated blind spots, and it's out of Claude quota. Soft-dep: on `STATUS: unavailable` fall back to rung 3 EXPLICITLY — unavailable is never "verified".
 
 Gate depth on OBSERVED risk too, not only predicted: huge diff, many files touched, flaky tests escalate the rung even when the task was classified low-risk — never de-escalate below the axis-2 floor. A clean verification is paid insurance, not waste: the logged hit-rate (see Telemetry) calibrates depth per task type, it is NEVER a reason to skip verification where error cost is high.
 

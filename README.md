@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.8.2-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.9.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -18,7 +18,12 @@ fable-director injects an **always-on routing policy** and makes it **enforced b
 
 ---
 
-## 🆕 What's new in 1.8.x
+## 🆕 What's new in 1.9.0
+
+- **Cross-family verifier (optional, ladder rung 4).** `scripts/cross-verify.py` — adversarial check on highest-stakes claims by a **different model family** (all-Claude ensembles share correlated blind spots by construction), out of Claude quota. Zero dependencies (stdlib HTTP), OpenAI-compatible endpoints behind a config file (`--init` creates it: Gemini free API / DeepSeek via OpenRouter free — URLs and models live in config, not code, because free tiers change monthly). **No silent fallback**: missing key, rate limit, endpoint down → `STATUS: unavailable` with the explicit instruction to degrade to the same-family fresh-context verifier — unavailable is never "verified".
+- **Benchmark now measures the shipped stack.** The `on` arm injects the full enforcement stack via `--settings` (SessionStart kernel + PreToolUse gate + Stop 2×/3× check) instead of kernel-only `--append-system-prompt`. Budget files are wiped between runs. The published number, when it lands, will measure what you actually install.
+
+<details><summary>1.8.x</summary>
 
 - **1.8.2 — fresh-context verifier + known limits.** Verification ladder rung 3 now requires the LLM verifier to run in a fresh-context subagent that sees only artifact + rubric — never the maker's reasoning trail (inline self-critique is structurally self-preferential). New "Known limits" README section: enforcement is local-only (cloud/CMA sessions run outside the hook stack), statusline degradation, Claude Code's quiet model fallback, transcript schema dependency.
 - **1.8.1 — skill-audit fixes.** "Never delegate" lists aligned between kernel and skill (the kernel was missing "decisions on how to count or report"); the skill's trigger description now covers gate denials; new playbook seed: spot delegations get an honest micro-budget for the single call — never a wide session-budget that kills the 2×/3× thresholds.
@@ -34,6 +39,7 @@ fable-director injects an **always-on routing policy** and makes it **enforced b
 - **5-part spec contract for delegation prompts** (Objective / Files / Interfaces / Constraints / Verification) — replaces the old 4-component contract; context-free delegation is the test that the route is delegable at all.
 - Statusline example renamed `[OPUS4.8]` → `[FABLE5]` (the director role matches the plugin's name; the model was never hardcoded).
 
+</details>
 </details>
 
 ---

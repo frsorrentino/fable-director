@@ -5,9 +5,12 @@ It compares the same task run by Claude Code **without** and **with** the fable-
 
 ## Method
 
-- **Arm `off`**: `claude -p "<task>"` with no kernel.
-- **Arm `on`**: identical task + the fable-director kernel injected via `--append-system-prompt`
-  (isolates the effect of the routing policy alone, the mechanism by which the plugin changes decisions).
+- **Arm `off`**: `claude -p "<task>"` with no kernel and no hooks.
+- **Arm `on`**: identical task + the **full enforcement stack** injected via `--settings`:
+  SessionStart (kernel), PreToolUse (pre-delegation gate), Stop (2×/3× budget check) — the
+  same hooks the plugin ships, with absolute paths. This measures what you actually install,
+  not just the policy's influence on decisions. Budget files are wiped between runs so one
+  run's budget can't authorize or pollute the next.
 - Tokens read from the `claude -p` JSON output (`.usage`, `.total_cost_usd`) — no estimates.
 - Deterministic fixtures (fixed seed) regenerated before each run.
 - **N runs per side** (default 3): report the mean and spread, not a single run.
@@ -27,7 +30,7 @@ The three shapes exist precisely to show the **range**, not a cherry-picked numb
 ```bash
 python3 gen_fixtures.py          # deterministic fixtures
 RUNS=3 bash run.sh               # ~18 headless sessions (3 tasks × 2 arms × 3 runs)
-# optional: MODEL=claude-opus-4-8 RUNS=3 bash run.sh
+# optional: MODEL=claude-fable-5 RUNS=3 bash run.sh
 ```
 
 `run.sh` uses `--dangerously-skip-permissions` so it doesn't block on every write: it runs only
