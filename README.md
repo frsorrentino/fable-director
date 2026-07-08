@@ -109,18 +109,52 @@ One glance at model, context and plan quotas — so you see the rate limit comin
 ![fable-director statusline](assets/statusline.svg)
 
 ```
-[FABLE5] [CTX 5%] [5H 6%→19:40] [7D 70%→9 Jul] [BDG ok] [DLG SONNET-5 41k HAIKU-4-5 3k]
+[FABLE5] [CTX 26%] [5H 71%→17:30] [7D 46%→14 Jul] [BDG ok] [XF GEMINI▶ CODEX×2] [DLG SONNET-5 41k ≡ 3k]
 ```
 
-- `[FABLE5]` active model
-- `[CTX 5%]` how full the conversation's context window is
-- `[5H 6%→19:40]` 5-hour plan-window quota + local reset time (the "Current session" in `/usage`)
-- `[7D 70%→9 Jul]` weekly quota + reset date
-- `[BDG ok]` fable-director pre-budget state (`ok` / `2×` / `3×`)
-- `[DLG …]` output tokens delegated this session, per **effective** model read incrementally from the session transcript (`≡` = subagents on the same model as the main loop). If the transcript isn't exposed, degrades to the gate's declared-model call counts, marked with `≈`
-- `[XF …]` cross-family verifier activity: `GEMINI▶` = call in flight right now (marker from `cross-verify.py`, ignored if stale >15 min), `CODEX×2` = calls today from local telemetry. Free tiers expose no real-time quota API — this is presence + local counts, not remaining quota (`cross-verify.py --usage` for limits)
+### Legend, segment by segment
 
-Color thresholds 60/80. If you have the **caveman** plugin, its badge stays in front.
+| Segment | What it shows | Reads from |
+|---|---|---|
+| `[FABLE5]` | Model driving **this** conversation (the "director") | Claude Code session info |
+| `[CTX 26%]` | How full the conversation's context window is | session info |
+| `[5H 71%→17:30]` | 5-hour plan-window quota used + local reset time (the "Current session" in `/usage`) | plan rate limits |
+| `[7D 46%→14 Jul]` | Weekly plan quota used + reset date | plan rate limits |
+| `[BDG …]` | fable-director **pre-budget** state for this directory | budget file |
+| `[XF …]` | **Cross-family verifier** (Gemini / Codex / DeepSeek) activity | marker file + local telemetry |
+| `[DLG …]` | Work **delegated to subagents** this session, tokens per model | session transcript |
+
+Segments with nothing to say disappear (no budget open → no `[BDG]`; no delegation → no `[DLG]`; no cross-family use today → no `[XF]`). Quota colors: green < 60%, yellow ≥ 60%, red ≥ 80%. With the **caveman** plugin its badge stays in front.
+
+### `[BDG]` states
+
+| You see | Meaning |
+|---|---|
+| `[BDG ok]` | A pre-budget is open, consumption under 2× the estimate |
+| `[BDG 2×]` | Checkpoint hit: consumption passed 2× — the Stop hook asked the model to reassess the route |
+| `[BDG 3×]` | Blown: ≥3× the estimate — turn closure was blocked until the post-mortem |
+
+### `[XF]` states — cross-family verifier
+
+The external providers expose **no real-time quota API**, so this segment shows *presence*, not remaining quota:
+
+| You see | Meaning |
+|---|---|
+| *(segment absent)* | No cross-family calls today, none running |
+| `GEMINI▶` | A Gemini verification call is **in flight right now** (`▶` disappears when it returns; stale markers >15 min are ignored) |
+| `CODEX×2` | 2 Codex calls completed **today** — counted locally by this machine's telemetry, blind to usage of the same key elsewhere |
+| `GEMINI▶ CODEX×2` | Both: Gemini running now, Codex used twice today |
+
+Limits check: `cross-verify.py --usage` compares today's counts against the free-tier limits declared in config.
+
+### `[DLG]` states — delegated work
+
+| You see | Meaning |
+|---|---|
+| *(segment absent)* | No subagent work in this session |
+| `SONNET-5 41k` | Subagents running on Sonnet 5 produced **41k output tokens** so far (effective model, read from the transcript — immune to Claude Code's quiet model fallback) |
+| `≡ 3k` | Subagents running on the **same model as the main loop** (inherit) produced 3k tokens |
+| `≈SONNET-5×2` | Fallback mode (`≈` prefix): transcript not exposed by this Claude Code version → counts **declared** delegation calls from the gate instead of effective tokens |
 
 **Enable it with one command** (idempotent, merge-safe, path auto-resolved per machine):
 
