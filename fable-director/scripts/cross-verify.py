@@ -59,7 +59,7 @@ DEFAULT_CONFIG = {
     "providers": {
         "gemini": {
             "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
-            "model": "gemini-3-flash",
+            "model": "gemini-2.5-flash",
             "api_key_env": "GEMINI_API_KEY",
             "limits": {"rpd": 1500, "rpm": 10},
             "note": "free tier AI Studio — la subscription consumer AI Pro NON alimenta l'API"
