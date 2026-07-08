@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.9.1-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.9.2-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -20,6 +20,7 @@ fable-director injects an **always-on routing policy** and makes it **enforced b
 
 ## 🆕 What's new in 1.9.x
 
+- **1.9.2 — in-session model visibility.** When a delegation declares an explicit model (`Agent` calls with a `model` field), the gate now prints a one-line notice in session: `FD ▶ delega a modello esplicito: <agent> → <model>`. Inherit stays silent (homogeneous fan-outs produce zero noise). The line shows the *declared* model — the effective one can quietly degrade (see Known limits); post-task truth is `session-cost-report.py` (per-model token breakdown, already shipped).
 - **1.9.1 — Codex CLI provider + local usage counter.** Third cross-family lane: `"type": "cli"` providers run a subprocess (Codex CLI with ChatGPT login — fixed-cost, no API billing); spec via stdin, unique mktemp output, `command -v` preflight, quota errors → `unavailable`. New `cross-verify.py --usage`: free tiers expose no quota API (neither Gemini nor ChatGPT/Codex), so this counts today's calls per provider from local telemetry against the declared limits in config (honest label: local counter, blind to key usage elsewhere; a real 429 still fails loudly).
 - **Cross-family verifier (optional, ladder rung 4).** `scripts/cross-verify.py` — adversarial check on highest-stakes claims by a **different model family** (all-Claude ensembles share correlated blind spots by construction), out of Claude quota. Zero dependencies (stdlib HTTP), OpenAI-compatible endpoints behind a config file (`--init` creates it: Gemini free API / DeepSeek via OpenRouter free — URLs and models live in config, not code, because free tiers change monthly). **No silent fallback**: missing key, rate limit, endpoint down → `STATUS: unavailable` with the explicit instruction to degrade to the same-family fresh-context verifier — unavailable is never "verified".
 - **Benchmark now measures the shipped stack.** The `on` arm injects the full enforcement stack via `--settings` (SessionStart kernel + PreToolUse gate + Stop 2×/3× check) instead of kernel-only `--append-system-prompt`. Budget files are wiped between runs. The published number, when it lands, will measure what you actually install.

@@ -46,6 +46,24 @@ def deny(reason):
     }, ensure_ascii=False))
 
 
+def announce_model(data):
+    """Delega con modello dichiarato ESPLICITO (≠ inherit): rendila visibile
+    in sessione. Inherit = stesso modello del main loop → silenzio, così i
+    fan-out omogenei non producono N righe di rumore. Mostra il modello
+    DICHIARATO: quello effettivo può degradare in silenzio (quiet fallback
+    di Claude Code, vedi Known limits) — la verità post-task è
+    session-cost-report.py (rendiconto per modello effettivo)."""
+    ti = data.get("tool_input") or {}
+    model = ti.get("model")
+    if not model:
+        return
+    target = ti.get("subagent_type") or data.get("tool_name") or "delega"
+    print(json.dumps({"systemMessage": (
+        f"FD ▶ delega a modello esplicito: {target} → {model} "
+        f"(dichiarato; effettivo verificabile post-task con "
+        f"session-cost-report.py)")}, ensure_ascii=False))
+
+
 def main():
     try:
         data = json.load(sys.stdin)
@@ -70,7 +88,8 @@ def main():
         declared = parse_ts(budget.get("declared_at"))
         now = datetime.now(timezone.utc)
         if declared and (now - declared).total_seconds() <= 86400:
-            return  # budget valido: allow, zero rumore
+            announce_model(data)  # riga solo se modello esplicito ≠ inherit
+            return  # budget valido: allow
         deny(
             "FABLE-DIRECTOR gate pre-delega: il budget aperto per questo cwd "
             f"è più vecchio di 24h (task abbandonato: '{budget.get('task')}'). "
