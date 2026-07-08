@@ -94,11 +94,21 @@ savings are a figure you read, not a percentage on a banner.
 
 **Reproducible benchmark.** [`benchmarks/`](benchmarks/) contains an A/B harness (same task
 *without* and *with* the policy, tokens read from the real `claude -p` output, N runs per side,
-3 task shapes). The measured percentage will be published here with methodology, N and spread —
-not before it's actually been measured.
+4 task shapes). Numbers below come from this harness, with methodology, N and spread.
 
-<!-- BENCH:RESULT — replace once the benchmark has been run -->
-> 📐 *Measurement pending.* Run it yourself: `cd benchmarks && RUNS=3 bash run.sh`.
+<!-- BENCH:RESULT — policy effect (equal model). Director topology: pending. -->
+> 📐 **Measured — policy effect at equal model** (both arms `claude-sonnet-5`, N=3 per side, full enforcement stack injected via `--settings`, 2026-07-08):
+>
+> | Task shape | Tokens saved | Cost saved | Quality (on vs off) |
+> |---|---|---|---|
+> | 01 batch-deterministic | **+17.1%** | **+10.8%** | — |
+> | 02 classification | +6.2% | −2.4% | — |
+> | 03 mixed | +3.0% | −2.8% | — |
+> | 04 semantic triage | −47.7%¹ | −76.0%¹ | identical (safety recall 100% both) |
+>
+> **Honest reading.** The policy pays where work is deterministic (01 — and it also made behavior *stable*: on-arm spread ±267 tokens vs ±40k off) and roughly breaks even where the base model already behaves well (02-03: kernel overhead ≈ the gain). ¹ Shape 04 is **not conclusive at N=3**: one outlier run ($2.00 vs ~$0.5 median) drives the number, spread is ±62% of the mean, and telemetry shows **no delegation happened** in the on-arm — consistent with axis 6 (for a cheap model on micro-items, inline beats delegation; there is no model differential to harvest at equal model). That differential is the *director topology* measurement (top model orchestrating, cheaper executors), planned separately — see the honesty section in [`benchmarks/README.md`](benchmarks/README.md). Quality was identical across arms.
+>
+> Reproduce: `cd benchmarks && MODEL=claude-sonnet-5 RUNS=3 bash run.sh`.
 
 ---
 
