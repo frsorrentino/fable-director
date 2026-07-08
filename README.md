@@ -20,6 +20,7 @@ fable-director injects an **always-on routing policy** and makes it **enforced b
 
 ## 🆕 What's new in 1.10.x
 
+- **1.10.2 — cross-family lanes verified live.** Default Gemini model for new configs is `gemini-2.5-flash` (verified with a real call: `gemini-3-flash` doesn't exist on the AI Studio free tier, `gemini-flash-latest` answers 503 under load). Both lanes tested end-to-end — Gemini free API and Codex CLI (ChatGPT login) each returned a correct adversarial verdict. **When they fire and how to invoke them yourself: see [Cross-family verifier](#-cross-family-verifier--when-and-how) below.**
 - **1.10.1 — `[DLG]` shows effective tokens, not declared calls.** The segment now reads the session transcript **incrementally** (a state file keeps the byte offset — each refresh parses only new lines, never a rescan) and shows **output tokens per effective model** of subagent work: `[DLG SONNET-5 41k HAIKU-4-5 3k]` (`≡` = subagents inheriting the main-loop model). Immune to the quiet-fallback blind spot and it weighs work, not call counts. Where the transcript isn't exposed it degrades to the gate's declared-call registry, marked `≈` — the two modes are visually distinct by design. Also new: **`[XF]` cross-family segment** — `GEMINI▶` while a `cross-verify.py` call is in flight, `CODEX×2` for today's calls (local telemetry; free tiers expose no quota API, so this is presence, not remaining quota).
 - **1.10.0 — `[DLG]` statusline segment (declared calls).** The pre-delegation gate keeps a per-session registry of delegations counted by declared model. The registry dies at SessionEnd (48h orphan cleanup for crashed sessions).
 - **Benchmark task shape 04 — where governance actually bites.** 40 synthetic customer reviews requiring per-item semantic judgment (closed-vocabulary sentiment/theme + safety-defect flagging, 6 planted defects with ground truth outside the task's view). Unlike shapes 01–03 (script-parity), this one can trigger real delegation → the gate and Stop hook finally get exercised in the `on` arm. `aggregate.py` now also reports **accuracy per arm** (sentiment/theme accuracy, safety recall/precision): savings only count at verified-equal quality — safety recall lost in one arm gets reported, not hidden.
@@ -128,6 +129,29 @@ Color thresholds 60/80. If you have the **caveman** plugin, its badge stays in f
 ```
 
 Then restart Claude Code. `--remove` to take it out. It won't touch a third-party statusLine already present and it backs up `settings.json`.
+
+---
+
+## 🧬 Cross-family verifier — when and how
+
+An all-Claude ensemble shares correlated blind spots by construction; a different model family (Gemini, GPT, DeepSeek) catches what same-family verification can't. `scripts/cross-verify.py` is that lane — and it's **out of your Claude quota** (Gemini free tier / ChatGPT plan / OpenRouter free).
+
+**When Claude invokes it on its own.** It is rung 4 of the verification ladder in the `delega-efficiente` skill — **optional and rare by design**. The director escalates to it only for the *highest-stakes* claims that have no objective test: an irreversible decision, a client-facing number it can't verify deterministically, a critical assumption everything else depends on. It is NOT called on every task — most verification stops at rung 1 (deterministic assertions) or rung 3 (same-family fresh-context verifier). When a call is in flight you see `[XF GEMINI▶]` in the statusline; today's calls show as `[XF CODEX×2]`.
+
+**When YOU can invoke it.** Any time, two ways:
+
+1. **Ask in session** — plain language works: *"verifica questo claim con il cross-family verifier"*, *"fai controllare a Gemini/Codex che…"*. Claude runs the script and reports the verdict.
+2. **Directly from any shell:**
+   ```bash
+   python3 <plugin>/scripts/cross-verify.py \
+     --claim "the migration script is idempotent" \
+     --rubric "running it twice must not duplicate rows" \
+     --context-file migration.sql \
+     --provider gemini          # or codex | deepseek; omit → config default
+   ```
+   Output is grep-able (`STATUS` / `PROVIDER` / `VERDICT: refuted|supported|uncertain` / `REASONING`). `--usage` shows today's local call counts against the declared free-tier limits.
+
+**Setup** (once): `cross-verify.py --init` creates `~/.claude/fable-director/cross-family.json`, then add your Gemini key (AI Studio) and/or `codex login`. **No silent fallback**: anything missing → `STATUS: unavailable` + explicit instruction to fall back to the same-family verifier. An `unavailable` is never "verified".
 
 ---
 
