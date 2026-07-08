@@ -308,9 +308,10 @@ def reap_delegations(session_id):
         if not d.is_dir():
             return
         if session_id:
-            f = d / f"{session_id}.json"
-            if f.is_file():
-                f.unlink()
+            for suffix in (".json", ".tok.json"):
+                f = d / f"{session_id}{suffix}"
+                if f.is_file():
+                    f.unlink()
         cutoff = datetime.now(timezone.utc).timestamp() - 172800
         for f in d.glob("*.json"):
             if f.stat().st_mtime < cutoff:

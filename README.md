@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.10.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.10.1-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -18,9 +18,10 @@ fable-director injects an **always-on routing policy** and makes it **enforced b
 
 ---
 
-## 🆕 What's new in 1.10.0
+## 🆕 What's new in 1.10.x
 
-- **`[DLG]` statusline segment — delegated models at a glance.** The pre-delegation gate now keeps a per-session registry of delegations counted by declared model; the statusline renders it live: `[DLG ≡×4 SONNET-5×2]` (`≡` = inherit). The registry dies at SessionEnd (48h orphan cleanup for crashed sessions). Declared vs effective caveat unchanged — post-task truth is `session-cost-report.py`.
+- **1.10.1 — `[DLG]` shows effective tokens, not declared calls.** The segment now reads the session transcript **incrementally** (a state file keeps the byte offset — each refresh parses only new lines, never a rescan) and shows **output tokens per effective model** of subagent work: `[DLG SONNET-5 41k HAIKU-4-5 3k]` (`≡` = subagents inheriting the main-loop model). Immune to the quiet-fallback blind spot and it weighs work, not call counts. Where the transcript isn't exposed it degrades to the gate's declared-call registry, marked `≈` — the two modes are visually distinct by design. Also new: **`[XF]` cross-family segment** — `GEMINI▶` while a `cross-verify.py` call is in flight, `CODEX×2` for today's calls (local telemetry; free tiers expose no quota API, so this is presence, not remaining quota).
+- **1.10.0 — `[DLG]` statusline segment (declared calls).** The pre-delegation gate keeps a per-session registry of delegations counted by declared model. The registry dies at SessionEnd (48h orphan cleanup for crashed sessions).
 - **Benchmark task shape 04 — where governance actually bites.** 40 synthetic customer reviews requiring per-item semantic judgment (closed-vocabulary sentiment/theme + safety-defect flagging, 6 planted defects with ground truth outside the task's view). Unlike shapes 01–03 (script-parity), this one can trigger real delegation → the gate and Stop hook finally get exercised in the `on` arm. `aggregate.py` now also reports **accuracy per arm** (sentiment/theme accuracy, safety recall/precision): savings only count at verified-equal quality — safety recall lost in one arm gets reported, not hidden.
 
 <details><summary>1.9.x</summary>
@@ -107,7 +108,7 @@ One glance at model, context and plan quotas — so you see the rate limit comin
 ![fable-director statusline](assets/statusline.svg)
 
 ```
-[FABLE5] [CTX 5%] [5H 6%→19:40] [7D 70%→9 Jul] [BDG ok] [DLG ≡×4 SONNET-5×2]
+[FABLE5] [CTX 5%] [5H 6%→19:40] [7D 70%→9 Jul] [BDG ok] [DLG SONNET-5 41k HAIKU-4-5 3k]
 ```
 
 - `[FABLE5]` active model
@@ -115,7 +116,8 @@ One glance at model, context and plan quotas — so you see the rate limit comin
 - `[5H 6%→19:40]` 5-hour plan-window quota + local reset time (the "Current session" in `/usage`)
 - `[7D 70%→9 Jul]` weekly quota + reset date
 - `[BDG ok]` fable-director pre-budget state (`ok` / `2×` / `3×`)
-- `[DLG …]` delegations this session, counted per **declared** model (`≡` = inherit, same model as the main loop). Recorded by the pre-delegation gate; effective models post-task via `session-cost-report.py`
+- `[DLG …]` output tokens delegated this session, per **effective** model read incrementally from the session transcript (`≡` = subagents on the same model as the main loop). If the transcript isn't exposed, degrades to the gate's declared-model call counts, marked with `≈`
+- `[XF …]` cross-family verifier activity: `GEMINI▶` = call in flight right now (marker from `cross-verify.py`, ignored if stale >15 min), `CODEX×2` = calls today from local telemetry. Free tiers expose no real-time quota API — this is presence + local counts, not remaining quota (`cross-verify.py --usage` for limits)
 
 Color thresholds 60/80. If you have the **caveman** plugin, its badge stays in front.
 

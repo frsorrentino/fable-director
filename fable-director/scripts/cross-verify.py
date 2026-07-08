@@ -51,6 +51,8 @@ from pathlib import Path
 
 CONFIG_PATH = Path.home() / ".claude" / "fable-director" / "cross-family.json"
 DB_PATH = Path.home() / ".claude" / "fable-director" / "telemetry.db"
+# Marker "chiamata cross-family in corso" per il segmento [XF] dello statusline
+ACTIVE_PATH = Path.home() / ".claude" / "fable-director" / "xfam-active.json"
 
 DEFAULT_CONFIG = {
     "default": "gemini",
@@ -283,10 +285,24 @@ def main():
         user_msg += f"\nARTIFACT:\n{context[:100_000]}\n"
 
     timeout = int(opts["--timeout"])
-    if is_cli:
-        content = call_cli(prov, name, user_msg, timeout)
-    else:
-        content = call_http(prov, name, api_key, user_msg, timeout)
+    # Marker per lo statusline: [XF <provider>▶] finché la chiamata è viva.
+    # finally garantisce la rimozione anche su unavailable (SystemExit).
+    try:
+        ACTIVE_PATH.write_text(json.dumps(
+            {"provider": name, "pid": os.getpid(),
+             "started": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}))
+    except OSError:
+        pass
+    try:
+        if is_cli:
+            content = call_cli(prov, name, user_msg, timeout)
+        else:
+            content = call_http(prov, name, api_key, user_msg, timeout)
+    finally:
+        try:
+            ACTIVE_PATH.unlink()
+        except OSError:
+            pass
 
     try:
         # tollera code fence attorno al JSON

@@ -25,11 +25,11 @@ badge=""
 # Tutte le metriche in UNA passata python (statusline gira spesso: un solo processo).
 # Campi assenti → "-" → il segmento si omette. Il budget file è di fable-director
 # (fd-telemetry.py budget-open / stop-budget-check.py): qui SOLO lettura.
-read -r model pct rl rlt wk wkt bdg dlg <<EOF
+read -r model pct rl rlt wk wkt bdg xf dlg <<EOF
 $(printf '%s' "$input" | python3 -c '
 import json,sys,os,time
 from pathlib import Path
-model=pct=rl=rlt=wk=wkt=bdg=dlg="-"
+model=pct=rl=rlt=wk=wkt=bdg=xf=dlg="-"
 def fmt_reset(ts):
     # entro 24h: orario; oltre: "6 Jul"/"6 lug" (giorno + mese secondo il locale)
     try:
@@ -66,21 +66,91 @@ try:
         st=b.get("status")
         if st=="open": bdg="2x" if b.get("warned") else "ok"
         elif st=="flagged": bdg="3x"
-    # [DLG] deleghe della sessione per modello dichiarato (registro del gate;
-    # ≡ = inherit, stesso modello del main). Effettivo: session-cost-report.py.
+    # [DLG] token EFFETTIVI delegati per modello reale, dal transcript della
+    # sessione con scan INCREMENTALE (state file con offset: a ogni refresh si
+    # leggono solo le righe nuove — mai rescan). Record sidechain (subagent)
+    # → bucket per message.model; "≡" = stesso modello del main loop.
+    # Fallback senza transcript: registro dichiarato del gate, prefisso "≈".
+    def norm(m):
+        return str(m).replace("claude-","").replace(" ","").replace("-","").upper()
+    def fmtk(n):
+        return f"{n/1000:.0f}k" if n >= 1000 else str(n)
     sid=d.get("session_id")
-    if sid:
+    tp=d.get("transcript_path")
+    main_norm=norm(m or "")
+    if sid and tp and Path(tp).is_file():
+        sf=Path.home()/".claude"/"fable-director"/"delegations"/f"{sid}.tok.json"
+        state={"off":0,"models":{}}
+        if sf.is_file():
+            try: state=json.loads(sf.read_text())
+            except Exception: pass
+        size=Path(tp).stat().st_size
+        if size < state.get("off",0): state={"off":0,"models":{}}  # transcript ruotato
+        if size > state.get("off",0):
+            with open(tp, errors="replace") as fh:
+                fh.seek(state.get("off",0))
+                for line in fh:
+                    try: rec=json.loads(line)
+                    except Exception: continue
+                    if not rec.get("isSidechain"): continue
+                    msg=rec.get("message") or {}
+                    u=msg.get("usage") or {}
+                    out=u.get("output_tokens") or 0
+                    if not out: continue
+                    mm=norm(msg.get("model") or "?")
+                    key="≡" if mm==main_norm else (msg.get("model") or "?").replace("claude-","").upper()[:10]
+                    state["models"][key]=state["models"].get(key,0)+out
+                state["off"]=fh.tell()
+            sf.parent.mkdir(parents=True, exist_ok=True)
+            sf.write_text(json.dumps(state))
+        mm=state.get("models") or {}
+        if mm:
+            dlg=",".join(f"{k} {fmtk(v)}" for k,v in
+                         sorted(mm.items(), key=lambda x:-x[1])[:4])
+    elif sid:
         df=Path.home()/".claude"/"fable-director"/"delegations"/f"{sid}.json"
         if df.is_file():
             c=json.loads(df.read_text())
-            parts=[]
-            for k in sorted(c, key=lambda x:-c[x]):
-                label="≡" if k=="inherit" else str(k).replace("claude-","").upper()[:10]
-                parts.append(f"{label}×{c[k]}")
-            if parts: dlg=",".join(parts[:4])
+            parts=[("≡" if k=="inherit" else str(k).replace("claude-","").upper()[:10])+f"×{v}"
+                   for k,v in sorted(c.items(), key=lambda x:-x[1])]
+            if parts: dlg="≈"+",".join(parts[:4])
+    # [XF] verifier cross-family (Gemini/DeepSeek/Codex): niente quota real-time
+    # dai provider → ▶ = chiamata IN CORSO (marker di cross-verify.py, ignorato
+    # se >15 min: processo morto); ×N = chiamate di oggi dalla telemetria locale.
+    fd=Path.home()/".claude"/"fable-director"
+    active=None
+    af=fd/"xfam-active.json"
+    if af.is_file():
+        try:
+            a=json.loads(af.read_text())
+            from datetime import datetime as _dt, timezone as _tz
+            st=_dt.fromisoformat(str(a.get("started","")).replace("Z","+00:00"))
+            if (_dt.now(_tz.utc)-st).total_seconds() < 900: active=a.get("provider")
+        except Exception: pass
+    xcounts={}
+    dbf=fd/"telemetry.db"
+    if dbf.is_file():
+        try:
+            import sqlite3
+            from datetime import datetime as _dt2, timezone as _tz2
+            today=_dt2.now(_tz2.utc).strftime("%Y-%m-%d")
+            con=sqlite3.connect(dbf)
+            for (pl,) in con.execute("SELECT payload FROM events WHERE event=? AND ts >= ?", ("verification", today)):
+                try: p=json.loads(pl or "{}")
+                except Exception: continue
+                if p.get("kind")=="cross-family" and p.get("provider"):
+                    xcounts[p["provider"]]=xcounts.get(p["provider"],0)+1
+            con.close()
+        except Exception: pass
+    xparts=[]
+    for prov in sorted(set(list(xcounts)+([active] if active else []))):
+        label=str(prov).upper()[:8]
+        if prov==active: xparts.append(f"{label}▶")
+        elif xcounts.get(prov): xparts.append(f"{label}×{xcounts[prov]}")
+    if xparts: xf=",".join(xparts[:3])
 except Exception:
     pass
-print(model,pct,rl,rlt,wk,wkt,bdg,dlg)
+print(model,pct,rl,rlt,wk,wkt,bdg,xf,dlg)
 ' 2>/dev/null)
 EOF
 
@@ -109,6 +179,8 @@ case "$bdg" in
   2x) out="$out $(printf '\033[38;5;220m[BDG 2×]\033[0m')" ;;
   3x) out="$out $(printf '\033[38;5;196m[BDG 3×]\033[0m')" ;;
 esac
+[ "$xf" != "-" ] && [ -n "$xf" ] && \
+  out="$out $(printf '\033[38;5;216m[XF %s]\033[0m' "$(printf '%s' "$xf" | tr ',' ' ')")"
 [ "$dlg" != "-" ] && [ -n "$dlg" ] && \
   out="$out $(printf '\033[38;5;183m[DLG %s]\033[0m' "$(printf '%s' "$dlg" | tr ',' ' ')")"
 printf '%s' "${out# }"
