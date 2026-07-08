@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.8.1-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.8.2-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -20,6 +20,7 @@ fable-director injects an **always-on routing policy** and makes it **enforced b
 
 ## 🆕 What's new in 1.8.x
 
+- **1.8.2 — fresh-context verifier + known limits.** Verification ladder rung 3 now requires the LLM verifier to run in a fresh-context subagent that sees only artifact + rubric — never the maker's reasoning trail (inline self-critique is structurally self-preferential). New "Known limits" README section: enforcement is local-only (cloud/CMA sessions run outside the hook stack), statusline degradation, Claude Code's quiet model fallback, transcript schema dependency.
 - **1.8.1 — skill-audit fixes.** "Never delegate" lists aligned between kernel and skill (the kernel was missing "decisions on how to count or report"); the skill's trigger description now covers gate denials; new playbook seed: spot delegations get an honest micro-budget for the single call — never a wide session-budget that kills the 2×/3× thresholds.
 - **Cache-staleness sentinel.** Claude Code copies plugins to a cache at install time and never re-checks it: with a local marketplace the running plugin silently falls behind its source (we lived it: 1.0.0 running for days while the source was at 1.6.0). A `SessionStart` sentinel now compares the running version against every `directory`-type marketplace source and warns with the exact `claude plugin update` command. Warn only, never auto-update — a nested CLI call in a hook is slow, races the plugin registry, and the current session would stay on the old version anyway.
 - **`/fable-director:review`** — the director reads its own telemetry. The learning loop used to write heuristics only on incidents (3× busts, rule-of-3); this command has the top model read `report` + playbook and produce a brutally honest improvement plan anchored **only to objective alarms** (max 5 recommendations, each citing the datum that justifies it; "no intervention justified by the data" is a valid outcome — inventing problems is forbidden).
@@ -110,6 +111,15 @@ Color thresholds 60/80. If you have the **caveman** plugin, its badge stays in f
 ```
 
 Then restart Claude Code. `--remove` to take it out. It won't touch a third-party statusLine already present and it backs up `settings.json`.
+
+---
+
+## ⚠️ Known limits (honest by design)
+
+- **Enforcement is local-only.** Hooks (pre-delegation gate, 2×/3× Stop check, telemetry) run on your machine. Sessions on Claude Managed Agents, cloud routines, or any remote harness run **outside** the enforcement stack: the policy kernel still applies if injected, but nothing blocks there.
+- **Statusline degrades silently** on Claude Code versions that don't expose the quota fields (< 2.1.x): missing segments simply don't render — no error.
+- **Claude Code's quiet model fallback.** If a subagent pins a model that isn't available on your plan/session, Claude Code silently falls back to another model — it does not fail. Routing decisions that assume a specific executor tier should verify it (the statusline shows the active model for the main loop only).
+- **Transcript schema dependency.** Token accounting reads Claude Code's undocumented JSONL transcript format. Since 1.7.0 a schema sentinel fails loudly (warning + `schema_anomaly` event, enforcement suspended) instead of silently counting zeros — but accounting remains unavailable until the plugin is updated for the new format.
 
 ---
 

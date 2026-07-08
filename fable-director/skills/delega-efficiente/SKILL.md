@@ -52,7 +52,7 @@ Axes compose rather than exclude: a batch (4) of quality-sensitive items (2) →
 
 1. Deterministic assertions covering ~100% (counts, grep, length/schema checks, tests).
 2. Top-model spot-check on 2-3 samples.
-3. LLM verifiers only for individually risky claims — per-item across a batch only when no objective test exists (see audit row).
+3. LLM verifiers only for individually risky claims — always in a fresh-context subagent that receives ONLY artifact + rubric, never the maker's reasoning trail (inline self-critique is structurally self-preferential: the maker prefers conclusions consistent with what it already wrote); per-item across a batch only when no objective test exists.
 
 Gate depth on OBSERVED risk too, not only predicted: huge diff, many files touched, flaky tests escalate the rung even when the task was classified low-risk — never de-escalate below the axis-2 floor. A clean verification is paid insurance, not waste: the logged hit-rate (see Telemetry) calibrates depth per task type, it is NEVER a reason to skip verification where error cost is high.
 
