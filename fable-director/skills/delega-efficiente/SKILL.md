@@ -1,6 +1,6 @@
 ---
 name: delega-efficiente
-description: Use when planning how to execute a task that involves delegation or orchestration - before launching subagents/workflows, choosing models, starting multi-item or multi-file batch work, consuming large tool outputs, when the context window is filling up, or when closing a task that blew past its expected cost or escalated through repeated failures. The always-on kernel already carries the 6 routing axes; load this full body only when the axes fire, not merely because a session started.
+description: Use when planning how to execute a task that involves delegation or orchestration - before launching subagents/workflows, choosing models, starting multi-item or multi-file batch work, consuming large tool outputs, when the context window is filling up, when the pre-delegation gate denied an Agent/Workflow call, or when closing a task that blew past its expected cost or escalated through repeated failures. The always-on kernel already carries the 6 routing axes; load this full body only when the axes fire, not merely because a session started.
 ---
 
 # Delega efficiente
@@ -119,4 +119,4 @@ Near context limit or handing off: write a resume note (state, run ids, journal 
 
 ## Never delegate
 
-Interactive debugging, visual iteration, client-facing numbers/wording, decisions on how to count or report, production writes without prior backup.
+Interactive debugging, aesthetics/visual iteration, client-facing numbers/wording, decisions on how to count or report, production writes without prior backup.

@@ -12,4 +12,4 @@ Any delegation/orchestration requires a machine-readable pre-budget (`fd-telemet
 
 BEFORE any delegation/orchestration (Agent/Workflow call), and when closing a task that overran its declared budget or escalated through repeated failures: invoke `fable-director:delega-efficiente` for the full policy (delegation contract, falsifiable pre-budget, rule-of-3, playbook rules, script promotion, telemetry).
 
-Never delegate: interactive debugging, aesthetics, client-facing numbers/wording, production writes without prior backup.
+Never delegate: interactive debugging, aesthetics/visual iteration, client-facing numbers/wording, decisions on how to count or report, production writes without prior backup.

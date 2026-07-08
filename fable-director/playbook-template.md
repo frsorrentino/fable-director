@@ -16,6 +16,7 @@ Si scrive qui per: rule-of-3 chiusa al livello 3 per fallimento approach/tool, s
 - [seed 2026-07] analisi strutturale ripetuta su file >500 righe: genera skeleton una volta via script (ctags/ast-grep: firme+import+commenti) e punta lì gli agenti; per ricerche puntuali bastano gli idiomi Grep/Read-parziale esistenti (uses:0 ok:0 ko:0)
 - [seed 2026-07] handoff (fine sessione, cambio esecutore, task oltre il contesto): consegna = piano su file (file toccati, ordine, trappole, criteri di verifica per passo), mai codice a metà (il divario tra esecutori è massimo in pianificazione, minimo in esecuzione guidata) (uses:0 ok:0 ko:0)
 - [seed 2026-07] prompt di delega con failure mode noto: includi UN contro-esempio esplicito (cosa non fare + perché) accanto alle istruzioni positive (l'esecutore replica pattern: il contro-esempio taglia il failure mode più dell'istruzione astratta) (uses:0 ok:0 ko:0)
+- [seed 2026-07] delega spot (singolo agente leggero, es. investigator/builder cavecrew): il gate nega senza budget — apri micro-budget onesto della SINGOLA delega (`--type spot-delegation`, stima = solo deliverable atteso), MAI budget-sessione a stima larga: stima gonfiata = enforcement 2×/3× morto (uses:0 ok:0 ko:0)
 
 ## Script promossi
 

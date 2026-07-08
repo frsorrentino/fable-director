@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.8.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.8.1-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -18,8 +18,9 @@ fable-director injects an **always-on routing policy** and makes it **enforced b
 
 ---
 
-## 🆕 What's new in 1.8.0
+## 🆕 What's new in 1.8.x
 
+- **1.8.1 — skill-audit fixes.** "Never delegate" lists aligned between kernel and skill (the kernel was missing "decisions on how to count or report"); the skill's trigger description now covers gate denials; new playbook seed: spot delegations get an honest micro-budget for the single call — never a wide session-budget that kills the 2×/3× thresholds.
 - **Cache-staleness sentinel.** Claude Code copies plugins to a cache at install time and never re-checks it: with a local marketplace the running plugin silently falls behind its source (we lived it: 1.0.0 running for days while the source was at 1.6.0). A `SessionStart` sentinel now compares the running version against every `directory`-type marketplace source and warns with the exact `claude plugin update` command. Warn only, never auto-update — a nested CLI call in a hook is slow, races the plugin registry, and the current session would stay on the old version anyway.
 - **`/fable-director:review`** — the director reads its own telemetry. The learning loop used to write heuristics only on incidents (3× busts, rule-of-3); this command has the top model read `report` + playbook and produce a brutally honest improvement plan anchored **only to objective alarms** (max 5 recommendations, each citing the datum that justifies it; "no intervention justified by the data" is a valid outcome — inventing problems is forbidden).
 
