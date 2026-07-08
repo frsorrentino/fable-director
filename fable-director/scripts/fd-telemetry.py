@@ -322,6 +322,26 @@ def reap_delegations(session_id):
         return
 
 
+def reap_read_cache(session_id):
+    """SessionEnd: la read-cache (hook read-dedup) è per-sessione — rimuovi la
+    dir della sessione + orfane >48h (sessioni crashate). Best-effort."""
+    try:
+        d = BASE / "read-cache"
+        if not d.is_dir():
+            return
+        import shutil
+        if session_id:
+            sd = d / str(session_id)
+            if sd.is_dir():
+                shutil.rmtree(sd, ignore_errors=True)
+        cutoff = datetime.now(timezone.utc).timestamp() - 172800
+        for sd in d.iterdir():
+            if sd.is_dir() and sd.stat().st_mtime < cutoff:
+                shutil.rmtree(sd, ignore_errors=True)
+    except OSError:
+        return
+
+
 def cmd_session_summary(args):
     opts = parse_opts(args, {"--transcript": None, "--session-id": None, "--cwd": None})
     transcript, session_id, cwd = opts["--transcript"], opts["--session-id"], opts["--cwd"]
@@ -336,6 +356,7 @@ def cmd_session_summary(args):
         cwd = data.get("cwd")
     reap_open_budget(cwd)  # prima del check transcript: l'orfano va mietuto comunque
     reap_delegations(session_id)
+    reap_read_cache(session_id)
     if not transcript or not Path(transcript).is_file():
         return
     main_tot, sub_tot, n_sub, cache_resets, first_ts, last_ts, stats = \

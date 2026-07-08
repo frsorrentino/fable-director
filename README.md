@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.10.4-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.10.5-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -20,6 +20,7 @@ fable-director injects an **always-on routing policy** and makes it **enforced b
 
 ## 🆕 What's new in 1.10.x
 
+- **1.10.5 — lossless read-dedup (opt-in) + token-reduction stance.** New `read-dedup.py` PostToolUse hook: on a **re-read** of a file already seen this session it replaces Read's output with just the diff (or an "unchanged" marker), cutting the biggest agentic token sink — re-sending file content already in context. **Lossless and recoverable:** it only touches large files, skips partial (offset/limit) reads, and after a dedup the *next* read of that file passes through in full — so the model always has a one-read path back to full content even after a compact. **Opt-in by design** (not wired into the default hooks — colleagues on the marketplace build don't inherit it until you validate it): enable with `export FD_READ_DEDUP=1` or `touch ~/.claude/fable-director/read-dedup.on`, then add the hook (see [Token reduction](#-token-reduction-lossless-only)). The routing engine optimizes **cost per token**; this is the first lever that cuts the **token count** itself — and by policy it stays **lossless-only** (RAG-style lossy chunking is now a documented anti-pattern: −90% tokens bought with a correctness risk is the exact Goodhart failure the kernel forbids).
 - **1.10.4 — gate denials become telemetry.** Every deny from the pre-delegation gate now logs a `gate_deny` event (kind `no_budget` / `stale_budget` / `flagged`, plus tool and declared model) and `report` prints the breakdown. Without it, post-hoc analysis couldn't distinguish "never attempted delegation" from "denied and fell back inline" — the exact blind spot hit while reading the shape-04 bench. Also fixed a systematically ambiguous shape-04 fixture: a quality-negative phrase ("pannello che si stacca") both arms read as a safety hazard against a ground truth of NO — safety-precision from earlier runs is not comparable (see [benchmarks/README](benchmarks/README.md)).
 - **1.10.2 — cross-family lanes verified live.** Default Gemini model for new configs is `gemini-2.5-flash` (verified with a real call: `gemini-3-flash` doesn't exist on the AI Studio free tier, `gemini-flash-latest` answers 503 under load). Both lanes tested end-to-end — Gemini free API and Codex CLI (ChatGPT login) each returned a correct adversarial verdict. **When they fire and how to invoke them yourself: see [Cross-family verifier](#-cross-family-verifier--when-and-how) below.**
 - **1.10.1 — `[DLG]` shows effective tokens, not declared calls.** The segment now reads the session transcript **incrementally** (a state file keeps the byte offset — each refresh parses only new lines, never a rescan) and shows **output tokens per effective model** of subagent work: `[DLG SONNET-5 41k HAIKU-4-5 3k]` (`≡` = subagents inheriting the main-loop model). Immune to the quiet-fallback blind spot and it weighs work, not call counts. Where the transcript isn't exposed it degrades to the gate's declared-call registry, marked `≈` — the two modes are visually distinct by design. Also new: **`[XF]` cross-family segment** — `GEMINI▲` while a `cross-verify.py` call is in flight, `CODEX×2` for today's calls (local telemetry; free tiers expose no quota API, so this is presence, not remaining quota).
@@ -200,6 +201,32 @@ An all-Claude ensemble shares correlated blind spots by construction; a differen
 
 ---
 
+## ♻️ Token reduction (lossless-only)
+
+Routing cuts **cost per token** (cheap executor does the heavy work). A separate lever cuts the **token count** itself — but only where it's **provably lossless**, because trading correctness for tokens is the Goodhart failure the kernel exists to prevent.
+
+**The rule.** Reduce tokens by *not re-sending* what's already in context (dedup/diff), by *not re-doing* verified work (idempotent exact-hash cache), or by *reversible* compression. Never by lossy retrieval: replacing a file read with top-k RAG chunks (−90% tokens) drops dependent code and is a **documented anti-pattern** in the playbook. Semantic caching (approximate match) falls under the same ban.
+
+**`read-dedup.py` (opt-in).** A `PostToolUse` hook on `Read`. On a re-read of a file already seen this session it returns only the diff since the previous read (or a short "unchanged" marker), instead of the full content.
+
+- **Lossless & recoverable.** Large files only (> ~2 KB); partial reads (offset/limit) always pass through untouched; a diff is emitted only when it's meaningfully smaller than the file. After any dedup, the *next* read of that file passes through in full — so even if the earlier read was compacted away, the model recovers full content in one more read.
+- **Off by default, zero cost when off.** Not in the shipped hooks, so it never runs (no subprocess, no risk) until you opt in.
+- **Enable it:**
+  ```bash
+  export FD_READ_DEDUP=1            # or: touch ~/.claude/fable-director/read-dedup.on
+  ```
+  then add to your `~/.claude/settings.json` hooks (or the plugin's `hooks/hooks.json`):
+  ```json
+  "PostToolUse": [
+    { "matcher": "Read",
+      "hooks": [ { "type": "command",
+        "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/read-dedup.py\"" } ] }
+  ]
+  ```
+  Per-session caches live under `~/.claude/fable-director/read-cache/` and are reaped at `SessionEnd`. Validate it in one real session before relying on it.
+
+---
+
 ## ⚠️ Known limits (honest by design)
 
 - **Enforcement is local-only.** Hooks (pre-delegation gate, 2×/3× Stop check, telemetry) run on your machine. Sessions on Claude Managed Agents, cloud routines, or any remote harness run **outside** the enforcement stack: the policy kernel still applies if injected, but nothing blocks there.
@@ -250,7 +277,8 @@ The kernel decides where each task goes, top-down (a higher axis wins):
 | **Kernel** (SessionStart hook) | Injects the 6 axes + never-delegate each session, ~500 tokens |
 | **Skill `delega-efficiente`** | Full policy on-demand: delegation contract, falsifiable pre-budget, rule-of-3 best-of-3, script promotion, playbook rules |
 | **`Stop` hook (budget-check)** | Deterministic 3× enforcement: compares actual tokens against the open budget, blocks the turn from closing and imposes the post-mortem |
-| **`SessionEnd` hook (telemetry)** | Logs tokens and cache/delegation metrics to SQLite, zero model tokens |
+| **`SessionEnd` hook (telemetry)** | Logs tokens and cache/delegation metrics to SQLite, zero model tokens; reaps per-session registries |
+| **`read-dedup.py` (opt-in PostToolUse)** | Lossless re-read dedup: returns diffs instead of re-sending file content already in context — cuts token count, off by default |
 | **Playbook** | Learned heuristics that survive updates |
 | **`session-cost-report.py`** | Token report from the real JSONL transcripts |
 | **Statusline + installer** | `/fable-director:statusline` writes the statusLine to settings.json, idempotent and merge-safe |
