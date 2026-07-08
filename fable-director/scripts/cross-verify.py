@@ -28,7 +28,12 @@ Uso:
   cross-verify.py --usage        # contatore locale vs limiti dichiarati (i
                                  # free tier non espongono la quota via API)
   cross-verify.py --claim "..." --rubric "..." [--context-file F]
-                  [--provider gemini|deepseek|codex] [--timeout 60]
+                  [--provider gemini|deepseek|codex] [--timeout 60] [--type SLUG]
+
+--type = tipo di task (es. cross-lingua, security-review, spec-compliance):
+loggato nella telemetria così `fd-telemetry.py report` può dire EMPIRICAMENTE
+su quali tipi il cross-family refuta davvero (hit-rate per tipo) — quali tipi
+sono affini diventa una domanda di dati, non un'asserzione di bravura-modello.
 
 Output (grep-abile):
   STATUS: ok|unavailable|error
@@ -177,7 +182,7 @@ def cmd_init():
 
 def parse_args(argv):
     opts = {"--claim": None, "--rubric": None, "--context-file": None,
-            "--provider": None, "--timeout": "60"}
+            "--provider": None, "--timeout": "60", "--type": None}
     i = 0
     while i < len(argv):
         if argv[i] == "--init":
@@ -321,6 +326,7 @@ def main():
     out("ok", name, prov["model"], verdict, reasoning)
     log_verification({"kind": "cross-family", "provider": name,
                       "model": prov["model"], "verdict": verdict,
+                      "type": opts.get("--type"),
                       "found": verdict == "refuted"})
     sys.exit(0)
 

@@ -493,6 +493,24 @@ def cmd_report(args):
         found = sum(1 for v in verifs if v.get("found"))
         print(f"\nVerifiche: {len(verifs)}, problemi trovati: {found} "
               f"(hit-rate {found / len(verifs):.2f}) — calibra la profondità, MAI saltare su error-cost alto")
+        # Cross-family per tipo di task: quali tipi il verifier di famiglia
+        # diversa refuta davvero. Rende "quali tipi sono affini" una domanda
+        # di dati (asserire bravura-modello decade a ogni release, vietato).
+        xf = [v for v in verifs if v.get("kind") == "cross-family"]
+        if xf:
+            by_type = {}
+            for v in xf:
+                t = v.get("type") or "(senza tipo)"
+                by_type.setdefault(t, [0, 0])
+                by_type[t][0] += 1
+                if v.get("found"):
+                    by_type[t][1] += 1
+            print("  cross-family per tipo (hit-rate = refutazioni/chiamate; "
+                  "N≥10 = affinità confermata dai dati, non asserita):")
+            for t, (n, fnd) in sorted(by_type.items(), key=lambda x: -x[1][0]):
+                dense = "DENSO" if n >= 10 else "sparso"
+                print(f"    {t}: {n} chiamate, {fnd} refutate "
+                      f"(hit-rate {fnd / n:.2f}) — {dense}")
 
     promos = [p for e, p in events if e == "script_promotion"]
     if promos:
