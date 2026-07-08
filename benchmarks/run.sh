@@ -5,7 +5,7 @@
 # Misura i token dall'output JSON di `claude -p` (.usage + .total_cost_usd).
 #
 # ATTENZIONE: consuma quota del piano / API reale. RUNS=3 per lato di default.
-# Uso:  RUNS=3 [MODEL=claude-opus-4-8] bash run.sh
+# Uso:  RUNS=3 [MODEL=claude-fable-5] bash run.sh
 set -euo pipefail
 cd "$(dirname "$0")"
 

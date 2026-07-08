@@ -8,7 +8,7 @@ Route by six axes, earlier overrides later:
 5. Verifiability — objective test? → deterministic assertions; none → adversarial verify per finding.
 6. Cache locality — every subagent pays a COLD START (own uncached prefix; it does not break the main thread's cache); switching model invalidates the prompt cache. Cost veto on borderline routes: delegate only if net saving after cold start. Never overrides axes 1-2.
 
-Any delegation/orchestration requires a machine-readable pre-budget (`fd-telemetry.py budget-open`, exact flags in the skill) that a Stop hook enforces deterministically: warns once at 2× (reassess route, log a reversal on change), blocks at 3× until the post-mortem is written. Close with `budget-close`.
+Any delegation/orchestration requires a machine-readable pre-budget (`fd-telemetry.py budget-open`, exact flags in the skill), enforced deterministically end-to-end: a PreToolUse gate denies any Agent/Workflow call with no open budget; a Stop hook warns once at 2× (reassess route, log a reversal on change) and blocks at 3× until the post-mortem is written. Close with `budget-close`.
 
 BEFORE any delegation/orchestration (Agent/Workflow call), and when closing a task that overran its declared budget or escalated through repeated failures: invoke `fable-director:delega-efficiente` for the full policy (delegation contract, falsifiable pre-budget, rule-of-3, playbook rules, script promotion, telemetry).
 

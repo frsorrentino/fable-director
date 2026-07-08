@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.6.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.7.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -18,13 +18,22 @@ fable-director injects an **always-on routing policy** and makes it **enforced b
 
 ---
 
+## 🆕 What's new in 1.7.0
+
+- **Pre-delegation gate (the bootstrap gap is closed).** Until 1.6.0 the 2×/3× enforcement only bit *if* a budget had been opened — and opening it was a prompt-level instruction the model could skip. A new `PreToolUse` hook now **denies any `Agent`/`Task`/`Workflow` call with no open budget** for the cwd, replying with the exact `budget-open` command to run. Also denies delegation while a budget is `flagged` (no dodging the 3× post-mortem by delegating) or older than 24h. Fail-open by design: a gate bug can never block a legitimate delegation.
+- **Transcript schema sentinel.** Token accounting reads Claude Code's undocumented JSONL transcript format; a silent field rename used to zero the counters without any error. Both the `Stop` hook and `session-summary` now detect "many valid records, zero recognized `usage`/`timestamp`" and **fail loudly**: one-time warning, `schema_anomaly` telemetry event, enforcement suspended instead of trusting zeros.
+- **5-part spec contract for delegation prompts** (Objective / Files / Interfaces / Constraints / Verification) — replaces the old 4-component contract; context-free delegation is the test that the route is delegable at all.
+- Statusline example renamed `[OPUS4.8]` → `[FABLE5]` (the director role matches the plugin's name; the model was never hardcoded).
+
+---
+
 ## ⭐ Advantages at a glance
 
 | | Advantage | How |
 |---|---|---|
 | 🧭 | **Every task goes to the right means** | A 6-axis routing kernel injected each session (~500 tokens): inline vs delegate vs script vs workflow, with a clear precedence order |
 | 💰 | **Deterministic work at zero cost** | The policy pushes repeatable work into scripts — zero model tokens instead of N calls |
-| 🛡️ | **Budget enforced, not suggested** | Machine-readable pre-budget + a `Stop` hook that deterministically blocks at 3× and forces a post-mortem. Anti-Goodhart by construction |
+| 🛡️ | **Budget enforced, not suggested** | Machine-readable pre-budget + a `PreToolUse` gate that denies delegation with no open budget + a `Stop` hook that deterministically blocks at 3× and forces a post-mortem. Anti-Goodhart by construction |
 | 📊 | **Real telemetry, zero overhead** | A `SessionEnd` hook logs tokens, cache hit ratio, delegation overhead to SQLite — without spending model tokens |
 | 🧠 | **The workshop learns** | A heuristics playbook that survives updates: `[candidate]` → confirmed on the 2nd occurrence, uses/ok/ko counters |
 | 📟 | **You always know where you stand** | A statusline with model, context %, 5h and 7d plan quotas with reset times, budget state |
@@ -73,10 +82,10 @@ One glance at model, context and plan quotas — so you see the rate limit comin
 ![fable-director statusline](assets/statusline.svg)
 
 ```
-[OPUS4.8] [CTX 5%] [5H 6%→19:40] [7D 70%→9 Jul] [BDG ok]
+[FABLE5] [CTX 5%] [5H 6%→19:40] [7D 70%→9 Jul] [BDG ok]
 ```
 
-- `[OPUS4.8]` active model
+- `[FABLE5]` active model
 - `[CTX 5%]` how full the conversation's context window is
 - `[5H 6%→19:40]` 5-hour plan-window quota + local reset time (the "Current session" in `/usage`)
 - `[7D 70%→9 Jul]` weekly quota + reset date

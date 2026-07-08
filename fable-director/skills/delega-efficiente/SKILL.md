@@ -36,9 +36,9 @@ Axes compose rather than exclude: a batch (4) of quality-sensitive items (2) →
 
 ## Delegation contract
 
-- Every delegation prompt states 4 components: objective, output format, tools/sources, task boundaries. Vague delegation ("occupati di X") duplicates work — forbidden.
+- Every delegation prompt is a 5-part spec contract — Objective / Files (exact paths in scope) / Interfaces (output format + status token) / Constraints (tools, sources, boundaries, hard caps) / Verification (the command or check the subagent must run and report actual output of). Vague delegation ("occupati di X") duplicates work — forbidden; a spec the subagent can execute without shared context is the test that the route is delegable at all.
 - The subagent ends with a status token: `DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED / ABSTAIN`. Grant explicit permission to ABSTAIN when unsure — an honest abstention triggers immediate escalation and skips a whole verify-fail-diagnose cycle; plausible-but-wrong is the worst outcome. Status feeds the rule-of-3 diagnosis.
-- Output contract, mandatory in every delegation prompt: hard cap (default ~1-2k tokens), forced schema (strict JSON or grep-able `path:line — finding` lines), full-content dumps forbidden — paths, counts, anomalies only. The subagent's output is the next turn's input: a token the orchestrator won't consume is waste.
+- Interfaces in practice: hard cap (default ~1-2k tokens), forced schema (strict JSON or grep-able `path:line — finding` lines), full-content dumps forbidden — paths, counts, anomalies only. The subagent's output is the next turn's input: a token the orchestrator won't consume is waste.
 - Scaling bands: simple fact-finding → 1 agent; direct comparisons → 2-4; broad research → 10+. Never exceed the band. Multi-agent ≈ 15× chat cost: if task value doesn't justify 15×, don't orchestrate.
 
 ## Harness mechanics (learned from real waste)
@@ -72,7 +72,7 @@ No-progress termination (independent of retries and budget): if the last ~5 turn
 
 Before executing any task that involves delegation or orchestration, the plan states one line: `approach / fallback / expected input tokens / expected output tokens`. Estimation anchors (don't guess from feel): expected input ≈ bytes of files/outputs to be read ÷ 4, times the number of passes; expected output ≈ size of the DELIVERABLE only (schema × N items), reasoning excluded. Cache is never budgeted ex ante (noise that improves no decision) — analyzed ex post only.
 
-Then IMMEDIATELY mirror the estimate machine-readably (this is what makes the loop enforcement-backed instead of discipline-backed):
+Then IMMEDIATELY mirror the estimate machine-readably — a PreToolUse gate denies any Agent/Workflow call with no open budget, so opening it is not optional:
 `<plugin>/scripts/fd-telemetry.py budget-open --task "..." --expected-output N [--expected-input N] [--type slug] [--route inline|workflow|script|agent] [--reason "axis2>axis4"] [--alternative "..."]`
 (`--type` = task category slug — reuse existing ones, feeds the density table. `--route/--reason/--alternative` = decision record: which route, why, what was discarded — it feeds reversal analysis, costs one line.)
 This writes `~/.claude/fable-director/budgets/<cwd-slug>.json`. The plugin's Stop hook compares actual tokens (from the transcript, since declaration) at every turn end: at ≥2× it warns ONCE (checkpoint: reassess the route now — a reversal at 2× is cheaper than a post-mortem at 3×); at ≥3× it BLOCKS closure and demands the post-mortem. Thresholds on consumed tokens only, never on self-estimated progress.

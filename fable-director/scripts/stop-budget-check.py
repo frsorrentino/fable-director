@@ -17,6 +17,11 @@ Protezioni anti-loop:
 - al blocco 3× il budget file passa a status=flagged → i turni successivi passano;
 - budget più vecchio di 24h → status=stale, nessun blocco (task abbandonato).
 
+Sentinella di schema: ≥20 record validi ma zero usage o zero timestamp
+riconosciuti → il formato transcript è cambiato; warning una tantum
+(schema_warned nel budget file) + evento schema_anomaly, enforcement sospeso
+invece di contare zeri in silenzio.
+
 Attribuzione per lineage, non per mtime: il main transcript contiene già
 l'usage aggregato di ogni subagent completato (toolUseResult.usage), quindi
 basta il main transcript — niente scan di file agent, niente double counting,
@@ -34,20 +39,22 @@ from pathlib import Path
 
 USAGE_KEYS = ("input_tokens", "output_tokens",
               "cache_read_input_tokens", "cache_creation_input_tokens")
+SENTINEL_MIN_RECORDS = 20  # sotto: transcript troppo corto per giudicare lo schema
 
 
-def log_budget_flag(payload, cwd):
-    """Persist the 3× bust to telemetry deterministically, reusing fd-telemetry's
-    log_event so the DB schema stays single-sourced. Best-effort: a telemetry
-    failure must NEVER block the hook's primary job (the enforcement itself).
-    Without this the objective bust event would depend on the model remembering
-    to log it — the exact discipline-gap this plugin exists to close."""
+def log_telemetry(event, payload, cwd):
+    """Persist an objective event to telemetry deterministically, reusing
+    fd-telemetry's log_event so the DB schema stays single-sourced.
+    Best-effort: a telemetry failure must NEVER block the hook's primary job
+    (the enforcement itself). Without this the objective event would depend
+    on the model remembering to log it — the exact discipline-gap this
+    plugin exists to close."""
     try:
         spec = importlib.util.spec_from_file_location(
             "fd_telemetry", Path(__file__).with_name("fd-telemetry.py"))
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
-        mod.log_event("budget_flag", payload, cwd=cwd)
+        mod.log_event(event, payload, cwd=cwd)
     except Exception:
         pass
 
@@ -72,12 +79,17 @@ def find_usage(obj):
 
 
 def sum_file(path, since):
+    """Somma i token dopo `since` e conta, sull'INTERO file, record validi /
+    record con usage / record con timestamp: sono i dati della sentinella di
+    schema — se il formato transcript rinomina le chiavi, le somme vanno a
+    zero in silenzio e l'enforcement muore senza errore."""
     out = inp = 0
+    n_rec = n_usage = n_ts = 0
     last_ts = None
     try:
         fh = open(path, errors="replace")
     except OSError:
-        return 0, 0
+        return 0, 0, (0, 0, 0)
     with fh:
         for line in fh:
             line = line.strip()
@@ -87,16 +99,23 @@ def sum_file(path, since):
                 rec = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            ts = parse_ts(rec.get("timestamp")) or last_ts  # inferenza posizionale
+            n_rec += 1
+            usages = list(find_usage(rec))
+            if usages:
+                n_usage += 1
+            raw_ts = parse_ts(rec.get("timestamp"))
+            if raw_ts:
+                n_ts += 1
+            ts = raw_ts or last_ts  # inferenza posizionale
             if ts:
                 last_ts = ts
             if since is not None and (ts is None or ts < since):
                 continue
-            for usage in find_usage(rec):
+            for usage in usages:
                 out += usage.get("output_tokens") or 0
                 inp += (usage.get("input_tokens") or 0) + \
                        (usage.get("cache_creation_input_tokens") or 0)
-    return out, inp
+    return out, inp, (n_rec, n_usage, n_ts)
 
 
 def main():
@@ -135,7 +154,30 @@ def main():
         return
     # Solo main transcript: l'usage dei subagenti completati è già dentro
     # (toolUseResult.usage) e find_usage lo raccoglie ricorsivamente.
-    actual_out, actual_in = sum_file(Path(transcript), declared)
+    actual_out, actual_in, (n_rec, n_usage, n_ts) = sum_file(Path(transcript), declared)
+
+    # Sentinella di schema: molti record validi ma zero usage o zero timestamp
+    # riconosciuti = formato transcript probabilmente cambiato. I conteggi
+    # sarebbero zeri: enforcement mai attivato, telemetria falsata — in
+    # silenzio. Fallire rumorosamente (una volta sola) e NON enforcare su
+    # numeri inaffidabili.
+    if n_rec >= SENTINEL_MIN_RECORDS and (n_usage == 0 or n_ts == 0):
+        missing = "usage" if n_usage == 0 else "timestamp"
+        if not budget.get("schema_warned"):
+            budget["schema_warned"] = True
+            bfile.write_text(json.dumps(budget, ensure_ascii=False, indent=1))
+            log_telemetry("schema_anomaly", {
+                "source": "stop-budget-check", "missing": missing,
+                "n_records": n_rec, "transcript": str(transcript),
+                "auto": True}, cwd)
+            print(json.dumps({"systemMessage": (
+                f"FABLE-DIRECTOR sentinella schema: {n_rec} record nel "
+                f"transcript ma zero campi '{missing}' riconosciuti — il "
+                f"formato transcript di Claude Code è probabilmente cambiato. "
+                f"Enforcement budget SOSPESO (i conteggi sarebbero 0): "
+                f"aggiornare il plugin fable-director."
+            )}, ensure_ascii=False))
+        return
 
     out_bust = actual_out >= 3 * exp_out
     in_bust = exp_in > 0 and actual_in >= 3 * exp_in
@@ -169,8 +211,9 @@ def main():
     # Deterministic capture of the objective bust: the model no longer has to
     # remember to log it (below, step-3 removed). Runs exactly once — the next
     # turn returns early on status != "open".
-    log_budget_flag({"task": budget.get("task"), "ratio": ratio, "dim": dim,
-                     "actual": actual, "expected": expected, "auto": True}, cwd)
+    log_telemetry("budget_flag",
+                  {"task": budget.get("task"), "ratio": ratio, "dim": dim,
+                   "actual": actual, "expected": expected, "auto": True}, cwd)
 
     reason = (
         f"FABLE-DIRECTOR budget enforcement: {dim} effettivo {actual} token ≥ 3× "

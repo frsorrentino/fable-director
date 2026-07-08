@@ -5,7 +5,9 @@ DB: ~/.claude/fable-director/telemetry.db (tabella events: ts, session_id, cwd, 
 Budget file: ~/.claude/fable-director/budgets/<cwd-slug>.json (letto dall'hook Stop per l'enforcement 3×)
 
 Eventi ammessi: task_open, task_close, budget_flag, retry, escalation, script_promotion,
-verification, session_summary. MAI voti di qualità auto-assegnati: la qualità è derivata
+verification, session_summary, schema_anomaly (auto: sentinella formato transcript —
+molti record ma zero usage/timestamp riconosciuti = contabilità inaffidabile, fallire
+rumorosamente). MAI voti di qualità auto-assegnati: la qualità è derivata
 solo da indicatori oggettivi (test pass/fail, rollback, fix successivo).
 
 Sottocomandi:
@@ -46,6 +48,7 @@ DB_PATH = BASE / "telemetry.db"
 BUDGETS = BASE / "budgets"
 USAGE_KEYS = ("input_tokens", "output_tokens",
               "cache_read_input_tokens", "cache_creation_input_tokens")
+SENTINEL_MIN_RECORDS = 20  # sotto: transcript troppo corto per giudicare lo schema
 
 
 def now_iso():
@@ -123,6 +126,7 @@ def sum_transcript(path):
     main = dict.fromkeys(USAGE_KEYS, 0)
     sub = dict.fromkeys(USAGE_KEYS, 0)
     n_sub = 0
+    n_records = n_usage_recs = 0
     cache_resets = 0
     had_high_read = False
     first_ts = last_ts = None
@@ -146,6 +150,7 @@ def sum_transcript(path):
                 rec = json.loads(line)
             except json.JSONDecodeError:
                 continue
+            n_records += 1
             ts = parse_ts(rec.get("timestamp"))
             if ts:
                 first_ts = first_ts or ts
@@ -159,7 +164,9 @@ def sum_transcript(path):
                 if first_write_turn is None and name in WRITE_TOOLS:
                     first_write_turn = turns
                     tokens_before_first_write = main["output_tokens"]
+            rec_had_usage = False
             for usage, in_sub in find_usage(rec):
+                rec_had_usage = True
                 bucket = sub if in_sub else main
                 for k in USAGE_KEYS:
                     bucket[k] += usage.get(k) or 0
@@ -173,7 +180,11 @@ def sum_transcript(path):
                         had_high_read = False
                     elif cr > CACHE_RESET_THRESHOLD:
                         had_high_read = True
+            if rec_had_usage:
+                n_usage_recs += 1
     stats = {
+        "n_records": n_records,
+        "n_usage_records": n_usage_recs,
         "first_write_turn": first_write_turn,
         "tokens_before_first_write": tokens_before_first_write,
         "tool_counts": tool_counts,
@@ -245,7 +256,8 @@ def cmd_budget_close(args):
 
 
 ALLOWED_EVENTS = {"task_open", "task_close", "budget_flag", "retry", "escalation",
-                  "script_promotion", "verification", "session_summary", "reversal"}
+                  "script_promotion", "verification", "session_summary", "reversal",
+                  "schema_anomaly"}
 
 
 def cmd_log(args):
@@ -304,6 +316,20 @@ def cmd_session_summary(args):
         return
     main_tot, sub_tot, n_sub, cache_resets, first_ts, last_ts, stats = \
         sum_transcript(Path(transcript))
+    # Sentinella di schema: molti record validi ma zero usage o zero timestamp
+    # riconosciuti = formato transcript cambiato → la summary conterebbe zeri
+    # in silenzio. Logga l'anomalia (rumore nel report) e avvisa su stderr.
+    n_rec = stats.get("n_records") or 0
+    if n_rec >= SENTINEL_MIN_RECORDS and \
+            ((stats.get("n_usage_records") or 0) == 0 or first_ts is None):
+        missing = "usage" if (stats.get("n_usage_records") or 0) == 0 else "timestamp"
+        log_event("schema_anomaly", {
+            "source": "session-summary", "missing": missing,
+            "n_records": n_rec, "transcript": str(transcript), "auto": True,
+        }, session_id=session_id, cwd=cwd)
+        print(f"fable-director sentinella schema: {n_rec} record ma zero "
+              f"'{missing}' riconosciuti — formato transcript cambiato? "
+              f"Contabilità token inaffidabile.", file=sys.stderr)
     inp = main_tot["input_tokens"] + sub_tot["input_tokens"]
     out = main_tot["output_tokens"] + sub_tot["output_tokens"]
     cr = main_tot["cache_read_input_tokens"] + sub_tot["cache_read_input_tokens"]
@@ -427,6 +453,12 @@ def cmd_report(args):
     if promos:
         tok = sum(p.get("tokens_pre_promotion") or 0 for p in promos)
         print(f"\nScript promossi: {len(promos)} (~{fmt(tok)} token spesi prima della promozione)")
+
+    anomalies = [p for e, p in events if e == "schema_anomaly"]
+    if anomalies:
+        print(f"\n⚠ ALLARME schema: {len(anomalies)} anomalie formato transcript "
+              f"(zero usage/timestamp riconosciuti) — contabilità token "
+              f"inaffidabile in quelle sessioni, aggiornare il plugin")
 
     flags = [p for e, p in events if e == "budget_flag"]
     opened = sum(1 for e, _ in events if e == "task_open")
