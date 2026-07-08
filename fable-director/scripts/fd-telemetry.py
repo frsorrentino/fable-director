@@ -322,6 +322,34 @@ def reap_delegations(session_id):
         return
 
 
+def git_yield(cwd, first_ts):
+    """Yield analysis (idea da CodeBurn): quanti commit + righe nette ha
+    prodotto la sessione. Denominatore di RESA che manca: misuriamo il costo,
+    non se la spesa ha prodotto lavoro tenuto. ALLARME diagnostico, MAI target:
+    planning/debug legittimamente non committano — un token/commit alto NON
+    condanna, segnala solo dove guardare. Best-effort: git assente o cwd non
+    repo → None, mai bloccante."""
+    if not cwd or not first_ts:
+        return None
+    try:
+        import subprocess
+        since = first_ts.strftime("%Y-%m-%dT%H:%M:%S")
+        inside = subprocess.run(
+            ["git", "-C", str(cwd), "rev-parse", "--is-inside-work-tree"],
+            capture_output=True, text=True, timeout=5)
+        if inside.returncode != 0 or inside.stdout.strip() != "true":
+            return None
+        n = subprocess.run(
+            ["git", "-C", str(cwd), "log", "--since", since, "--oneline"],
+            capture_output=True, text=True, timeout=5)
+        if n.returncode != 0:
+            return None
+        commits = [l for l in n.stdout.splitlines() if l.strip()]
+        return {"commits": len(commits)}
+    except Exception:
+        return None
+
+
 def reap_read_cache(session_id):
     """SessionEnd: la read-cache (hook read-dedup) è per-sessione — rimuovi la
     dir della sessione + orfane >48h (sessioni crashate). Best-effort."""
@@ -387,6 +415,9 @@ def cmd_session_summary(args):
         "cache_resets": cache_resets,
         "duration_s": (last_ts - first_ts).total_seconds() if first_ts and last_ts else None,
     }
+    yld = git_yield(cwd, first_ts)
+    if yld is not None:
+        payload["commits"] = yld["commits"]
     payload.update(stats)
     payload.update(derived_metrics(inp, out, cr, cc,
                                    main_tot["output_tokens"],
@@ -453,6 +484,21 @@ def cmd_report(args):
         if resets:
             alarms.append(f"cache-thrash: {resets} reset di prefisso a metà sessione "
                           f"(cambio modello/edit plugin/compact?) — diagnostico, mai blocking")
+        # Yield: output token per commit prodotto. Solo sessioni con dato git
+        # (git_yield → None su cwd non-repo). RESA, non target: sessioni di
+        # planning/debug non committano legittimamente, non le condanna.
+        with_git = [s for s in sessions if s.get("commits") is not None]
+        commits = sum(s.get("commits") or 0 for s in with_git)
+        if with_git:
+            g_out = sum(s.get("output_tokens") or 0 for s in with_git)
+            if commits:
+                print(f"yield: {commits} commit da {len(with_git)} sessioni git "
+                      f"(~{fmt(g_out / commits)} output token/commit) — RESA "
+                      f"diagnostica, mai target: planning/debug non committano")
+            else:
+                print(f"yield: 0 commit da {len(with_git)} sessioni git "
+                      f"(~{fmt(g_out)} output token senza commit) — normale per "
+                      f"planning/debug/review; allarme solo se atteso codice")
         for a in alarms:
             print(f"⚠ ALLARME (non target): {a}")
 
@@ -522,6 +568,17 @@ def cmd_report(args):
         print(f"\n⚠ ALLARME schema: {len(anomalies)} anomalie formato transcript "
               f"(zero usage/timestamp riconosciuti) — contabilità token "
               f"inaffidabile in quelle sessioni, aggiornare il plugin")
+
+    dedups = [p for e, p in events if e == "read_dedup"]
+    if dedups:
+        tok = sum(d.get("tokens_est") or 0 for d in dedups)
+        by_kind = {}
+        for d in dedups:
+            by_kind[d.get("kind", "?")] = by_kind.get(d.get("kind", "?"), 0) + 1
+        kinds_s = ", ".join(f"{k}×{v}" for k, v in
+                            sorted(by_kind.items(), key=lambda x: -x[1]))
+        print(f"\nRead-dedup: {len(dedups)} riletture deduplicate ({kinds_s}), "
+              f"~{fmt(tok)} token risparmiati (lossless, ≈char/4)")
 
     denies = [p for e, p in events if e == "gate_deny"]
     if denies:

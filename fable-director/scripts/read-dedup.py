@@ -31,7 +31,9 @@ import difflib
 import hashlib
 import json
 import os
+import sqlite3
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 THRESHOLD = 2000          # char minimi del contenuto per valere il dedup
@@ -43,6 +45,31 @@ def enabled():
     if os.environ.get("FD_READ_DEDUP") == "1":
         return True
     return (BASE / "read-dedup.on").is_file()
+
+
+def log_saving(session_id, path, kind, saved_chars):
+    """Evento telemetria `read_dedup`: token risparmiati (≈ char/4) rendendo la
+    riduzione MISURABILE invece che silenziosa — il report può dire quanto vale
+    davvero, e la validazione live diventa data-driven. Scrittura sqlite diretta
+    (fd-telemetry.py ha trattini nel nome, non importabile). Best-effort: mai
+    interferire con l'output del dedup."""
+    try:
+        BASE.mkdir(parents=True, exist_ok=True)
+        con = sqlite3.connect(BASE / "telemetry.db")
+        con.execute("CREATE TABLE IF NOT EXISTS events("
+                    "id INTEGER PRIMARY KEY, ts TEXT NOT NULL, session_id TEXT, "
+                    "cwd TEXT, event TEXT NOT NULL, payload TEXT)")
+        con.execute(
+            "INSERT INTO events(ts, session_id, cwd, event, payload) "
+            "VALUES(?,?,?,?,?)",
+            (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+             session_id, None, "read_dedup",
+             json.dumps({"kind": kind, "saved_chars": saved_chars,
+                         "tokens_est": saved_chars // 4}, ensure_ascii=False)))
+        con.commit()
+        con.close()
+    except Exception:
+        pass
 
 
 def extract_text(resp):
@@ -139,13 +166,15 @@ def main():
     if meta.get("sha") == new_sha:
         recache("diff")
         n_lines = new_text.count("\n") + 1
-        emit(
+        marker = (
             f"[FD read-dedup] '{path}' invariato dalla lettura #{seq} di questa "
             f"sessione ({n_lines} righe, sha {new_sha[:12]}). Contenuto già in "
             f"contesto sopra. Se è stato compattato via, rileggi ancora una "
-            f"volta: la prossima Read ritorna il file pieno.",
-            "Rilettura identica soppressa per risparmio token (dedup lossless "
-            "opt-in, recuperabile in 1 read).")
+            f"volta: la prossima Read ritorna il file pieno.")
+        log_saving(sid, path, "unchanged", max(0, len(new_text) - len(marker)))
+        emit(marker,
+             "Rilettura identica soppressa per risparmio token (dedup lossless "
+             "opt-in, recuperabile in 1 read).")
         return
 
     # Rilettura con modifiche: diff unificato, solo se conviene.
@@ -157,12 +186,14 @@ def main():
         recache("full")
         return
     recache("diff")
-    emit(
+    body = (
         f"[FD read-dedup] '{path}' già letto (#{seq}); mostro solo il diff da "
         f"allora. Il contenuto pieno è in quella lettura precedente; se è stato "
-        f"compattato via, rileggi ancora una volta per riaverlo intero.\n\n{diff}",
-        "Contenuto stabile soppresso, mostrato solo il diff (dedup lossless "
-        "opt-in, recuperabile in 1 read).")
+        f"compattato via, rileggi ancora una volta per riaverlo intero.\n\n{diff}")
+    log_saving(sid, path, "diff", max(0, len(new_text) - len(body)))
+    emit(body,
+         "Contenuto stabile soppresso, mostrato solo il diff (dedup lossless "
+         "opt-in, recuperabile in 1 read).")
 
 
 if __name__ == "__main__":
