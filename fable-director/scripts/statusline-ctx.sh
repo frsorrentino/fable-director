@@ -25,11 +25,11 @@ badge=""
 # Tutte le metriche in UNA passata python (statusline gira spesso: un solo processo).
 # Campi assenti → "-" → il segmento si omette. Il budget file è di fable-director
 # (fd-telemetry.py budget-open / stop-budget-check.py): qui SOLO lettura.
-read -r model pct rl rlt wk wkt bdg <<EOF
+read -r model pct rl rlt wk wkt bdg dlg <<EOF
 $(printf '%s' "$input" | python3 -c '
 import json,sys,os,time
 from pathlib import Path
-model=pct=rl=rlt=wk=wkt=bdg="-"
+model=pct=rl=rlt=wk=wkt=bdg=dlg="-"
 def fmt_reset(ts):
     # entro 24h: orario; oltre: "6 Jul"/"6 lug" (giorno + mese secondo il locale)
     try:
@@ -66,9 +66,21 @@ try:
         st=b.get("status")
         if st=="open": bdg="2x" if b.get("warned") else "ok"
         elif st=="flagged": bdg="3x"
+    # [DLG] deleghe della sessione per modello dichiarato (registro del gate;
+    # ≡ = inherit, stesso modello del main). Effettivo: session-cost-report.py.
+    sid=d.get("session_id")
+    if sid:
+        df=Path.home()/".claude"/"fable-director"/"delegations"/f"{sid}.json"
+        if df.is_file():
+            c=json.loads(df.read_text())
+            parts=[]
+            for k in sorted(c, key=lambda x:-c[x]):
+                label="≡" if k=="inherit" else str(k).replace("claude-","").upper()[:10]
+                parts.append(f"{label}×{c[k]}")
+            if parts: dlg=",".join(parts[:4])
 except Exception:
     pass
-print(model,pct,rl,rlt,wk,wkt,bdg)
+print(model,pct,rl,rlt,wk,wkt,bdg,dlg)
 ' 2>/dev/null)
 EOF
 
@@ -97,4 +109,6 @@ case "$bdg" in
   2x) out="$out $(printf '\033[38;5;220m[BDG 2×]\033[0m')" ;;
   3x) out="$out $(printf '\033[38;5;196m[BDG 3×]\033[0m')" ;;
 esac
+[ "$dlg" != "-" ] && [ -n "$dlg" ] && \
+  out="$out $(printf '\033[38;5;183m[DLG %s]\033[0m' "$(printf '%s' "$dlg" | tr ',' ' ')")"
 printf '%s' "${out# }"

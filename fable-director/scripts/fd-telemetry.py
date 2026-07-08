@@ -299,6 +299,26 @@ def reap_open_budget(cwd):
         return
 
 
+def reap_delegations(session_id):
+    """SessionEnd: il registro deleghe serve solo allo statusline live —
+    rimuovi quello della sessione + orfani >48h (sessioni crashate).
+    Best-effort, mai bloccante."""
+    try:
+        d = BASE / "delegations"
+        if not d.is_dir():
+            return
+        if session_id:
+            f = d / f"{session_id}.json"
+            if f.is_file():
+                f.unlink()
+        cutoff = datetime.now(timezone.utc).timestamp() - 172800
+        for f in d.glob("*.json"):
+            if f.stat().st_mtime < cutoff:
+                f.unlink()
+    except OSError:
+        return
+
+
 def cmd_session_summary(args):
     opts = parse_opts(args, {"--transcript": None, "--session-id": None, "--cwd": None})
     transcript, session_id, cwd = opts["--transcript"], opts["--session-id"], opts["--cwd"]
@@ -312,6 +332,7 @@ def cmd_session_summary(args):
         session_id = data.get("session_id")
         cwd = data.get("cwd")
     reap_open_budget(cwd)  # prima del check transcript: l'orfano va mietuto comunque
+    reap_delegations(session_id)
     if not transcript or not Path(transcript).is_file():
         return
     main_tot, sub_tot, n_sub, cache_resets, first_ts, last_ts, stats = \

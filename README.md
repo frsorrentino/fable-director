@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.9.2-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.10.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -18,7 +18,12 @@ fable-director injects an **always-on routing policy** and makes it **enforced b
 
 ---
 
-## 🆕 What's new in 1.9.x
+## 🆕 What's new in 1.10.0
+
+- **`[DLG]` statusline segment — delegated models at a glance.** The pre-delegation gate now keeps a per-session registry of delegations counted by declared model; the statusline renders it live: `[DLG ≡×4 SONNET-5×2]` (`≡` = inherit). The registry dies at SessionEnd (48h orphan cleanup for crashed sessions). Declared vs effective caveat unchanged — post-task truth is `session-cost-report.py`.
+- **Benchmark task shape 04 — where governance actually bites.** 40 synthetic customer reviews requiring per-item semantic judgment (closed-vocabulary sentiment/theme + safety-defect flagging, 6 planted defects with ground truth outside the task's view). Unlike shapes 01–03 (script-parity), this one can trigger real delegation → the gate and Stop hook finally get exercised in the `on` arm. `aggregate.py` now also reports **accuracy per arm** (sentiment/theme accuracy, safety recall/precision): savings only count at verified-equal quality — safety recall lost in one arm gets reported, not hidden.
+
+<details><summary>1.9.x</summary>
 
 - **1.9.2 — in-session model visibility.** When a delegation declares an explicit model (`Agent` calls with a `model` field), the gate now prints a one-line notice in session: `FD ▶ delega a modello esplicito: <agent> → <model>`. Inherit stays silent (homogeneous fan-outs produce zero noise). The line shows the *declared* model — the effective one can quietly degrade (see Known limits); post-task truth is `session-cost-report.py` (per-model token breakdown, already shipped).
 - **1.9.1 — Codex CLI provider + local usage counter.** Third cross-family lane: `"type": "cli"` providers run a subprocess (Codex CLI with ChatGPT login — fixed-cost, no API billing); spec via stdin, unique mktemp output, `command -v` preflight, quota errors → `unavailable`. New `cross-verify.py --usage`: free tiers expose no quota API (neither Gemini nor ChatGPT/Codex), so this counts today's calls per provider from local telemetry against the declared limits in config (honest label: local counter, blind to key usage elsewhere; a real 429 still fails loudly).
@@ -41,6 +46,7 @@ fable-director injects an **always-on routing policy** and makes it **enforced b
 - **5-part spec contract for delegation prompts** (Objective / Files / Interfaces / Constraints / Verification) — replaces the old 4-component contract; context-free delegation is the test that the route is delegable at all.
 - Statusline example renamed `[OPUS4.8]` → `[FABLE5]` (the director role matches the plugin's name; the model was never hardcoded).
 
+</details>
 </details>
 </details>
 
@@ -101,7 +107,7 @@ One glance at model, context and plan quotas — so you see the rate limit comin
 ![fable-director statusline](assets/statusline.svg)
 
 ```
-[FABLE5] [CTX 5%] [5H 6%→19:40] [7D 70%→9 Jul] [BDG ok]
+[FABLE5] [CTX 5%] [5H 6%→19:40] [7D 70%→9 Jul] [BDG ok] [DLG ≡×4 SONNET-5×2]
 ```
 
 - `[FABLE5]` active model
@@ -109,6 +115,7 @@ One glance at model, context and plan quotas — so you see the rate limit comin
 - `[5H 6%→19:40]` 5-hour plan-window quota + local reset time (the "Current session" in `/usage`)
 - `[7D 70%→9 Jul]` weekly quota + reset date
 - `[BDG ok]` fable-director pre-budget state (`ok` / `2×` / `3×`)
+- `[DLG …]` delegations this session, counted per **declared** model (`≡` = inherit, same model as the main loop). Recorded by the pre-delegation gate; effective models post-task via `session-cost-report.py`
 
 Color thresholds 60/80. If you have the **caveman** plugin, its badge stays in front.
 

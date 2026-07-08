@@ -46,6 +46,25 @@ def deny(reason):
     }, ensure_ascii=False))
 
 
+def record_delegation(data):
+    """Registro deleghe di sessione per il segmento [DLG] dello statusline:
+    conteggio per modello DICHIARATO ('inherit' = modello di sessione).
+    Registra alla richiesta (pre): se l'utente nega la permission dopo,
+    sovrastima di 1 — accettabile per un indicatore live. Best-effort:
+    mai bloccare il gate. Il file muore a SessionEnd (reap in telemetria)."""
+    try:
+        sid = data.get("session_id") or "unknown"
+        model = (data.get("tool_input") or {}).get("model") or "inherit"
+        d = Path.home() / ".claude" / "fable-director" / "delegations"
+        d.mkdir(parents=True, exist_ok=True)
+        f = d / f"{sid}.json"
+        counts = json.loads(f.read_text()) if f.is_file() else {}
+        counts[model] = counts.get(model, 0) + 1
+        f.write_text(json.dumps(counts))
+    except Exception:
+        pass
+
+
 def announce_model(data):
     """Delega con modello dichiarato ESPLICITO (≠ inherit): rendila visibile
     in sessione. Inherit = stesso modello del main loop → silenzio, così i
@@ -88,7 +107,8 @@ def main():
         declared = parse_ts(budget.get("declared_at"))
         now = datetime.now(timezone.utc)
         if declared and (now - declared).total_seconds() <= 86400:
-            announce_model(data)  # riga solo se modello esplicito ≠ inherit
+            record_delegation(data)  # registro per lo statusline [DLG]
+            announce_model(data)     # riga solo se modello esplicito ≠ inherit
             return  # budget valido: allow
         deny(
             "FABLE-DIRECTOR gate pre-delega: il budget aperto per questo cwd "

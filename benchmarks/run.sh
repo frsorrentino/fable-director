@@ -43,7 +43,14 @@ model_arg=(); [ -n "${MODEL:-}" ] && model_arg=(--model "$MODEL")
 reset_fixtures() {
   python3 gen_fixtures.py >/dev/null
   rm -f fixtures/batch/results.csv fixtures/batch/report.txt fixtures/classify/labels.csv
+  rm -f fixtures/reviews/triage.csv
   rm -f "$BUDGET_FILE"
+}
+
+save_artifacts() { # $1=arm $2=taskfile $3=idx — salva i deliverable PRIMA del prossimo reset
+  local base="$OUT/$(basename "$2" .md)__$1__$3"
+  [ -f fixtures/reviews/triage.csv ] && cp fixtures/reviews/triage.csv "$base.triage.csv"
+  return 0
 }
 
 run_one() { # $1=arm(off|on) $2=taskfile $3=idx
@@ -55,6 +62,7 @@ run_one() { # $1=arm(off|on) $2=taskfile $3=idx
     --dangerously-skip-permissions "${model_arg[@]}" "${extra[@]}" \
     > "$OUT/$(basename "$2" .md)__$1__$3.json" 2>"$OUT/$(basename "$2" .md)__$1__$3.err" \
     || echo "    (run fallito, vedi .err)"
+  save_artifacts "$1" "$2" "$3"
 }
 
 for t in tasks/*.md; do
