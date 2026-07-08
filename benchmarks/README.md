@@ -43,3 +43,18 @@ Output: `results/<timestamp>/` (raw JSON + `summary.txt`).
 
 - The number in the main README comes **from this harness**, with N, mean, spread and date.
 - If the delta is small or noisy, that's what gets written. No extrapolation to "every case".
+
+### What this harness measures — and what it doesn't
+
+Both arms run the **same model** (`MODEL=...`). The A/B therefore measures the **policy effect
+at equal model**: script-first routing, grouped batches, output contracts, and the enforcement
+stack actually firing. It does **not** measure the second — and larger — component of
+fable-director's value: the **model differential** of the director topology, where an expensive
+top model (Fable/Opus) does only planning/judgment and the heavy tokens land on cheaper
+executors. A cheap model delegating to itself has ~zero differential by construction.
+
+Measuring that requires the top model as the orchestrator arm
+(`MODEL=claude-fable-5 RUNS=1-2`, ideally on task shape 04): few runs suffice — the expected
+delta is large. Publish the two numbers separately, with these exact labels: *policy effect
+(equal model)* vs *director topology (top model orchestrating)*. Reporting one as the other
+is the kind of number this project refuses to ship.
