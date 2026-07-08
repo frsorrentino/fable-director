@@ -145,7 +145,7 @@ try:
     xparts=[]
     for prov in sorted(set(list(xcounts)+([active] if active else []))):
         label=str(prov).upper()[:8]
-        if prov==active: xparts.append(f"{label}▶")
+        if prov==active: xparts.append(f"{label}▲")
         elif xcounts.get(prov): xparts.append(f"{label}×{xcounts[prov]}")
     if xparts: xf=",".join(xparts[:3])
 except Exception:

@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.10.2-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.10.3-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -21,7 +21,7 @@ fable-director injects an **always-on routing policy** and makes it **enforced b
 ## 🆕 What's new in 1.10.x
 
 - **1.10.2 — cross-family lanes verified live.** Default Gemini model for new configs is `gemini-2.5-flash` (verified with a real call: `gemini-3-flash` doesn't exist on the AI Studio free tier, `gemini-flash-latest` answers 503 under load). Both lanes tested end-to-end — Gemini free API and Codex CLI (ChatGPT login) each returned a correct adversarial verdict. **When they fire and how to invoke them yourself: see [Cross-family verifier](#-cross-family-verifier--when-and-how) below.**
-- **1.10.1 — `[DLG]` shows effective tokens, not declared calls.** The segment now reads the session transcript **incrementally** (a state file keeps the byte offset — each refresh parses only new lines, never a rescan) and shows **output tokens per effective model** of subagent work: `[DLG SONNET-5 41k HAIKU-4-5 3k]` (`≡` = subagents inheriting the main-loop model). Immune to the quiet-fallback blind spot and it weighs work, not call counts. Where the transcript isn't exposed it degrades to the gate's declared-call registry, marked `≈` — the two modes are visually distinct by design. Also new: **`[XF]` cross-family segment** — `GEMINI▶` while a `cross-verify.py` call is in flight, `CODEX×2` for today's calls (local telemetry; free tiers expose no quota API, so this is presence, not remaining quota).
+- **1.10.1 — `[DLG]` shows effective tokens, not declared calls.** The segment now reads the session transcript **incrementally** (a state file keeps the byte offset — each refresh parses only new lines, never a rescan) and shows **output tokens per effective model** of subagent work: `[DLG SONNET-5 41k HAIKU-4-5 3k]` (`≡` = subagents inheriting the main-loop model). Immune to the quiet-fallback blind spot and it weighs work, not call counts. Where the transcript isn't exposed it degrades to the gate's declared-call registry, marked `≈` — the two modes are visually distinct by design. Also new: **`[XF]` cross-family segment** — `GEMINI▲` while a `cross-verify.py` call is in flight, `CODEX×2` for today's calls (local telemetry; free tiers expose no quota API, so this is presence, not remaining quota).
 - **1.10.0 — `[DLG]` statusline segment (declared calls).** The pre-delegation gate keeps a per-session registry of delegations counted by declared model. The registry dies at SessionEnd (48h orphan cleanup for crashed sessions).
 - **Benchmark task shape 04 — where governance actually bites.** 40 synthetic customer reviews requiring per-item semantic judgment (closed-vocabulary sentiment/theme + safety-defect flagging, 6 planted defects with ground truth outside the task's view). Unlike shapes 01–03 (script-parity), this one can trigger real delegation → the gate and Stop hook finally get exercised in the `on` arm. `aggregate.py` now also reports **accuracy per arm** (sentiment/theme accuracy, safety recall/precision): savings only count at verified-equal quality — safety recall lost in one arm gets reported, not hidden.
 
@@ -109,7 +109,7 @@ One glance at model, context and plan quotas — so you see the rate limit comin
 ![fable-director statusline](assets/statusline.svg)
 
 ```
-[FABLE5] [CTX 26%] [5H 71%→17:30] [7D 46%→14 Jul] [BDG ok] [XF GEMINI▶ CODEX×2] [DLG SONNET-5 41k ≡ 3k]
+[FABLE5] [CTX 26%] [5H 71%→17:30] [7D 46%→14 Jul] [BDG ok] [XF GEMINI▲ CODEX×2] [DLG SONNET-5 41k ≡ 3k]
 ```
 
 ### Legend, segment by segment
@@ -141,9 +141,9 @@ The external providers expose **no real-time quota API**, so this segment shows 
 | You see | Meaning |
 |---|---|
 | *(segment absent)* | No cross-family calls today, none running |
-| `GEMINI▶` | A Gemini verification call is **in flight right now** (`▶` disappears when it returns; stale markers >15 min are ignored) |
+| `GEMINI▲` | A Gemini verification call is **in flight right now** (`▲` disappears when it returns; stale markers >15 min are ignored) |
 | `CODEX×2` | 2 Codex calls completed **today** — counted locally by this machine's telemetry, blind to usage of the same key elsewhere |
-| `GEMINI▶ CODEX×2` | Both: Gemini running now, Codex used twice today |
+| `GEMINI▲ CODEX×2` | Both: Gemini running now, Codex used twice today |
 
 Limits check: `cross-verify.py --usage` compares today's counts against the free-tier limits declared in config.
 
@@ -170,7 +170,7 @@ Then restart Claude Code. `--remove` to take it out. It won't touch a third-part
 
 An all-Claude ensemble shares correlated blind spots by construction; a different model family (Gemini, GPT, DeepSeek) catches what same-family verification can't. `scripts/cross-verify.py` is that lane — and it's **out of your Claude quota** (Gemini free tier / ChatGPT plan / OpenRouter free).
 
-**When Claude invokes it on its own.** It is rung 4 of the verification ladder in the `delega-efficiente` skill — **optional and rare by design**. The director escalates to it only for the *highest-stakes* claims that have no objective test: an irreversible decision, a client-facing number it can't verify deterministically, a critical assumption everything else depends on. It is NOT called on every task — most verification stops at rung 1 (deterministic assertions) or rung 3 (same-family fresh-context verifier). When a call is in flight you see `[XF GEMINI▶]` in the statusline; today's calls show as `[XF CODEX×2]`.
+**When Claude invokes it on its own.** It is rung 4 of the verification ladder in the `delega-efficiente` skill — **optional and rare by design**. The director escalates to it only for the *highest-stakes* claims that have no objective test: an irreversible decision, a client-facing number it can't verify deterministically, a critical assumption everything else depends on. It is NOT called on every task — most verification stops at rung 1 (deterministic assertions) or rung 3 (same-family fresh-context verifier). When a call is in flight you see `[XF GEMINI▲]` in the statusline; today's calls show as `[XF CODEX×2]`.
 
 **When YOU can invoke it.** Any time, two ways:
 
