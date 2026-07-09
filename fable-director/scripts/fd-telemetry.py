@@ -285,7 +285,7 @@ def cmd_budget_close(args):
 
 ALLOWED_EVENTS = {"task_open", "task_close", "budget_flag", "retry", "escalation",
                   "script_promotion", "verification", "session_summary", "reversal",
-                  "schema_anomaly"}
+                  "schema_anomaly", "external_exec"}
 
 
 def cmd_log(args):
@@ -585,6 +585,24 @@ def cmd_report(args):
                 dense = "DENSO" if n >= 10 else "sparso"
                 print(f"    {t}: {n} chiamate, {fnd} refutate "
                       f"(hit-rate {fnd / n:.2f}) — {dense}")
+
+    ext = [p for e, p in events if e == "external_exec"]
+    if ext:
+        by_pt = {}
+        for x in ext:
+            key = f"{x.get('provider', '?')}/{x.get('type') or '(senza tipo)'}"
+            by_pt.setdefault(key, [0, 0, 0])
+            by_pt[key][0] += 1
+            if x.get("ok"):
+                by_pt[key][1] += 1
+            if x.get("check") in ("json-invalid", "needs_context", "empty"):
+                by_pt[key][2] += 1
+        print("\nExecutor esterni per provider/tipo (rotta sperimentale: la "
+              "promozione a playbook la decidono questi numeri, N≥10):")
+        for key, (n, ok, bad) in sorted(by_pt.items(), key=lambda x: -x[1][0]):
+            dense = "DENSO" if n >= 10 else "sparso"
+            print(f"  {key}: {n} run, {ok} ok, {bad} scarti "
+                  f"(ok-rate {ok / n:.2f}) — {dense}")
 
     promos = [p for e, p in events if e == "script_promotion"]
     if promos:

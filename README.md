@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.11.1-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.12.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -20,11 +20,11 @@ fable-director injects an **always-on routing policy** and makes it **enforced b
 
 ## 🆕 What's new
 
+- **1.12.0** — External executor (experimental): `external-exec.py` routes non-code axis-4 batches to free external tiers (Gemini Flash, Codex CLI) at zero Claude tokens — cross-family discipline (no silent fallback), built-in JSON rung-1, `external_exec` telemetry per provider/type; the route stays per-case until `report` shows DENSE ok-rate.
 - **1.11.1** — `[BDG]` statusline segment shows a live consumed/expected ratio + declared effort tier (`[BDG 0.7×·high]`, Stop-hook accounting, incremental scan): the 2× checkpoint becomes visible on approach, not as a surprise block.
 - **1.11.0** — Effort becomes a routing lever: two shipped agents with pinned reasoning tiers (`fd-executor`, effort `low`, for axis-4 batches; `fd-verifier`, effort `high`, for rung-3 adversarial verification), `budget-open --effort` to declare the tier, gate warns (never denies) on declared≠pinned mismatch, `report` breaks flag-rate down per tier — measurement first, enforcement only if the data earns it.
 - **1.10.10** — Self-review with the plugin's own ladder (8 finder angles → inline verify → cross-family on Gemini *and* Codex): 6 real bugs fixed — expensive delegations missing from `[DLG]`, timezone-shifted commit windows in yield analysis, double-counted cost reports, discarded cross-family verdicts on uppercase fences, a `≡` marker that never matched, a misleading stale-budget deny — plus 2 hot-path efficiency cuts and doc-drift fixes.
 - **1.10.9** — Cost checkpoint: a delegation above the cost ceiling (default 50k expected output, quota-aware) asks *you* instead of silently spending; `--cost-ack` to approve once per task.
-- **1.10.8** — The top model owns "done": delegation now requires a verifiable done + stop condition up front; executors never self-assess completion.
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 
