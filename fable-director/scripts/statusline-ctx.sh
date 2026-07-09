@@ -4,7 +4,10 @@
 #   [CTX %]         riempimento context window della conversazione
 #   [5H %→HH:MM]    quota piano finestra 5 ore + orario reset locale
 #   [7D %]          quota piano settimanale (se il campo esiste)
-#   [BDG ok|2×|3×]  stato pre-budget fable-director (solo lettura del budget file)
+#   [BDG r×·eff]    pre-budget fable-director: ratio live output consumato/atteso
+#                   (stessa contabilità dello Stop hook, incrementale) + effort
+#                   dichiarato; verde <2×, giallo ≥2×, rosso ≥3× (flagged: 3×).
+#                   Senza transcript degrada a ok|2×|3× dal solo budget file.
 # Antepone il badge caveman se il plugin è presente nel profilo attivo.
 #
 # Setup in settings.json:
@@ -76,11 +79,14 @@ try:
     cwd=d.get("cwd") or os.getcwd()
     slug="-"+str(cwd).strip("/").replace("/","-").replace(".","-")
     bf=Path.home()/".claude"/"fable-director"/"budgets"/f"{slug}.json"
+    b_open=None; b_status=None; b_warned=False; b_eff=None; b_exp=0
     if bf.is_file():
         b=json.loads(bf.read_text())
-        st=b.get("status")
-        if st=="open": bdg="2x" if b.get("warned") else "ok"
-        elif st=="flagged": bdg="3x"
+        b_status=b.get("status")
+        if b_status=="open":
+            b_open=b; b_warned=bool(b.get("warned"))
+            b_eff=b.get("effort")
+            b_exp=int(b.get("expected_output_tokens") or 0)
     # [DLG] token EFFETTIVI delegati per modello reale, dal transcript della
     # sessione con scan INCREMENTALE (state file con offset: a ogni refresh si
     # leggono solo le righe nuove — mai rescan). Record sidechain (subagent)
@@ -100,20 +106,51 @@ try:
     sid=d.get("session_id")
     tp=d.get("transcript_path")
     main_norm=norm(m or "")
+    # Ratio budget live: STESSA contabilità dello Stop hook (find_usage
+    # ricorsivo su ogni record, output dopo declared_at, timestamp mancante
+    # → inferenza posizionale) ma incrementale: il contatore vive nello state
+    # file insieme a offset, si azzera quando cambia declared_at.
+    # NB: commenti senza apostrofi — questo blocco vive in una stringa
+    # shell single-quoted, un apostrofo la tronca.
+    from datetime import datetime as _dtb
+    def pts(s):
+        try: return _dtb.fromisoformat(str(s).replace("Z","+00:00"))
+        except Exception: return None
+    def usages(o):
+        if isinstance(o,dict):
+            u=o.get("usage")
+            if isinstance(u,dict) and "output_tokens" in u: yield u
+            for v in o.values(): yield from usages(v)
+        elif isinstance(o,list):
+            for v in o: yield from usages(v)
+    b_decl=pts(b_open.get("declared_at")) if b_open else None
+    spent=None
     if sid and tp and Path(tp).is_file():
         sf=Path.home()/".claude"/"fable-director"/"delegations"/f"{sid}.tok.json"
         state={"off":0,"models":{}}
         if sf.is_file():
             try: state=json.loads(sf.read_text())
             except Exception: pass
+        bst=state.get("budget") or {}
+        if b_open and bst.get("declared")!=b_open.get("declared_at"):
+            bst={"declared":b_open.get("declared_at"),"out":0}  # budget nuovo
         size=Path(tp).stat().st_size
-        if size < state.get("off",0): state={"off":0,"models":{}}  # transcript ruotato
+        if size < state.get("off",0):  # transcript ruotato
+            state={"off":0,"models":{}}
+            if b_open: bst={"declared":b_open.get("declared_at"),"out":0}
         if size > state.get("off",0):
+            last_ts=pts(state.get("last_ts"))
             with open(tp, errors="replace") as fh:
                 fh.seek(state.get("off",0))
                 for line in fh:
                     try: rec=json.loads(line)
                     except Exception: continue
+                    rts=pts(rec.get("timestamp"))
+                    ts=rts or last_ts
+                    if rts: last_ts=rts
+                    if b_decl and ts and ts>=b_decl:
+                        for u in usages(rec):
+                            bst["out"]=bst.get("out",0)+(u.get("output_tokens") or 0)
                     if not rec.get("isSidechain"): continue
                     msg=rec.get("message") or {}
                     u=msg.get("usage") or {}
@@ -123,8 +160,12 @@ try:
                     key="≡" if mm==main_norm else (msg.get("model") or "?").replace("claude-","").upper()[:10]
                     state["models"][key]=state["models"].get(key,0)+out
                 state["off"]=fh.tell()
+            if last_ts: state["last_ts"]=last_ts.isoformat()
+            state["budget"]=bst if b_open else {}
             sf.parent.mkdir(parents=True, exist_ok=True)
             sf.write_text(json.dumps(state))
+        if b_open and bst.get("declared")==b_open.get("declared_at"):
+            spent=int(bst.get("out",0))
         mm=state.get("models") or {}
         if mm:
             dlg=",".join(f"{k} {fmtk(v)}" for k,v in
@@ -136,6 +177,20 @@ try:
             parts=[("≡" if k=="inherit" else str(k).replace("claude-","").upper()[:10])+f"×{v}"
                    for k,v in sorted(c.items(), key=lambda x:-x[1])]
             if parts: dlg="≈"+",".join(parts[:4])
+    # [BDG] = classe:testo — la classe colore (g/y/r) si decide qui, la shell
+    # mappa solo ANSI. flagged → 3×; open → ratio live (soglie identiche allo
+    # Stop hook: verde <2×, giallo ≥2×, rosso ≥3×) + effort dichiarato;
+    # senza transcript degrada a ok|2× dal solo budget file.
+    if b_status=="flagged":
+        bdg="r:3×"
+    elif b_status=="open":
+        eff=("·"+str(b_eff)) if b_eff else ""
+        if spent is not None and b_exp>0:
+            ratio=spent/b_exp
+            cls="g" if ratio<2 else ("y" if ratio<3 else "r")
+            bdg=f"{cls}:{ratio:.1f}×{eff}"
+        else:
+            bdg=("y:2×" if b_warned else "g:ok")+eff
     # [XF] verifier cross-family (Gemini/DeepSeek/Codex): niente quota real-time
     # dai provider → ▶ = chiamata IN CORSO (marker di cross-verify.py, ignorato
     # se >15 min: processo morto); ×N = chiamate di oggi dalla telemetria locale.
@@ -197,9 +252,9 @@ if [ "$wk" != "-" ]; then
   out="$out $(printf "$(color_for "$wk")%s]\033[0m" "$seg")"
 fi
 case "$bdg" in
-  ok) out="$out $(printf '\033[38;5;114m[BDG ok]\033[0m')" ;;
-  2x) out="$out $(printf '\033[38;5;220m[BDG 2×]\033[0m')" ;;
-  3x) out="$out $(printf '\033[38;5;196m[BDG 3×]\033[0m')" ;;
+  g:*) out="$out $(printf '\033[38;5;114m[BDG %s]\033[0m' "${bdg#g:}")" ;;
+  y:*) out="$out $(printf '\033[38;5;220m[BDG %s]\033[0m' "${bdg#y:}")" ;;
+  r:*) out="$out $(printf '\033[38;5;196m[BDG %s]\033[0m' "${bdg#r:}")" ;;
 esac
 [ "$xf" != "-" ] && [ -n "$xf" ] && \
   out="$out $(printf '\033[38;5;216m[XF %s]\033[0m' "$(printf '%s' "$xf" | tr ',' ' ')")"

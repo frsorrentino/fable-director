@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.11.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.11.1-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -20,11 +20,11 @@ fable-director injects an **always-on routing policy** and makes it **enforced b
 
 ## 🆕 What's new
 
+- **1.11.1** — `[BDG]` statusline segment shows a live consumed/expected ratio + declared effort tier (`[BDG 0.7×·high]`, Stop-hook accounting, incremental scan): the 2× checkpoint becomes visible on approach, not as a surprise block.
 - **1.11.0** — Effort becomes a routing lever: two shipped agents with pinned reasoning tiers (`fd-executor`, effort `low`, for axis-4 batches; `fd-verifier`, effort `high`, for rung-3 adversarial verification), `budget-open --effort` to declare the tier, gate warns (never denies) on declared≠pinned mismatch, `report` breaks flag-rate down per tier — measurement first, enforcement only if the data earns it.
 - **1.10.10** — Self-review with the plugin's own ladder (8 finder angles → inline verify → cross-family on Gemini *and* Codex): 6 real bugs fixed — expensive delegations missing from `[DLG]`, timezone-shifted commit windows in yield analysis, double-counted cost reports, discarded cross-family verdicts on uppercase fences, a `≡` marker that never matched, a misleading stale-budget deny — plus 2 hot-path efficiency cuts and doc-drift fixes.
 - **1.10.9** — Cost checkpoint: a delegation above the cost ceiling (default 50k expected output, quota-aware) asks *you* instead of silently spending; `--cost-ack` to approve once per task.
 - **1.10.8** — The top model owns "done": delegation now requires a verifiable done + stop condition up front; executors never self-assess completion.
-- **1.10.7** — Two silent things became measurable: read-dedup logs the tokens it saves, and `report` prints output-tokens-per-commit (yield — a diagnostic alarm, never a target).
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 
@@ -95,7 +95,7 @@ One glance at model, context and plan quotas — so you see the rate limit comin
 ![fable-director statusline](assets/statusline.svg)
 
 ```
-[FABLE5] [CTX 26%] [5H 71%→17:30] [7D 46%→14 Jul] [BDG ok] [XF GEMINI▲ CODEX×2] [DLG SONNET-5 41k ≡ 3k]
+[FABLE5] [CTX 26%] [5H 71%→17:30] [7D 46%→14 Jul] [BDG 0.7×·high] [XF GEMINI▲ CODEX×2] [DLG SONNET-5 41k ≡ 3k]
 ```
 
 ### Legend, segment by segment
@@ -106,7 +106,7 @@ One glance at model, context and plan quotas — so you see the rate limit comin
 | `[CTX 26%]` | How full the conversation's context window is | session info |
 | `[5H 71%→17:30]` | 5-hour plan-window quota used + local reset time (the "Current session" in `/usage`) | plan rate limits |
 | `[7D 46%→14 Jul]` | Weekly plan quota used + reset date | plan rate limits |
-| `[BDG …]` | fable-director **pre-budget** state for this directory | budget file |
+| `[BDG …]` | fable-director **pre-budget**: live consumed/expected output ratio + declared effort tier | budget file + session transcript (incremental) |
 | `[XF …]` | **Cross-family verifier** (Gemini / Codex / DeepSeek) activity | marker file + local telemetry |
 | `[DLG …]` | Work **delegated to subagents** this session, tokens per model | session transcript |
 
@@ -116,8 +116,8 @@ Segments with nothing to say disappear (no budget open → no `[BDG]`; no delega
 
 | You see | Meaning |
 |---|---|
-| `[BDG ok]` | A pre-budget is open, consumption under 2× the estimate |
-| `[BDG 2×]` | Checkpoint hit: consumption passed 2× — the Stop hook asked the model to reassess the route |
+| `[BDG 0.7×·high]` | Pre-budget open: output consumed so far is 0.7× the declared estimate, declared effort tier `high`. Green < 2×, yellow ≥ 2×, red ≥ 3× — the same accounting and thresholds as the Stop hook, so you see the 2× checkpoint **coming** instead of discovering it when it fires. The ratio updates incrementally from the session transcript (only new lines are read at each render) |
+| `[BDG ok]` / `[BDG 2×]` | Fallback when the transcript isn't exposed: budget-file state only (`2×` = the Stop hook checkpoint already fired). The `·effort` suffix still shows if declared |
 | `[BDG 3×]` | Blown: ≥3× the estimate — turn closure was blocked until the post-mortem |
 
 ### `[XF]` states — cross-family verifier
