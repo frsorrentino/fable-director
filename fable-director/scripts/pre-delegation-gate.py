@@ -140,6 +140,7 @@ def log_gate_deny(data, kind, budget=None):
         }
         if isinstance(budget, dict):
             payload["task"] = budget.get("task")
+            payload["effort"] = budget.get("effort")
         base = Path.home() / ".claude" / "fable-director"
         base.mkdir(parents=True, exist_ok=True)
         con = sqlite3.connect(base / "telemetry.db")
@@ -183,16 +184,81 @@ def announce_model(data):
     fan-out omogenei non producono N righe di rumore. Mostra il modello
     DICHIARATO: quello effettivo può degradare in silenzio (quiet fallback
     di Claude Code, vedi Known limits) — la verità post-task è
-    session-cost-report.py (rendiconto per modello effettivo)."""
+    session-cost-report.py (rendiconto per modello effettivo).
+    Ritorna la riga (o None): il chiamante stampa UN solo systemMessage."""
     ti = data.get("tool_input") or {}
     model = ti.get("model")
     if not model:
-        return
+        return None
     target = ti.get("subagent_type") or data.get("tool_name") or "delega"
-    print(json.dumps({"systemMessage": (
-        f"FD ▶ delega a modello esplicito: {target} → {model} "
-        f"(dichiarato; effettivo verificabile post-task con "
-        f"session-cost-report.py)")}, ensure_ascii=False))
+    return (f"FD ▶ delega a modello esplicito: {target} → {model} "
+            f"(dichiarato; effettivo verificabile post-task con "
+            f"session-cost-report.py)")
+
+
+def agent_pinned_effort(subagent_type):
+    """Effort pinnato nel frontmatter dell'agent shipped col plugin (agents/).
+    Parse a runtime invece di mappa hardcoded: zero drift se il frontmatter
+    cambia. Solo agent fd-* del plugin; per tutti gli altri ritorna None
+    (l'effort eredita dalla sessione, nessuna coerenza da verificare)."""
+    if not subagent_type:
+        return None
+    name = str(subagent_type).split(":")[-1]
+    f = Path(__file__).resolve().parent.parent / "agents" / f"{name}.md"
+    if not f.is_file():
+        return None
+    in_fm = False
+    for line in f.read_text(errors="replace").splitlines():
+        if line.strip() == "---":
+            if in_fm:
+                break
+            in_fm = True
+            continue
+        if in_fm and line.startswith("effort:"):
+            return line.split(":", 1)[1].strip() or None
+    return None
+
+
+def effort_coherence(data, budget):
+    """Coerenza effort dichiarato (budget --effort) vs pinnato (frontmatter
+    agent fd-*). Mismatch → warn + evento telemetria `effort_mismatch`,
+    MAI deny: l'effort dichiarato è un decision record, non un vincolo di
+    selezione (bloccare qui sarebbe il Goodhart del budget). Ritorna la riga
+    di warn o None. Best-effort: qualunque errore → None."""
+    try:
+        declared = (budget or {}).get("effort")
+        if not declared:
+            return None
+        ti = data.get("tool_input") or {}
+        pinned = agent_pinned_effort(ti.get("subagent_type"))
+        if not pinned or pinned == declared:
+            return None
+        try:
+            payload = {"declared": declared, "pinned": pinned,
+                       "subagent_type": ti.get("subagent_type"),
+                       "task": (budget or {}).get("task")}
+            base = Path.home() / ".claude" / "fable-director"
+            base.mkdir(parents=True, exist_ok=True)
+            con = sqlite3.connect(base / "telemetry.db")
+            con.execute("CREATE TABLE IF NOT EXISTS events("
+                        "id INTEGER PRIMARY KEY, ts TEXT NOT NULL, session_id TEXT, "
+                        "cwd TEXT, event TEXT NOT NULL, payload TEXT)")
+            con.execute(
+                "INSERT INTO events(ts, session_id, cwd, event, payload) "
+                "VALUES(?,?,?,?,?)",
+                (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                 data.get("session_id"), str(data.get("cwd") or os.getcwd()),
+                 "effort_mismatch", json.dumps(payload, ensure_ascii=False)))
+            con.commit()
+            con.close()
+        except Exception:
+            pass
+        return (f"FD ⚠ effort incoerente: budget dichiara '{declared}' ma "
+                f"{ti.get('subagent_type')} ha effort pinnato '{pinned}' "
+                f"(frontmatter). Delega consentita — verifica la rotta o "
+                f"riapri il budget con l'effort giusto.")
+    except Exception:
+        return None
 
 
 def main():
@@ -238,7 +304,13 @@ def main():
             if checkpoint:
                 ask(checkpoint)  # task costoso: l'utente decide sui suoi limiti
                 return
-            announce_model(data)     # riga solo se modello esplicito ≠ inherit
+            # UN solo systemMessage: due print JSON separati romperebbero il
+            # parsing dell'output hook.
+            msgs = [m for m in (announce_model(data),
+                                effort_coherence(data, budget)) if m]
+            if msgs:
+                print(json.dumps({"systemMessage": "\n".join(msgs)},
+                                 ensure_ascii=False))
             return  # budget valido: allow
         log_gate_deny(data, "stale_budget", budget)
         deny(

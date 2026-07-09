@@ -4,8 +4,8 @@ Route by six axes, earlier overrides later:
 1. Interactivity — live/visual/user iteration? → top model inline, never delegate.
 2. Error cost — production code, client-facing numbers/wording, irreversible writes? → top model; reclassifying to save tokens is Goodhart failure: in doubt, it IS quality-sensitive.
 3. Determinism — core doable by code? → script, zero model tokens.
-4. Cardinality — N similar items? → workflow, mid-model grouped ~10-15, forced JSON schema; fan-out 1+(N-1): one canary verified rung-1 BEFORE the rest (systemic failure costs 1×, not N×). Single item → inline.
-5. Verifiability — objective test? → deterministic assertions; none → adversarial verify per finding.
+4. Cardinality — N similar items? → workflow, mid-model grouped ~10-15, forced JSON schema; executor: agent `fd-executor` (effort pinned low); fan-out 1+(N-1): one canary verified rung-1 BEFORE the rest (systemic failure costs 1×, not N×). Single item → inline.
+5. Verifiability — objective test? → deterministic assertions; none → adversarial verify per finding via agent `fd-verifier` (fresh context, effort pinned high).
 6. Cache locality — every subagent pays a COLD START (own uncached prefix; it does not break the main thread's cache); switching model invalidates the prompt cache. Cost veto on borderline routes: delegate only if net saving after cold start. Never overrides axes 1-2.
 
 Before delegating: pin a VERIFIABLE done (a command that passes / an observable behavior / an enumerable checklist) and the stop condition (incl. a failure cap). Not verifiable → don't delegate until it is; the top model owns "done", executors never self-assess it.

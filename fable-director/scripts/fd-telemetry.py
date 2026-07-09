@@ -16,14 +16,18 @@ Sottocomandi:
   budget-open  --task S --expected-output N [--expected-input N] [--type SLUG]
                [--approach S] [--fallback S]
                [--route inline|workflow|script|agent] [--reason S] [--alternative S]
-               [--cost-ack]
+               [--effort low|medium|high|xhigh|max] [--cost-ack]
                scrive il budget file (status=open) e logga task_open;
                --cost-ack = l'utente ha già approvato il costo di questo task (il
                checkpoint del gate è stato presentato e accettato) → il gate non ri-chiede;
                --type = categoria task per la tabella empirica (es. seo-batch, code-review);
                --route/--reason/--alternative = decision record: quale rotta, perché
                (es. "axis2>axis4"), quale scartata — serve alla telemetria (reversal
-               analysis), non al modello
+               analysis), non al modello;
+               --effort = tier di reasoning dichiarato per la delega (applicabile solo
+               via agent con effort pinnato in frontmatter: fd-executor=low,
+               fd-verifier=high — il tool Agent non ha parametro effort per-call);
+               il gate verifica la coerenza dichiarato/pinnato (warn, mai deny)
   budget-close [--outcome ok|flagged|abandoned]
                marca il budget file closed e logga task_close
   log EVENT [--json '{...}']
@@ -53,6 +57,8 @@ DB_PATH = BASE / "telemetry.db"
 BUDGETS = BASE / "budgets"
 USAGE_KEYS = ("input_tokens", "output_tokens",
               "cache_read_input_tokens", "cache_creation_input_tokens")
+# Tier di effort ammessi (allineati al frontmatter agent di Claude Code).
+EFFORT_LEVELS = {"low", "medium", "high", "xhigh", "max"}
 SENTINEL_MIN_RECORDS = 20  # sotto: transcript troppo corto per giudicare lo schema
 
 
@@ -224,9 +230,13 @@ def cmd_budget_open(args):
     opts = parse_opts(args, {"--task": None, "--expected-output": None,
                              "--expected-input": None, "--type": None,
                              "--approach": None, "--fallback": None, "--cwd": None,
-                             "--route": None, "--reason": None, "--alternative": None})
+                             "--route": None, "--reason": None, "--alternative": None,
+                             "--effort": None})
     if not opts["--task"] or not opts["--expected-output"]:
         sys.exit("budget-open richiede --task e --expected-output")
+    if opts["--effort"] and opts["--effort"] not in EFFORT_LEVELS:
+        sys.exit(f"--effort non valido: {opts['--effort']} "
+                 f"(ammessi: {', '.join(sorted(EFFORT_LEVELS))})")
     cwd = opts["--cwd"] or os.getcwd()
     BUDGETS.mkdir(parents=True, exist_ok=True)
     budget = {
@@ -237,6 +247,9 @@ def cmd_budget_open(args):
         "route": opts["--route"],
         "reason": opts["--reason"],
         "alternative": opts["--alternative"],
+        # effort dichiarato: leva reale solo se la delega usa un agent con
+        # effort pinnato (fd-executor/fd-verifier); il gate confronta i due.
+        "effort": opts["--effort"],
         "expected_output_tokens": int(opts["--expected-output"]),
         "expected_input_tokens": int(opts["--expected-input"] or 0),
         # cost_ack: l'utente ha già approvato un task sopra la soglia di costo
@@ -607,10 +620,42 @@ def cmd_report(args):
               f"dal gate; molti no_budget = il modello salta il pre-budget, "
               f"molti flagged = post-mortem che non vengono chiusi")
 
+    mismatches = [p for e, p in events if e == "effort_mismatch"]
+    if mismatches:
+        pairs = {}
+        for m in mismatches:
+            key = f"{m.get('declared', '?')}≠{m.get('pinned', '?')}"
+            pairs[key] = pairs.get(key, 0) + 1
+        pairs_s = ", ".join(f"{k}×{v}" for k, v in
+                            sorted(pairs.items(), key=lambda x: -x[1]))
+        print(f"\nEffort mismatch: {len(mismatches)} ({pairs_s}) — budget e agent "
+              f"in disaccordo; ricorrente = la rotta dichiarata non riflette "
+              f"l'esecutore reale, candidato playbook")
+
     flags = [p for e, p in events if e == "budget_flag"]
     opened = sum(1 for e, _ in events if e == "task_open")
     closed_tasks = [p for e, p in events if e == "task_close"]
     print(f"\nTask: {opened} aperti, {len(closed_tasks)} chiusi, {len(flags)} sforamenti ≥3×")
+
+    # Breakdown per effort dichiarato: misura se il tier low regge davvero
+    # (flag rate vs tier alti). Dato che decide la promozione warn→deny;
+    # senza N, il tier resta euristica.
+    by_effort = {}
+    for t in closed_tasks:
+        eff = t.get("effort")
+        if not eff:
+            continue
+        by_effort.setdefault(eff, [0, 0])
+        by_effort[eff][0] += 1
+        if t.get("outcome") == "flagged":
+            by_effort[eff][1] += 1
+    if by_effort:
+        order = {"low": 0, "medium": 1, "high": 2, "xhigh": 3, "max": 4}
+        print("Task per effort dichiarato (flag rate alto su low = tier "
+              "insufficiente per quel tipo):")
+        for eff, (n, fl) in sorted(by_effort.items(),
+                                   key=lambda x: order.get(x[0], 9)):
+            print(f"  {eff}: {n} task, {fl} flaggati")
 
     # Densità per tipo: i dati sovrascrivono una regola di routing SOLO nelle
     # celle marcate dense (N≥10 task chiusi). Soglia codificata, non a giudizio.

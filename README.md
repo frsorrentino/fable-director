@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.10.10-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.11.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -20,11 +20,11 @@ fable-director injects an **always-on routing policy** and makes it **enforced b
 
 ## 🆕 What's new
 
+- **1.11.0** — Effort becomes a routing lever: two shipped agents with pinned reasoning tiers (`fd-executor`, effort `low`, for axis-4 batches; `fd-verifier`, effort `high`, for rung-3 adversarial verification), `budget-open --effort` to declare the tier, gate warns (never denies) on declared≠pinned mismatch, `report` breaks flag-rate down per tier — measurement first, enforcement only if the data earns it.
 - **1.10.10** — Self-review with the plugin's own ladder (8 finder angles → inline verify → cross-family on Gemini *and* Codex): 6 real bugs fixed — expensive delegations missing from `[DLG]`, timezone-shifted commit windows in yield analysis, double-counted cost reports, discarded cross-family verdicts on uppercase fences, a `≡` marker that never matched, a misleading stale-budget deny — plus 2 hot-path efficiency cuts and doc-drift fixes.
 - **1.10.9** — Cost checkpoint: a delegation above the cost ceiling (default 50k expected output, quota-aware) asks *you* instead of silently spending; `--cost-ack` to approve once per task.
 - **1.10.8** — The top model owns "done": delegation now requires a verifiable done + stop condition up front; executors never self-assess completion.
 - **1.10.7** — Two silent things became measurable: read-dedup logs the tokens it saves, and `report` prints output-tokens-per-commit (yield — a diagnostic alarm, never a target).
-- **1.10.6** — Cross-family verifier is data-driven: `--type` slug per call, hit-rate broken down per task type in `report`.
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 
@@ -207,6 +207,7 @@ Routing cuts **cost per token** (cheap executor does the heavy work). A separate
 - **Statusline degrades silently** on Claude Code versions that don't expose the quota fields (< 2.1.x): missing segments simply don't render — no error.
 - **Claude Code's quiet model fallback.** If a subagent pins a model that isn't available on your plan/session, Claude Code silently falls back to another model — it does not fail. Routing decisions that assume a specific executor tier should verify it (the statusline shows the active model for the main loop only).
 - **Transcript schema dependency.** Token accounting reads Claude Code's undocumented JSONL transcript format. Since 1.7.0 a schema sentinel fails loudly (warning + `schema_anomaly` event, enforcement suspended) instead of silently counting zeros — but accounting remains unavailable until the plugin is updated for the new format.
+- **Per-agent `effort` needs a recent Claude Code.** The `fd-executor`/`fd-verifier` agents pin their reasoning tier via the `effort` frontmatter field. Older Claude Code versions ignore unknown frontmatter fields: the agents still work, they just inherit the session effort — silent degradation, no error. Effort coherence (budget `--effort` vs pinned tier) is a warn-only check by design: it never blocks a delegation.
 
 ---
 
