@@ -1,6 +1,6 @@
 ---
 name: delega-efficiente
-description: Use when planning how to execute a task that involves delegation or orchestration - before launching subagents/workflows, choosing models, starting multi-item or multi-file batch work, consuming large tool outputs, when the context window is filling up, when the pre-delegation gate denied an Agent/Workflow call, or when closing a task that blew past its expected cost or escalated through repeated failures. The always-on kernel already carries the 6 routing axes; load this full body only when the axes fire, not merely because a session started.
+description: Use when planning how to execute a task that involves delegation or orchestration - before launching subagents/workflows, choosing models, starting multi-item or multi-file batch work, consuming large tool outputs, when the context window is filling up, when the pre-delegation gate denied an Agent/Task/Workflow call, or when closing a task that blew past its expected cost or escalated through repeated failures. The always-on kernel already carries the 6 routing axes; load this full body only when the axes fire, not merely because a session started.
 ---
 
 # Delega efficiente
@@ -76,7 +76,7 @@ No-progress termination (independent of retries and budget): if the last ~5 turn
 
 Before executing any task that involves delegation or orchestration, the plan states one line: `approach / fallback / expected input tokens / expected output tokens`. Estimation anchors (don't guess from feel): expected input ≈ bytes of files/outputs to be read ÷ 4, times the number of passes; expected output ≈ size of the DELIVERABLE only (schema × N items), reasoning excluded. Cache is never budgeted ex ante (noise that improves no decision) — analyzed ex post only.
 
-Then IMMEDIATELY mirror the estimate machine-readably — a PreToolUse gate denies any Agent/Workflow call with no open budget, so opening it is not optional:
+Then IMMEDIATELY mirror the estimate machine-readably — a PreToolUse gate denies any Agent/Task/Workflow call with no open budget, so opening it is not optional:
 `<plugin>/scripts/fd-telemetry.py budget-open --task "..." --expected-output N [--expected-input N] [--type slug] [--route inline|workflow|script|agent] [--reason "axis2>axis4"] [--alternative "..."]`
 (`--type` = task category slug — reuse existing ones, feeds the density table. `--route/--reason/--alternative` = decision record: which route, why, what was discarded — it feeds reversal analysis, costs one line.)
 This writes `~/.claude/fable-director/budgets/<cwd-slug>.json`. The plugin's Stop hook compares actual tokens (from the transcript, since declaration) at every turn end: at ≥2× it warns ONCE (checkpoint: reassess the route now — a reversal at 2× is cheaper than a post-mortem at 3×); at ≥3× it BLOCKS closure and demands the post-mortem. Thresholds on consumed tokens only, never on self-estimated progress.

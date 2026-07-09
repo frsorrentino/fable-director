@@ -79,6 +79,10 @@ def open_db():
                 "cwd TEXT, event TEXT NOT NULL, payload TEXT)")
     con.execute("CREATE TABLE IF NOT EXISTS llm_cache("
                 "key TEXT PRIMARY KEY, ts TEXT NOT NULL, output TEXT NOT NULL)")
+    # Lo statusline interroga events(event, ts) a ogni render su un DB globale
+    # che cresce per sempre: senza indice è un full scan a ogni turno.
+    con.execute("CREATE INDEX IF NOT EXISTS idx_events_event_ts "
+                "ON events(event, ts)")
     return con
 
 
@@ -342,7 +346,9 @@ def git_yield(cwd, first_ts):
         return None
     try:
         import subprocess
-        since = first_ts.strftime("%Y-%m-%dT%H:%M:%S")
+        # Offset esplicito: senza, git interpreta il timestamp nel fuso locale
+        # e su macchine non-UTC la finestra dei commit slitta dell'offset.
+        since = first_ts.strftime("%Y-%m-%dT%H:%M:%S%z")
         inside = subprocess.run(
             ["git", "-C", str(cwd), "rev-parse", "--is-inside-work-tree"],
             capture_output=True, text=True, timeout=5)

@@ -51,7 +51,9 @@ def log_saving(session_id, path, kind, saved_chars):
     """Evento telemetria `read_dedup`: token risparmiati (≈ char/4) rendendo la
     riduzione MISURABILE invece che silenziosa — il report può dire quanto vale
     davvero, e la validazione live diventa data-driven. Scrittura sqlite diretta
-    (fd-telemetry.py ha trattini nel nome, non importabile). Best-effort: mai
+    (fd-telemetry.py sarebbe importabile via importlib come fa cross-verify.py,
+    ma questo hook PostToolUse gira a ogni Read: resta autonomo — schema events
+    da tenere allineato a open_db() in fd-telemetry.py). Best-effort: mai
     interferire con l'output del dedup."""
     try:
         BASE.mkdir(parents=True, exist_ok=True)

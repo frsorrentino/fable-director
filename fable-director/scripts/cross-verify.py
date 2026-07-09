@@ -310,8 +310,10 @@ def main():
             pass
 
     try:
-        # tollera code fence attorno al JSON
-        content = content.strip().strip("`").removeprefix("json").strip()
+        # tollera code fence attorno al JSON (```json / ```JSON / senza tag)
+        content = content.strip().strip("`").strip()
+        if content[:4].lower() == "json":
+            content = content[4:].strip()
         verdict_obj = json.loads(content)
         verdict = verdict_obj.get("verdict", "uncertain")
         reasoning = verdict_obj.get("reasoning", "")

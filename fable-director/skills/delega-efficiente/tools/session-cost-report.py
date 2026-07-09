@@ -53,7 +53,11 @@ def project_dirs_for_cwd():
     dirs = []
     cfg = os.environ.get("CLAUDE_CONFIG_DIR")
     bases = [Path(cfg) / "projects"] if cfg else []
-    bases.append(Path.home() / ".claude" / "projects")
+    default = Path.home() / ".claude" / "projects"
+    # CLAUDE_CONFIG_DIR può puntare a ~/.claude: senza dedup la stessa dir
+    # verrebbe scansionata due volte e i totali del report raddoppierebbero.
+    if not any(b.resolve() == default.resolve() for b in bases):
+        bases.append(default)
     for base in bases:
         if not base.is_dir():
             continue
@@ -64,7 +68,7 @@ def project_dirs_for_cwd():
             # fallback: match sul nome della dir corrente
             tail = Path.cwd().name.replace(".", "-")
             dirs.extend(p for p in base.iterdir() if p.is_dir() and tail in p.name)
-    return dirs
+    return list(dict.fromkeys(dirs))
 
 
 def load_budget_file():

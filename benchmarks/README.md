@@ -15,21 +15,23 @@ It compares the same task run by Claude Code **without** and **with** the fable-
 - Deterministic fixtures (fixed seed) regenerated before each run.
 - **N runs per side** (default 3): report the mean and spread, not a single run.
 
-## Tasks (3 shapes)
+## Tasks (4 shapes)
 
 1. `01-batch-deterministico` — 30 number files → CSV of aggregates. Scriptable core.
 2. `02-classificazione` — 30 strings → EMAIL/URL/PHONE/OTHER labels. Scriptable via regex.
 3. `03-misto` — a deterministic part (means) + a judgment part (anomaly summary).
+4. `04-triage-recensioni` — 40 reviews needing per-item semantic judgment (sentiment/theme +
+   safety flags with ground truth): the shape where delegation and the gate actually fire.
 
 Savings are largest where the work is deterministic (the policy promotes it to a script → ~0
 model tokens on the core) and tend to zero where even the base model would write a script anyway.
-The three shapes exist precisely to show the **range**, not a cherry-picked number.
+The shapes exist precisely to show the **range**, not a cherry-picked number.
 
 ## How to run it
 
 ```bash
 python3 gen_fixtures.py          # deterministic fixtures
-RUNS=3 bash run.sh               # ~18 headless sessions (3 tasks × 2 arms × 3 runs)
+RUNS=3 bash run.sh               # ~24 headless sessions (4 tasks × 2 arms × 3 runs)
 # optional: MODEL=claude-fable-5 RUNS=3 bash run.sh
 ```
 

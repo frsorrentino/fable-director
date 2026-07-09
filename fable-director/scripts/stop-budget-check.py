@@ -100,16 +100,23 @@ def sum_file(path, since):
             except json.JSONDecodeError:
                 continue
             n_rec += 1
-            usages = list(find_usage(rec))
-            if usages:
-                n_usage += 1
             raw_ts = parse_ts(rec.get("timestamp"))
             if raw_ts:
                 n_ts += 1
             ts = raw_ts or last_ts  # inferenza posizionale
             if ts:
                 last_ts = ts
-            if since is not None and (ts is None or ts < since):
+            pre_since = since is not None and (ts is None or ts < since)
+            # Sui record pre-since find_usage serve SOLO alla sentinella
+            # (n_usage==0?): appena un usage è stato visto, la ricorsione sul
+            # prefisso storico è lavoro morto ripetuto a ogni turno — skip.
+            # La sentinella e le somme restano identiche.
+            if pre_since and n_usage:
+                continue
+            usages = list(find_usage(rec))
+            if usages:
+                n_usage += 1
+            if pre_since:
                 continue
             for usage in usages:
                 out += usage.get("output_tokens") or 0

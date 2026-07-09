@@ -125,8 +125,10 @@ def cost_checkpoint(budget):
 def log_gate_deny(data, kind, budget=None):
     """Evento telemetria `gate_deny`: senza, l'analisi post-hoc non distingue
     "mai tentata delega" da "delega negata e ripiegata inline" (emerso dal
-    benchmark shape 04). Scrittura sqlite diretta invece di importare
-    fd-telemetry.py (nome con trattini, non importabile senza importlib).
+    benchmark shape 04). Scrittura sqlite diretta (fd-telemetry.py sarebbe
+    importabile via importlib, come fa cross-verify.py, ma il gate resta
+    autonomo: hot path PreToolUse, zero dipendenze da caricare — lo schema
+    events va tenuto allineato a open_db() in fd-telemetry.py).
     Best-effort: un errore qui non deve mai impedire il deny."""
     try:
         ti = data.get("tool_input") or {}
@@ -215,13 +217,27 @@ def main():
 
     if isinstance(budget, dict) and budget.get("status") == "open":
         declared = parse_ts(budget.get("declared_at"))
+        if declared is None:
+            # declared_at assente/malformato ≠ budget vecchio: diagnosi onesta
+            # (file editato a mano o schema estraneo), non "più vecchio di 24h".
+            log_gate_deny(data, "no_budget", budget)
+            deny(
+                "FABLE-DIRECTOR gate pre-delega: il budget di questo cwd è "
+                "privo di declared_at valido (file corrotto o schema estraneo). "
+                f"Riapri il pre-budget del task corrente e ritenta:\n{open_cmd}"
+            )
+            return
         now = datetime.now(timezone.utc)
-        if declared and (now - declared).total_seconds() <= 86400:
+        if (now - declared).total_seconds() <= 86400:
+            # Registro PRIMA del checkpoint: se l'ask viene approvato l'hook non
+            # gira di nuovo — senza questo, proprio le deleghe più costose
+            # sparirebbero dal [DLG]. Se l'utente nega, sovrastima di 1: stesso
+            # tradeoff già accettato in record_delegation (registra alla richiesta).
+            record_delegation(data)  # registro per lo statusline [DLG]
             checkpoint = cost_checkpoint(budget)
             if checkpoint:
                 ask(checkpoint)  # task costoso: l'utente decide sui suoi limiti
                 return
-            record_delegation(data)  # registro per lo statusline [DLG]
             announce_model(data)     # riga solo se modello esplicito ≠ inherit
             return  # budget valido: allow
         log_gate_deny(data, "stale_budget", budget)

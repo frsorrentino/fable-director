@@ -87,7 +87,14 @@ try:
     # → bucket per message.model; "≡" = stesso modello del main loop.
     # Fallback senza transcript: registro dichiarato del gate, prefisso "≈".
     def norm(m):
-        return str(m).replace("claude-","").replace(" ","").replace("-","").upper()
+        # Confronta display_name ("Claude Sonnet 5") e model id anche versionato
+        # ("claude-sonnet-5-20260701"): via prefisso claude in ogni forma,
+        # separatori e suffisso data — altrimenti "≡" non combacia mai.
+        import re as _re
+        s=str(m).lower().replace(" ","").replace("-","").replace(".","")
+        s=_re.sub(r"^claude","",s)
+        s=_re.sub(r"20\d{6}$","",s)
+        return s.upper()
     def fmtk(n):
         return f"{n/1000:.0f}k" if n >= 1000 else str(n)
     sid=d.get("session_id")
