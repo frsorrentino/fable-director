@@ -9,7 +9,7 @@
 # ATTENZIONE: consuma quota del piano / API reale. RUNS=3 per lato di default.
 # Nota: i run "on" scrivono budget file ed eventi telemetria reali
 # (cwd = questa dir → slug dedicato); reset_fixtures pulisce il budget tra i run.
-# Uso:  RUNS=3 [MODEL=claude-fable-5] bash run.sh
+# Uso:  RUNS=3 [MODEL=claude-fable-5] [TASKS='tasks/04*.md'] bash run.sh
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -65,7 +65,7 @@ run_one() { # $1=arm(off|on) $2=taskfile $3=idx
   save_artifacts "$1" "$2" "$3"
 }
 
-for t in tasks/*.md; do
+for t in ${TASKS:-tasks/*.md}; do
   for i in $(seq 1 "$RUNS"); do
     run_one off "$t" "$i"
     run_one on  "$t" "$i"

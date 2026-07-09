@@ -49,6 +49,12 @@ Output: `results/<timestamp>/` (raw JSON + `summary.txt`).
   ("pannello che si stacca") that both arms read as a safety hazard while ground truth said NO
   (the likely cause of the identical 85% safety precision in both arms). **Safety-precision
   numbers from runs before this date are not comparable with later runs.**
+- 2026-07-09: first director-topology run (`MODEL=claude-fable-5`, shape 04, N=2) came out
+  **negative** (−135% USD, theme 98% vs 100%): zero delegations attempted, zero gate events —
+  the top model correctly declined to delegate 40 micro-items, so the measured delta is pure
+  policy overhead at top-model rates. Conclusion codified: the topology differential needs a
+  fixture with genuinely worker-heavy reads (hundreds of items / large files); shape 04 is too
+  small by construction. Publishing the negative number instead of rerunning until it flips.
 
 ### What this harness measures — and what it doesn't
 

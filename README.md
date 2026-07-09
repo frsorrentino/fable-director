@@ -72,19 +72,21 @@ savings are a figure you read, not a percentage on a banner.
 *without* and *with* the policy, tokens read from the real `claude -p` output, N runs per side,
 4 task shapes). Numbers below come from this harness, with methodology, N and spread.
 
-<!-- BENCH:RESULT — policy effect (equal model). Director topology: pending. -->
-> 📐 **Measured — policy effect at equal model** (both arms `claude-sonnet-5`, N=3 per side, full enforcement stack injected via `--settings`, 2026-07-08):
+<!-- BENCH:RESULT — policy effect (equal model, sonnet + fable) + director topology attempt: measured 2026-07-09. -->
+> 📐 **Measured — policy effect at equal model** (full enforcement stack via `--settings`; shape-04 quality numbers before the 2026-07-08 fixture fix are not comparable):
 >
-> | Task shape | Tokens saved | Cost saved | Quality (on vs off) |
-> |---|---|---|---|
-> | 01 batch-deterministic | **+17.1%** | **+10.8%** | — |
-> | 02 classification | +6.2% | −2.4% | — |
-> | 03 mixed | +3.0% | −2.8% | — |
-> | 04 semantic triage | −47.7%¹ | −76.0%¹ | identical (safety recall 100% both) |
+> | Task shape | sonnet-5, N=3 (07-08) — tokens / USD | fable-5, N=3 (07-09) — tokens / USD |
+> |---|---|---|
+> | 01 batch-deterministic | **+17.1% / +10.8%** | −38.9% / −15.1% |
+> | 02 classification | +6.2% / −2.4% | −5.4% / −8.8% |
+> | 03 mixed | +3.0% / −2.8% | −24.2% / −12.7% |
+> | 04 semantic triage | (pre-fix, not comparable) | **+11.4% / +13.2%**, quality 100% both arms |
 >
-> **Honest reading.** The policy pays where work is deterministic (01 — and it also made behavior *stable*: on-arm spread ±267 tokens vs ±40k off) and roughly breaks even where the base model already behaves well (02-03: kernel overhead ≈ the gain). ¹ Shape 04 is **not conclusive at N=3**: one outlier run ($2.00 vs ~$0.5 median) drives the number, spread is ±62% of the mean, and telemetry shows **no delegation happened** in the on-arm — consistent with axis 6 (for a cheap model on micro-items, inline beats delegation; there is no model differential to harvest at equal model). That differential is the *director topology* measurement (top model orchestrating, cheaper executors), planned separately — see the honesty section in [`benchmarks/README.md`](benchmarks/README.md). Quality was identical across arms.
+> **The equal-model effect is model-dependent.** On sonnet the policy pays where work is deterministic (+17% on 01, and it stabilizes behavior: spread ±267 vs ±40k tokens). On fable the baseline is already so lean (off-arm 3× smaller than sonnet's) that the kernel+hooks overhead dominates the small shapes — only the judgment-heavy shape (04) stays positive at equal quality.
 >
-> Reproduce: `cd benchmarks && MODEL=claude-sonnet-5 RUNS=3 bash run.sh`.
+> 📐 **Measured — director topology, first attempt** (`MODEL=claude-fable-5`, shape 04, N=2, 2026-07-09): **negative at this scale** — off-arm 4 turns / $0.90, on-arm 26-44 turns / $2.11 (−135% USD), theme accuracy 98% vs 100%. Telemetry shows **zero delegations attempted and zero gate events**: the top model correctly declined to delegate 40 micro-items (axis 6 — no differential to harvest), so the whole delta is the behavioral overhead of the policy at top-model rates on a small single-shot task. The cookbook's ~2.5× anchor requires worker-heavy token loads this bench shape doesn't have; measuring it honestly needs a heavier fixture (planned). What the single-shot harness structurally *cannot* see: script promotion on recurring tasks and the learning loop — the two levers the policy is actually built around.
+>
+> Reproduce: `cd benchmarks && RUNS=3 bash run.sh` (equal model) · `MODEL=claude-fable-5 TASKS='tasks/04*.md' RUNS=2 bash run.sh` (topology).
 
 ---
 
