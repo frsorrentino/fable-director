@@ -51,13 +51,28 @@ try:
     r=fh.get("used_percentage")
     if r is not None: rl=f"{r:.0f}"
     rlt=fmt_reset(fh.get("resets_at")) or "-"
+    w=None; w_reset=None
     for k in ("seven_day","weekly","seven_days"):
         wd=d.get("rate_limits",{}).get(k,{})
         w=wd.get("used_percentage")
         if w is not None:
             wk=f"{w:.0f}"
-            wkt=fmt_reset(wd.get("resets_at")) or "-"
+            w_reset=wd.get("resets_at")
+            wkt=fmt_reset(w_reset) or "-"
             break
+    # Ponte quota → gate: salvo la quota vista qui, cosi il checkpoint costo
+    # del pre-delegation-gate puo abbassare la soglia a quota scarsa. Best-effort.
+    try:
+        q={}
+        if r is not None: q["five_hour_used_pct"]=round(float(r),1)
+        if w is not None: q["weekly_used_pct"]=round(float(w),1)
+        if w_reset: q["weekly_resets_at"]=w_reset
+        if q:
+            qd=Path.home()/".claude"/"fable-director"
+            qd.mkdir(parents=True,exist_ok=True)
+            (qd/"quota.json").write_text(json.dumps(q))
+    except Exception:
+        pass
     cwd=d.get("cwd") or os.getcwd()
     slug="-"+str(cwd).strip("/").replace("/","-").replace(".","-")
     bf=Path.home()/".claude"/"fable-director"/"budgets"/f"{slug}.json"

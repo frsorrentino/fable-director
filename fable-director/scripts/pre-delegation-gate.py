@@ -47,6 +47,81 @@ def deny(reason):
     }, ensure_ascii=False))
 
 
+def ask(reason):
+    print(json.dumps({
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "ask",
+            "permissionDecisionReason": reason,
+        }
+    }, ensure_ascii=False))
+
+
+DEFAULT_CEILING = 50_000    # token output attesi oltre cui scatta il checkpoint
+
+
+def cost_checkpoint(budget):
+    """Taglio 1+2: task costoso → l'utente decide in base ai propri rate limit.
+    Ritorna un reason (→ `ask`) se il pre-budget dichiara un output atteso sopra
+    la soglia e l'utente non ha già dato l'ack; None altrimenti (→ allow).
+
+    Soglia: env FD_COST_CEILING o ~/.claude/fable-director/cost-checkpoint.json
+    {output_ceiling, weekly_pct_floor}, default 50k. Se lo statusline ha scritto
+    la quota (quota.json) e il residuo weekly è sotto il floor, la soglia si
+    abbassa (a quota scarsa anche un task medio merita il checkpoint). Il costo
+    non è enforceable sull'inline (nessun tool-call da intercettare) — lì è il
+    kernel a far porre la scelta; questo copre la DELEGA. Best-effort/fail-open:
+    qualunque errore → None (allow), un bug del checkpoint non blocca mai."""
+    try:
+        if budget.get("cost_ack"):
+            return None  # già presentato e approvato
+        exp = int(budget.get("expected_output_tokens") or 0)
+        base = Path.home() / ".claude" / "fable-director"
+        cfg = {}
+        cfile = base / "cost-checkpoint.json"
+        if cfile.is_file():
+            cfg = json.loads(cfile.read_text())
+        env_ceil = os.environ.get("FD_COST_CEILING")
+        ceiling = int(env_ceil) if env_ceil else int(cfg.get("output_ceiling", DEFAULT_CEILING))
+        floor = float(cfg.get("weekly_pct_floor", 25))
+
+        # Quota residua weekly da quota.json (scritto dallo statusline). Assente
+        # → checkpoint solo su soglia assoluta (degrada senza, come da Known limits).
+        weekly_remaining = None
+        qfile = base / "quota.json"
+        if qfile.is_file():
+            try:
+                used = json.loads(qfile.read_text()).get("weekly_used_pct")
+                if used is not None:
+                    weekly_remaining = 100.0 - float(used)
+            except (json.JSONDecodeError, OSError, TypeError, ValueError):
+                weekly_remaining = None
+
+        scarce = weekly_remaining is not None and weekly_remaining < floor
+        # A quota scarsa la soglia scende al 30% del ceiling: anche un task medio
+        # merita conferma quando resta poco limite.
+        eff_ceiling = ceiling * 0.3 if scarce else ceiling
+        if exp <= eff_ceiling:
+            return None
+
+        def dot(n):  # separatore migliaia "." solo sui numeri, non sul testo
+            return f"{n:,.0f}".replace(",", ".")
+        q = (f" Quota weekly residua ~{weekly_remaining:.0f}%."
+             if weekly_remaining is not None else "")
+        return (
+            f"FABLE-DIRECTOR checkpoint costo: questa delega dichiara ~{dot(exp)} "
+            f"token output attesi (soglia {dot(eff_ceiling)}"
+            f"{', abbassata perché quota scarsa' if scarce else ''}).{q} "
+            "Decidi tu in base ai tuoi rate limit. Se procedi, il top model "
+            "dovrebbe averti già presentato: stima, perché serve questo costo, "
+            "alternative (spezzare il task / esecutore economico + verifica / "
+            "rimandare al reset). Per non ri-chiedere sullo stesso task, riapri "
+            "il budget con --cost-ack dopo l'ok."
+        )
+    except Exception:
+        return None
+
+
 def log_gate_deny(data, kind, budget=None):
     """Evento telemetria `gate_deny`: senza, l'analisi post-hoc non distingue
     "mai tentata delega" da "delega negata e ripiegata inline" (emerso dal
@@ -142,6 +217,10 @@ def main():
         declared = parse_ts(budget.get("declared_at"))
         now = datetime.now(timezone.utc)
         if declared and (now - declared).total_seconds() <= 86400:
+            checkpoint = cost_checkpoint(budget)
+            if checkpoint:
+                ask(checkpoint)  # task costoso: l'utente decide sui suoi limiti
+                return
             record_delegation(data)  # registro per lo statusline [DLG]
             announce_model(data)     # riga solo se modello esplicito ≠ inherit
             return  # budget valido: allow

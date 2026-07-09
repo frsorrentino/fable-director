@@ -16,7 +16,10 @@ Sottocomandi:
   budget-open  --task S --expected-output N [--expected-input N] [--type SLUG]
                [--approach S] [--fallback S]
                [--route inline|workflow|script|agent] [--reason S] [--alternative S]
+               [--cost-ack]
                scrive il budget file (status=open) e logga task_open;
+               --cost-ack = l'utente ha già approvato il costo di questo task (il
+               checkpoint del gate è stato presentato e accettato) → il gate non ri-chiede;
                --type = categoria task per la tabella empirica (es. seo-batch, code-review);
                --route/--reason/--alternative = decision record: quale rotta, perché
                (es. "axis2>axis4"), quale scartata — serve alla telemetria (reversal
@@ -211,6 +214,9 @@ def derived_metrics(inp, out, cr, cc, main_out, sub_out, n_sub):
 # ---------- sottocomandi ----------
 
 def cmd_budget_open(args):
+    cost_ack = "--cost-ack" in args
+    if cost_ack:
+        args = [a for a in args if a != "--cost-ack"]
     opts = parse_opts(args, {"--task": None, "--expected-output": None,
                              "--expected-input": None, "--type": None,
                              "--approach": None, "--fallback": None, "--cwd": None,
@@ -229,6 +235,9 @@ def cmd_budget_open(args):
         "alternative": opts["--alternative"],
         "expected_output_tokens": int(opts["--expected-output"]),
         "expected_input_tokens": int(opts["--expected-input"] or 0),
+        # cost_ack: l'utente ha già approvato un task sopra la soglia di costo
+        # (checkpoint del gate presentato e accettato) → il gate non ri-chiede.
+        "cost_ack": cost_ack,
         "declared_at": now_iso(),
         "cwd": str(cwd),
         "status": "open",
