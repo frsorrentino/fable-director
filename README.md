@@ -61,11 +61,21 @@ Here is the honest answer, plain and measured:
 | **Repetitive mechanical work** (e.g. process 30 data files) | Works, but each run behaves differently | **~20% fewer tokens** and near-identical behavior every run | ✅ **saves** |
 | **Quick small tasks** (one question, one small fix) | Baseline | **~5% more** — the fixed price of the safety checks, like an insurance premium | ➖ small premium |
 | **Quality of results** | 94-100% accurate on our test sets | Equal or better everywhere the plugin saves (e.g. 98% vs 95%); never traded for savings | 🛡️ **protected** |
-| **Recurring jobs** (the same task every week) | Full AI cost, every time | The plugin turns it into a script: **near-zero AI cost from the second time on** — real but by nature not visible in a one-shot benchmark | ✅ **biggest win over time** |
+| **Recurring jobs** (the same task every week) | Full AI cost, every single time | The plugin turns it into a script: **up to ~100% of the AI cost cut from the second time on** | ✅ **the biggest saving — grows with use** |
+| **Non-code batches** (classify, extract, transform — experimental) | On your Claude quota | Routed to free external models: **that batch leaves your Claude bill entirely** | ✅ **100% off the Claude quota** |
 
-**Three things you buy regardless of savings:** predictable behavior (same task → same
-steps), automatic brakes on spending (a wrong cost estimate gets caught *while it happens*,
-not on the bill), and verified quality (results are checked, not assumed).
+The 20-25% figures above are what a *single-shot* benchmark can see. The two bottom rows
+are where the design actually aims — and they cut far deeper, up to the whole cost of the job.
+
+**And it improves with time, by design.** The plugin learns from its own history: every
+incident becomes a heuristic in its playbook (kept or killed by outcome counters, never by
+feel), and work that repeats gets crystallized into a purpose-built script — so your most
+frequent jobs drift toward zero AI cost. The benchmark measures day one; the design
+compounds after it.
+
+**Included whatever the savings:** predictable behavior (same task → same steps),
+automatic brakes on spending (a wrong cost estimate gets caught *while it happens*, not on
+the bill), and verified quality (results are checked, not assumed).
 
 **Measure it on your own work** — instead of taking our word for it:
 
