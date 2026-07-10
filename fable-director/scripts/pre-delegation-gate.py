@@ -153,7 +153,9 @@ def log_gate_deny(data, kind, budget=None):
             payload["effort"] = budget.get("effort")
         base = Path.home() / ".claude" / "fable-director"
         base.mkdir(parents=True, exist_ok=True)
-        con = sqlite3.connect(base / "telemetry.db")
+        con = sqlite3.connect(base / "telemetry.db", timeout=1.0)
+        con.execute("PRAGMA journal_mode=WAL")
+        con.execute("PRAGMA busy_timeout=1000")
         con.execute("CREATE TABLE IF NOT EXISTS events("
                     "id INTEGER PRIMARY KEY, ts TEXT NOT NULL, session_id TEXT, "
                     "cwd TEXT, event TEXT NOT NULL, payload TEXT)")
@@ -176,14 +178,20 @@ def record_delegation(data):
     sovrastima di 1 — accettabile per un indicatore live. Best-effort:
     mai bloccare il gate. Il file muore a SessionEnd (reap in telemetria)."""
     try:
-        sid = data.get("session_id") or "unknown"
+        # sid entra nel path: allowlist stretta o skip — mai normalizzare
+        # (collisioni), mai fidarsi di input esterno nei path (review 2026-07-10)
+        sid = str(data.get("session_id") or "")
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", sid):
+            return
         model = (data.get("tool_input") or {}).get("model") or "inherit"
         d = Path.home() / ".claude" / "fable-director" / "delegations"
         d.mkdir(parents=True, exist_ok=True)
         f = d / f"{sid}.json"
         counts = json.loads(f.read_text()) if f.is_file() else {}
         counts[model] = counts.get(model, 0) + 1
-        f.write_text(json.dumps(counts))
+        tmp = f.with_name(f"{f.name}.{os.getpid()}.tmp")
+        tmp.write_text(json.dumps(counts))
+        os.replace(tmp, f)  # atomico: il file è condiviso con lo statusline
     except Exception:
         pass
 
@@ -249,7 +257,9 @@ def effort_coherence(data, budget):
                        "task": (budget or {}).get("task")}
             base = Path.home() / ".claude" / "fable-director"
             base.mkdir(parents=True, exist_ok=True)
-            con = sqlite3.connect(base / "telemetry.db")
+            con = sqlite3.connect(base / "telemetry.db", timeout=1.0)
+            con.execute("PRAGMA journal_mode=WAL")
+            con.execute("PRAGMA busy_timeout=1000")
             con.execute("CREATE TABLE IF NOT EXISTS events("
                         "id INTEGER PRIMARY KEY, ts TEXT NOT NULL, session_id TEXT, "
                         "cwd TEXT, event TEXT NOT NULL, payload TEXT)")

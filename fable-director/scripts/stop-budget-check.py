@@ -71,6 +71,13 @@ def log_telemetry(event, payload, cwd):
         pass
 
 
+def write_json_atomic(path, obj):
+    """Identico a fd-telemetry.write_json_atomic (writer standalone)."""
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(obj, ensure_ascii=False, indent=1))
+    os.replace(tmp, path)
+
+
 def parse_ts(s):
     try:
         return datetime.fromisoformat(str(s).replace("Z", "+00:00"))
@@ -90,51 +97,80 @@ def find_usage(obj):
             yield from find_usage(v)
 
 
-def sum_file(path, since):
-    """Somma i token dopo `since` e conta, sull'INTERO file, record validi /
-    record con usage / record con timestamp: sono i dati della sentinella di
-    schema — se il formato transcript rinomina le chiavi, le somme vanno a
-    zero in silenzio e l'enforcement muore senza errore."""
-    out = inp = 0
-    n_rec = n_usage = n_ts = 0
-    last_ts = None
+def sum_file_incremental(path, since, state_file, declared_iso):
+    """Somma i token dopo `since` con scan INCREMENTALE: il vecchio sum_file
+    rileggeva l'intero JSONL a ogni Stop → costo quadratico sui task lunghi
+    (review duale 2026-07-10). Lo stato (offset in BYTE + totali cumulativi +
+    contatori sentinella + last_ts per l'inferenza posizionale) vive in un
+    file accanto al budget, chiavato su declared_at: budget nuovo → rescan.
+    Lettura in binario e offset avanzato SOLO a fine riga completa: una riga
+    parziale (transcript in scrittura) viene ripresa al giro dopo — un
+    indicatore live può permettersi di perderla, l'enforcement no.
+    I contatori della sentinella restano cumulativi sull'intero file (il
+    primo giro parte da offset 0), quindi la semantica non cambia."""
+    state = {"declared": declared_iso, "path": str(path), "off": 0,
+             "out": 0, "inp": 0, "n_rec": 0, "n_usage": 0, "n_ts": 0,
+             "last_ts": None}
+    if state_file.is_file():
+        try:
+            prev = json.loads(state_file.read_text())
+            if (prev.get("declared") == declared_iso
+                    and prev.get("path") == str(path)):
+                state = prev
+        except (json.JSONDecodeError, OSError):
+            pass
     try:
-        fh = open(path, errors="replace")
+        size = path.stat().st_size
     except OSError:
         return 0, 0, (0, 0, 0)
-    with fh:
-        for line in fh:
-            line = line.strip()
+    if size < int(state.get("off", 0)):  # transcript ruotato/troncato
+        state.update(off=0, out=0, inp=0, n_rec=0, n_usage=0, n_ts=0,
+                     last_ts=None)
+    last_ts = parse_ts(state.get("last_ts"))
+    if size > int(state.get("off", 0)):
+        try:
+            with open(path, "rb") as fh:
+                fh.seek(int(state.get("off", 0)))
+                data = fh.read()
+        except OSError:
+            return 0, 0, (0, 0, 0)
+        chunks = data.split(b"\n")
+        tail = chunks.pop()  # riga possibilmente incompleta: non consumarla
+        state["off"] = int(state.get("off", 0)) + len(data) - len(tail)
+        for raw in chunks:
+            line = raw.decode(errors="replace").strip()
             if not line:
                 continue
             try:
                 rec = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            n_rec += 1
+            state["n_rec"] += 1
             raw_ts = parse_ts(rec.get("timestamp"))
             if raw_ts:
-                n_ts += 1
+                state["n_ts"] += 1
             ts = raw_ts or last_ts  # inferenza posizionale
             if ts:
                 last_ts = ts
             pre_since = since is not None and (ts is None or ts < since)
-            # Sui record pre-since find_usage serve SOLO alla sentinella
-            # (n_usage==0?): appena un usage è stato visto, la ricorsione sul
-            # prefisso storico è lavoro morto ripetuto a ogni turno — skip.
-            # La sentinella e le somme restano identiche.
-            if pre_since and n_usage:
-                continue
+            if pre_since and state["n_usage"]:
+                continue  # prefisso storico: serve solo alla sentinella
             usages = list(find_usage(rec))
             if usages:
-                n_usage += 1
+                state["n_usage"] += 1
             if pre_since:
                 continue
             for usage in usages:
-                out += usage.get("output_tokens") or 0
-                inp += (usage.get("input_tokens") or 0) + \
-                       (usage.get("cache_creation_input_tokens") or 0)
-    return out, inp, (n_rec, n_usage, n_ts)
+                state["out"] += usage.get("output_tokens") or 0
+                state["inp"] += (usage.get("input_tokens") or 0) + \
+                                (usage.get("cache_creation_input_tokens") or 0)
+        state["last_ts"] = last_ts.isoformat() if last_ts else None
+        try:
+            write_json_atomic(state_file, state)
+        except OSError:
+            pass  # stato non persistito: il prossimo giro riparte dal vecchio offset
+    return (state["out"], state["inp"],
+            (state["n_rec"], state["n_usage"], state["n_ts"]))
 
 
 def main():
@@ -168,7 +204,7 @@ def main():
     now = datetime.now(timezone.utc)
     if (now - declared).total_seconds() > 86400:
         budget["status"] = "stale"
-        bfile.write_text(json.dumps(budget, ensure_ascii=False, indent=1))
+        write_json_atomic(bfile, budget)
         return
 
     transcript = data.get("transcript_path")
@@ -176,7 +212,9 @@ def main():
         return
     # Solo main transcript: l'usage dei subagenti completati è già dentro
     # (toolUseResult.usage) e find_usage lo raccoglie ricorsivamente.
-    actual_out, actual_in, (n_rec, n_usage, n_ts) = sum_file(Path(transcript), declared)
+    state_file = bfile.with_name(bfile.stem + ".state.json")
+    actual_out, actual_in, (n_rec, n_usage, n_ts) = sum_file_incremental(
+        Path(transcript), declared, state_file, budget.get("declared_at"))
 
     # Sentinella di schema: molti record validi ma zero usage o zero timestamp
     # riconosciuti = formato transcript probabilmente cambiato. I conteggi
@@ -187,7 +225,7 @@ def main():
         missing = "usage" if n_usage == 0 else "timestamp"
         if not budget.get("schema_warned"):
             budget["schema_warned"] = True
-            bfile.write_text(json.dumps(budget, ensure_ascii=False, indent=1))
+            write_json_atomic(bfile, budget)
             log_telemetry("schema_anomaly", {
                 "source": "stop-budget-check", "missing": missing,
                 "n_records": n_rec, "transcript": str(transcript),
@@ -208,7 +246,7 @@ def main():
         warn = actual_out >= 2 * exp_out or (exp_in > 0 and actual_in >= 2 * exp_in)
         if warn and not budget.get("warned"):
             budget["warned"] = True
-            bfile.write_text(json.dumps(budget, ensure_ascii=False, indent=1))
+            write_json_atomic(bfile, budget)
             print(json.dumps({"decision": "block", "reason": (
                 f"FABLE-DIRECTOR checkpoint 2×: consumo attuale (output {actual_out}, "
                 f"input fresh {actual_in}) ha superato il doppio del pre-budget per il "
@@ -224,7 +262,7 @@ def main():
     budget["actual_output_tokens"] = actual_out
     budget["actual_input_tokens"] = actual_in
     budget["flagged_at"] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
-    bfile.write_text(json.dumps(budget, ensure_ascii=False, indent=1))
+    write_json_atomic(bfile, budget)
 
     dim = "output" if out_bust else "input"
     actual = actual_out if out_bust else actual_in

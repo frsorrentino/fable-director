@@ -31,6 +31,7 @@ import difflib
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import sys
 from datetime import datetime, timezone
@@ -57,7 +58,9 @@ def log_saving(session_id, path, kind, saved_chars):
     interferire con l'output del dedup."""
     try:
         BASE.mkdir(parents=True, exist_ok=True)
-        con = sqlite3.connect(BASE / "telemetry.db")
+        con = sqlite3.connect(BASE / "telemetry.db", timeout=1.0)
+        con.execute("PRAGMA journal_mode=WAL")
+        con.execute("PRAGMA busy_timeout=1000")
         con.execute("CREATE TABLE IF NOT EXISTS events("
                     "id INTEGER PRIMARY KEY, ts TEXT NOT NULL, session_id TEXT, "
                     "cwd TEXT, event TEXT NOT NULL, payload TEXT)")
@@ -128,8 +131,11 @@ def main():
     if not isinstance(new_text, str) or len(new_text) < THRESHOLD:
         return
 
-    sid = data.get("session_id") or "unknown"
-    d = BASE / "read-cache" / str(sid)
+    # sid nel path: allowlist stretta o skip (mai traversal da input esterno)
+    sid = str(data.get("session_id") or "")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", sid):
+        return
+    d = BASE / "read-cache" / sid
     d.mkdir(parents=True, exist_ok=True)
     ph = hashlib.sha1(str(path).encode()).hexdigest()[:16]
     meta_f = d / f"{ph}.json"

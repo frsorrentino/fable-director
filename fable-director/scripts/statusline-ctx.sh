@@ -73,7 +73,13 @@ try:
         if q:
             qd=Path.home()/".claude"/"fable-director"
             qd.mkdir(parents=True,exist_ok=True)
-            (qd/"quota.json").write_text(json.dumps(q))
+            qf=qd/"quota.json"
+            new=json.dumps(q)
+            # write-if-changed + atomica: render frequente, lettori concorrenti
+            old_q=qf.read_text() if qf.is_file() else None
+            if new!=old_q:
+                tmpq=qf.with_name(f"quota.json.{os.getpid()}.tmp")
+                tmpq.write_text(new); os.replace(tmpq,qf)
     except Exception:
         pass
     cwd=d.get("cwd") or os.getcwd()
@@ -108,6 +114,9 @@ try:
     def fmtk(n):
         return f"{n/1000:.0f}k" if n >= 1000 else str(n)
     sid=d.get("session_id")
+    # sid entra nei path di stato: allowlist stretta o niente (skip DLG)
+    import re as _res
+    if sid and not _res.fullmatch(r"[A-Za-z0-9_-]{1,64}", str(sid)): sid=None
     tp=d.get("transcript_path")
     main_norm=norm(m or "")
     # Ratio budget live: STESSA contabilità dello Stop hook (find_usage
@@ -167,7 +176,8 @@ try:
             if last_ts: state["last_ts"]=last_ts.isoformat()
             state["budget"]=bst if b_open else {}
             sf.parent.mkdir(parents=True, exist_ok=True)
-            sf.write_text(json.dumps(state))
+            tmps=sf.with_name(f"{sf.name}.{os.getpid()}.tmp")
+            tmps.write_text(json.dumps(state)); os.replace(tmps,sf)  # atomica
         if b_open and bst.get("declared")==b_open.get("declared_at"):
             spent=int(bst.get("out",0))
         mm=state.get("models") or {}
@@ -215,7 +225,8 @@ try:
             import sqlite3
             from datetime import datetime as _dt2, timezone as _tz2
             today=_dt2.now(_tz2.utc).strftime("%Y-%m-%d")
-            con=sqlite3.connect(dbf)
+            con=sqlite3.connect(dbf, timeout=0.3)
+            con.execute("PRAGMA busy_timeout=300")  # render: mai bloccare a lungo
             for (pl,) in con.execute("SELECT payload FROM events WHERE event=? AND ts >= ?", ("verification", today)):
                 try: p=json.loads(pl or "{}")
                 except Exception: continue

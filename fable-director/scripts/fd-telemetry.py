@@ -84,6 +84,26 @@ def parse_ts(s):
         return None
 
 
+def write_json_atomic(path, obj):
+    """Scrittura atomica: tmp nella stessa dir + os.replace. I file di stato
+    (budget, delegations) sono condivisi tra hook concorrenti — una write
+    parziale letta da un altro processo è JSON corrotto e il gate ci fallisce
+    sopra in fail-open = enforcement spento (review duale 2026-07-10).
+    Da tenere IDENTICO negli altri writer standalone (gate, stop hook)."""
+    path = Path(path)
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(obj, ensure_ascii=False, indent=1))
+    os.replace(tmp, path)
+
+
+def safe_sid(sid):
+    """session_id entra nei path di stato: allowlist stretta o None (skip).
+    Un sid con separatori potrebbe uscire dalle dir di stato (finding review
+    duale 2026-07-10) — mai normalizzare (collisioni), solo rifiutare."""
+    s = str(sid or "")
+    return s if re.fullmatch(r"[A-Za-z0-9_-]{1,64}", s) else None
+
+
 def cwd_slug(cwd):
     """Slug leggibile + hash breve del path CANONICALIZZATO.
     - hash: rompe le collisioni del solo replace (`a.b` vs `a-b` → stesso
@@ -103,7 +123,12 @@ def cwd_slug(cwd):
 
 def open_db():
     BASE.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(DB_PATH)
+    con = sqlite3.connect(DB_PATH, timeout=2.0)
+    # WAL: letture (statusline) e scritture (hook) concorrenti senza perdersi
+    # eventi in silenzio; busy_timeout evita il fallimento immediato su lock
+    # (review duale 2026-07-10: eventi persi = telemetria falsata senza errore).
+    con.execute("PRAGMA journal_mode=WAL")
+    con.execute("PRAGMA busy_timeout=2000")
     con.execute("CREATE TABLE IF NOT EXISTS events("
                 "id INTEGER PRIMARY KEY, ts TEXT NOT NULL, session_id TEXT, "
                 "cwd TEXT, event TEXT NOT NULL, payload TEXT)")
@@ -296,7 +321,7 @@ def cmd_budget_open(args):
         "status": "open",
     }
     bfile = BUDGETS / f"{cwd_slug(cwd)}.json"
-    bfile.write_text(json.dumps(budget, ensure_ascii=False, indent=1))
+    write_json_atomic(bfile, budget)
     log_event("task_open", budget, cwd=cwd)
     print(f"budget aperto: {bfile}")
 
@@ -314,7 +339,13 @@ def cmd_budget_close(args):
     budget["closed_at"] = now_iso()
     if opts["--actual-output"]:
         budget["actual_output_tokens"] = int(opts["--actual-output"])
-    bfile.write_text(json.dumps(budget, ensure_ascii=False, indent=1))
+    write_json_atomic(bfile, budget)
+    # Lo state file dello Stop incrementale è chiavato su declared_at: a
+    # budget chiuso è morto — rimuoverlo evita accumulo, non serve migrarlo.
+    try:
+        bfile.with_name(bfile.stem + ".state.json").unlink()
+    except OSError:
+        pass
     log_event("task_close", budget, cwd=cwd)
     print(f"budget chiuso ({opts['--outcome']}): {budget.get('task')}")
 
@@ -371,7 +402,7 @@ def reap_open_budget(cwd):
         budget["status"] = "closed"
         budget["outcome"] = "abandoned"
         budget["closed_at"] = now_iso()
-        bfile.write_text(json.dumps(budget, ensure_ascii=False, indent=1))
+        write_json_atomic(bfile, budget)
         log_event("task_close", budget, cwd=cwd)
     except (json.JSONDecodeError, OSError):
         return
@@ -385,6 +416,7 @@ def reap_delegations(session_id):
         d = BASE / "delegations"
         if not d.is_dir():
             return
+        session_id = safe_sid(session_id)  # sid nei path: allowlist o skip
         if session_id:
             for suffix in (".json", ".tok.json"):
                 f = d / f"{session_id}{suffix}"
@@ -436,8 +468,9 @@ def reap_read_cache(session_id):
         if not d.is_dir():
             return
         import shutil
+        session_id = safe_sid(session_id)  # sid nei path: allowlist o skip
         if session_id:
-            sd = d / str(session_id)
+            sd = d / session_id
             if sd.is_dir():
                 shutil.rmtree(sd, ignore_errors=True)
         cutoff = datetime.now(timezone.utc).timestamp() - 172800
