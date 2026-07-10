@@ -25,11 +25,11 @@ fable-director injects an **always-on routing policy** and makes it **enforced b
 
 ## 🆕 What's new
 
-- **1.12.1** — Kernel fast path (single-turn task, no delegation → zero ritual: the policy must never cost more than the task), three-clause positioning and a plain-language benchmark conclusions section — both born from the measured small-task overhead.
-- **1.12.0** — External executor (experimental): `external-exec.py` routes non-code axis-4 batches to free external tiers (Gemini Flash, Codex CLI) at zero Claude tokens — cross-family discipline (no silent fallback), built-in JSON rung-1, `external_exec` telemetry per provider/type; the route stays per-case until `report` shows DENSE ok-rate.
-- **1.11.1** — `[BDG]` statusline segment shows a live consumed/expected ratio + declared effort tier (`[BDG 0.7×·high]`, Stop-hook accounting, incremental scan): the 2× checkpoint becomes visible on approach, not as a surprise block.
-- **1.11.0** — Effort becomes a routing lever: two shipped agents with pinned reasoning tiers (`fd-executor`, effort `low`, for axis-4 batches; `fd-verifier`, effort `high`, for rung-3 adversarial verification), `budget-open --effort` to declare the tier, gate warns (never denies) on declared≠pinned mismatch, `report` breaks flag-rate down per tier — measurement first, enforcement only if the data earns it.
-- **1.10.10** — Self-review with the plugin's own ladder (8 finder angles → inline verify → cross-family on Gemini *and* Codex): 6 real bugs fixed — expensive delegations missing from `[DLG]`, timezone-shifted commit windows in yield analysis, double-counted cost reports, discarded cross-family verdicts on uppercase fences, a `≡` marker that never matched, a misleading stale-budget deny — plus 2 hot-path efficiency cuts and doc-drift fixes.
+- **1.12.3** — Cross-family verifier goes two-lane: dead DeepSeek lane removed (last free variant left OpenRouter), defaults upgraded and verified live in 1.12.2 — `gemini-3-flash-preview` + `gpt-5.6-terra`, with an explicit `gemini-stable` fallback, never a silent one.
+- **1.12.1** — Kernel fast path: a single-turn task pays zero ritual — the policy must never cost more than the task.
+- **1.12.0** — External executor (experimental): non-code batches on free external tiers, zero Claude tokens.
+- **1.11.x** — Effort as a routing lever (shipped `fd-executor`/`fd-verifier` agents with pinned tiers) + live budget ratio in the statusline (`[BDG 0.7×·high]`).
+- **1.10.10** — Self-review with the plugin's own ladder: 6 real bugs found and fixed.
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 
