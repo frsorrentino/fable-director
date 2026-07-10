@@ -44,15 +44,13 @@ Budget enforcement is local and depends on Claude Code providing a readable tran
 
 ## 🆕 What's new
 
-- **1.13.0** — The dual-review features: budget lease with session ownership (no more silent clobbering between concurrent sessions), transcript-contract fixture suite (schema drift fails at update time, not in production), deterministic validators for benchmark shapes 01-03 with per-arm failure reporting, versioned idempotent cache.
-- **1.12.6** — Concurrency and hot-path hardening from a dual cross-family review (Codex + Gemini): atomic state writes, SQLite WAL, session-id sanitization, incremental Stop-hook accounting (was quadratic on long tasks).
-- **1.12.5** — Windows fixes from the first external issue: UTF-8 hook output (cp1252 crashed the gate into silent allow) and OS-agnostic budget slugs — enforcement now actually works on Windows.
-- **1.12.4** — Five hardening fixes from an adversarial cross-family review (Codex): budget-bypass closed, slug collisions fixed, concurrent-session reaper made safe, fail-closed input truncation, external executor now enforces its own budget.
-- **1.12.3** — Cross-family verifier goes two-lane: dead DeepSeek lane removed (last free variant left OpenRouter), defaults upgraded and verified live in 1.12.2 — `gemini-3-flash-preview` + `gpt-5.6-terra`, with an explicit `gemini-stable` fallback, never a silent one.
-- **1.12.1** — Kernel fast path: a single-turn task pays zero ritual — the policy must never cost more than the task.
-- **1.12.0** — External executor (experimental): non-code batches on free external tiers, zero Claude tokens.
-- **1.11.x** — Effort as a routing lever (shipped `fd-executor`/`fd-verifier` agents with pinned tiers) + live budget ratio in the statusline (`[BDG 0.7×·high]`).
-- **1.10.10** — Self-review with the plugin's own ladder: 6 real bugs found and fixed.
+- **1.13.0** — Budget lease, transcript-contract suite, benchmark validators, versioned cache
+- **1.12.6** — Concurrency and hot-path hardening from the dual cross-family review
+- **1.12.5** — Windows enforcement fixes (issue #1)
+- **1.12.4** — Five hardening fixes from the Codex adversarial review
+- **1.12.3** — Cross-family goes two-lane, models upgraded
+- **1.12.x** — Kernel fast path · external executor (experimental)
+- **1.11.x** — Effort as a routing lever · live budget ratio in the statusline
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 
