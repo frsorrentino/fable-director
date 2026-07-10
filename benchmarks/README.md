@@ -65,6 +65,12 @@ Output: `results/<timestamp>/` (raw JSON + `summary.txt`).
   dominate billing in both arms. Both arms score safety recall <100% on this shape (96-97%):
   the shape's ceiling, reported as-is. Caveat: N=2, and the off-arm's native strategy is
   itself high-variance (11 vs 32 turns between its two runs).
+- 2026-07-10 (consolidation): two more run-pairs → **N=4 off / N=3 on** (one on-run died on
+  the plan's 5h session limit, excluded; `aggregate.py` now skips `is_error` runs instead of
+  counting their partial usage). Consolidated: **+24.6% tokens (±33%), +1.7% USD, quality
+  on ≥ off** (sentiment 98% vs 95%, rest equal). The N=2 −51% halved under regression to the
+  mean — published with spread, as the method requires. Merged aggregate:
+  `results/merged-05-N4/` (`python3 ../../aggregate.py .` inside it reproduces the table).
 
 ### What this harness measures — and what it doesn't
 

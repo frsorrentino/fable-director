@@ -27,6 +27,10 @@ def load(d):
         parts = f.stem.split("__")
         if len(parts) < 3:
             continue
+        # Run morti a metà (session limit) arrivano con is_error=true e usage
+        # parziale: contarli falserebbe medie e costi (visto il 2026-07-10).
+        if j.get("is_error"):
+            continue
         task, arm = parts[0], parts[1]
         u = j.get("usage", {}) or {}
         tot = sum(int(u.get(k, 0) or 0) for k in TOK)
