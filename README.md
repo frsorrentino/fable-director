@@ -62,7 +62,7 @@ Here is the honest answer, plain and measured:
 | **Quick small tasks** (one question, one small fix) | Baseline | **~5% more** — the fixed price of the safety checks, like an insurance premium | ➖ small premium |
 | **Quality of results** | 94-100% accurate on our test sets | Equal or better everywhere the plugin saves (e.g. 98% vs 95%); never traded for savings | 🛡️ **protected** |
 | **Recurring jobs** (the same task every week) | Full AI cost, every single time | The plugin turns the repeatable core into a script: from the second run on, **that specific job** costs close to zero — the first run and the surrounding supervision still cost normally | ✅ **the biggest saving — grows with use** |
-| **Non-code batches** (classify, extract, transform — experimental) | On your Claude quota | The bulk work runs on free external models; Claude still plans and checks the result, so a supervision share stays on your quota | ✅ **bulk off the Claude quota** |
+| **Non-code batches** (classify, extract, transform — experimental) | On your Claude quota | If you connect free external models (Gemini API key or Codex CLI — one-time setup, section *External free-tier models* below), the bulk work runs there; Claude still plans and checks, so a supervision share stays on your quota | ✅ **bulk off the Claude quota** |
 
 To be clear: these deep cuts apply to **specific jobs the plugin can script or route
 externally** — not to your Claude usage as a whole. The 20-25% above is what a single-shot
@@ -195,9 +195,15 @@ Then restart Claude Code. `--remove` to take it out. It won't touch a third-part
 
 ---
 
-## 🧬 Cross-family verifier — when and how
+## 🧬 External free-tier models (Gemini, Codex) — verifier and executor
 
-An all-Claude ensemble shares correlated blind spots by construction; a different model family (Gemini, GPT) catches what same-family verification can't. `scripts/cross-verify.py` is that lane — and it's **out of your Claude quota** (Gemini free tier / ChatGPT plan). A third OpenRouter-based lane (DeepSeek) existed until 2026-07: dropped when the last free DeepSeek variant left OpenRouter — two uncorrelated families are enough for the rung, and a lane that can silently die isn't worth its maintenance.
+You can connect **free-tier external models** to the plugin — currently **Gemini** (free
+AI Studio API key) and **Codex** (Codex CLI with your ChatGPT login). One-time setup, and
+the plugin manages them with the same discipline as everything else: **no silent fallback**
+(a missing key or a down endpoint fails loudly, never pretends), every call logged to
+telemetry, output contracts checked. They serve two distinct roles:
+
+**Role 1 — independent verifier** (`scripts/cross-verify.py`). An all-Claude ensemble shares correlated blind spots by construction; a different model family (Gemini, GPT) catches what same-family verification can't — and it's **out of your Claude quota**. A third OpenRouter-based lane (DeepSeek) existed until 2026-07: dropped when the last free DeepSeek variant left OpenRouter — two uncorrelated families are enough, and a lane that can silently die isn't worth its maintenance.
 
 **When Claude invokes it on its own.** It is rung 4 of the verification ladder in the `delega-efficiente` skill — **optional and rare by design**. The director escalates to it only for the *highest-stakes* claims that have no objective test: an irreversible decision, a client-facing number it can't verify deterministically, a critical assumption everything else depends on. It is NOT called on every task — most verification stops at rung 1 (deterministic assertions) or rung 3 (same-family fresh-context verifier). When a call is in flight you see `[XF GEMINI▲]` in the statusline; today's calls show as `[XF CODEX×2]`.
 
@@ -214,7 +220,9 @@ An all-Claude ensemble shares correlated blind spots by construction; a differen
    ```
    Output is grep-able (`STATUS` / `PROVIDER` / `VERDICT: refuted|supported|uncertain` / `REASONING`). `--usage` shows today's local call counts against the declared free-tier limits.
 
-**Setup** (once): `cross-verify.py --init` creates `~/.claude/fable-director/cross-family.json`, then add your Gemini key (AI Studio) and/or `codex login`. **No silent fallback**: anything missing → `STATUS: unavailable` + explicit instruction to fall back to the same-family verifier. An `unavailable` is never "verified".
+**Role 2 — external executor** (`scripts/external-exec.py`, experimental). For **non-code batches** (classify, extract, transform text) the bulk work can run on the free external models instead of your Claude quota — Claude keeps planning and checking the result. Built-in guardrails: the external model gets a complete spec and must answer in the required format (JSON is validated before anything moves downstream — malformed output is rejected, not passed along), an honest `NEEDS_CONTEXT` stops the run instead of guessing, and every call logs provider/type/outcome so `report` shows where this route actually works. It stays a per-case, experimental route until that data is dense.
+
+**Setup for both roles** (once): `cross-verify.py --init` creates `~/.claude/fable-director/cross-family.json`, then add your Gemini key (AI Studio) and/or `codex login`. **No silent fallback**: anything missing → `STATUS: unavailable` + explicit instruction to fall back to the normal Claude route. An `unavailable` is never "verified" (nor "executed").
 
 ---
 
