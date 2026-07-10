@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.12.6-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.13.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -44,6 +44,7 @@ Budget enforcement is local and depends on Claude Code providing a readable tran
 
 ## 🆕 What's new
 
+- **1.13.0** — The dual-review features: budget lease with session ownership (no more silent clobbering between concurrent sessions), transcript-contract fixture suite (schema drift fails at update time, not in production), deterministic validators for benchmark shapes 01-03 with per-arm failure reporting, versioned idempotent cache.
 - **1.12.6** — Concurrency and hot-path hardening from a dual cross-family review (Codex + Gemini): atomic state writes, SQLite WAL, session-id sanitization, incremental Stop-hook accounting (was quadratic on long tasks).
 - **1.12.5** — Windows fixes from the first external issue: UTF-8 hook output (cp1252 crashed the gate into silent allow) and OS-agnostic budget slugs — enforcement now actually works on Windows.
 - **1.12.4** — Five hardening fixes from an adversarial cross-family review (Codex): budget-bypass closed, slug collisions fixed, concurrent-session reaper made safe, fail-closed input truncation, external executor now enforces its own budget.
@@ -290,7 +291,7 @@ Routing cuts **cost per token** (cheap executor does the heavy work). A separate
 ## ⚠️ Known limits (honest by design)
 
 - **Claude Code versions.** The optional statusline needs Claude Code ≥ 2.1.x for `context_window` and `rate_limits`; older versions omit those segments without an error. Older Claude Code versions may ignore the `effort` frontmatter on `fd-executor` and `fd-verifier`, so those agents inherit the session effort instead — silent degradation, no error. Effort coherence (budget `--effort` vs pinned tier) is a warn-only check by design.
-- **Concurrent sessions.** An open budget is stored as one file per working directory: `~/.claude/fable-director/budgets/<cwd-slug>.json`. Two Claude Code sessions using the same directory can share or overwrite that budget state (since 1.12.4 the SessionEnd reaper no longer closes a concurrent session's fresh budget, but the file is still shared). Do not run concurrent budgeted sessions from one working directory; use separate worktrees or working directories.
+- **Concurrent sessions.** An open budget is one file per working directory. Since 1.13.0 it carries a session lease: `budget-open` refuses to clobber another session's fresh open budget (`--force` to override) and the SessionEnd reaper only closes its own. The file is still one per cwd, so two sessions can't hold budgets on the same directory at once — for parallel budgeted work use separate worktrees.
 - **Transcript dependency.** Token accounting reads Claude Code's undocumented JSONL transcript schema. If at least 20 valid records contain no recognized usage or timestamp fields, the schema sentinel warns, logs `schema_anomaly`, and suspends budget enforcement rather than silently counting zero. Update the plugin before relying on accounting again.
 - **In-flight subagents.** The Stop hook counts subagent usage after it appears in the main transcript, so work still in flight can be temporarily undercounted.
 - **Remote environments.** Managed Agents, cloud routines, and remote harnesses are outside the local hook stack: the injected policy may still apply, but the local gate, Stop check, and telemetry do not.

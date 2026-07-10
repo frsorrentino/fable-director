@@ -276,6 +276,9 @@ def cmd_budget_open(args):
     cost_ack = "--cost-ack" in args
     if cost_ack:
         args = [a for a in args if a != "--cost-ack"]
+    force = "--force" in args
+    if force:
+        args = [a for a in args if a != "--force"]
     opts = parse_opts(args, {"--task": None, "--expected-output": None,
                              "--expected-input": None, "--type": None,
                              "--approach": None, "--fallback": None, "--cwd": None,
@@ -300,6 +303,29 @@ def cmd_budget_open(args):
         sys.exit("--expected-input non può essere negativo")
     cwd = opts["--cwd"] or os.getcwd()
     BUDGETS.mkdir(parents=True, exist_ok=True)
+    # Lease: owner = sessione che apre (CLAUDE_CODE_SESSION_ID nell'env Bash).
+    # Un budget OPEN fresco di un'ALTRA sessione non si calpesta in silenzio:
+    # sovrascriverlo distruggerebbe il suo enforcement (warned/flagged persi).
+    # --force per il caso deliberato. Assente owner/env → comportamento legacy.
+    owner = safe_sid(os.environ.get("CLAUDE_CODE_SESSION_ID"))
+    bfile_pre = BUDGETS / f"{cwd_slug(cwd)}.json"
+    if bfile_pre.is_file() and not force:
+        try:
+            prev = json.loads(bfile_pre.read_text())
+            prev_owner = prev.get("owner_sid")
+            declared_prev = parse_ts(prev.get("declared_at"))
+            fresh = (declared_prev is not None and
+                     (datetime.now(timezone.utc) - declared_prev).total_seconds() < 86400)
+            if (prev.get("status") == "open" and fresh and prev_owner
+                    and owner and prev_owner != owner):
+                sys.exit(f"budget-open rifiutato: esiste un budget OPEN di "
+                         f"un'altra sessione ({prev_owner[:8]}…, task "
+                         f"'{prev.get('task')}') per questo cwd. Sovrascriverlo "
+                         f"ne distruggerebbe l'enforcement. Usa --force solo se "
+                         f"sai che quella sessione è morta, o lavora da un cwd/"
+                         f"worktree separato.")
+        except (json.JSONDecodeError, OSError):
+            pass  # file corrotto: la nuova open lo rimpiazza (atomicamente)
     budget = {
         "task": opts["--task"],
         "type": opts["--type"],
@@ -316,6 +342,10 @@ def cmd_budget_open(args):
         # cost_ack: l'utente ha già approvato un task sopra la soglia di costo
         # (checkpoint del gate presentato e accettato) → il gate non ri-chiede.
         "cost_ack": cost_ack,
+        # owner_sid: lease di sessione — il reaper chiude i budget PROPRI
+        # subito e quelli altrui mai (salvo orfani >24h); budget-open non
+        # calpesta budget open altrui freschi.
+        "owner_sid": owner,
         "declared_at": now_iso(),
         "cwd": str(cwd),
         "status": "open",
@@ -370,21 +400,21 @@ def cmd_log(args):
     print(f"loggato: {event}")
 
 
-REAP_MIN_AGE_S = 6 * 3600  # sotto: potrebbe essere di una sessione concorrente viva
+REAP_MIN_AGE_S = 6 * 3600     # legacy senza owner: sotto, non toccare
+REAP_FOREIGN_AGE_S = 24 * 3600  # budget di ALTRA sessione: orfano solo oltre
 
 
-def reap_open_budget(cwd):
+def reap_open_budget(cwd, session_id=None):
     """SessionEnd: un budget ancora 'open' che il modello non ha chiuso è orfano.
     Lo chiudo come abandoned così un Stop hook di una sessione futura non agisce
     su un budget morto e il report non resta falsato da un task svanito in
     silenzio. Tocco SOLO status=open — flagged/closed/stale restano intatti.
-    SOLO se più vecchio di REAP_MIN_AGE_S: il budget file è per-cwd, non
-    per-sessione — due sessioni concorrenti sullo stesso cwd condividono il
-    file, e chiudere alla fine della MIA sessione un budget fresco appena
-    aperto dall'altra le spegnerebbe gate e Stop hook in silenzio (trovato
-    dalla review cross-family 2026-07-10). Un budget davvero orfano supera
-    comunque l'orizzonte 24h di gate/Stop: il reaper serve solo a non
-    lasciare file aperti per giorni, non deve essere aggressivo.
+    Semantica di LEASE (owner_sid scritto da budget-open):
+    - budget MIO (owner == sessione che finisce) → chiudo subito, a qualunque
+      età: la sessione muore, il suo budget con lei;
+    - budget di un'ALTRA sessione → solo se più vecchio di 24h (orfano di
+      sessione crashata): mai spegnere l'enforcement di una concorrente viva;
+    - senza owner (legacy/env assente) → orizzonte prudente 6h.
     Best-effort: non deve mai far fallire la session-summary."""
     if not cwd:
         return
@@ -397,8 +427,15 @@ def reap_open_budget(cwd):
             return
         declared = parse_ts(budget.get("declared_at"))
         age = (datetime.now(timezone.utc) - declared).total_seconds() if declared else None
-        if age is not None and age < REAP_MIN_AGE_S:
-            return  # fresco: possibile sessione concorrente viva, non toccare
+        owner = budget.get("owner_sid")
+        sid = safe_sid(session_id)
+        if owner and sid and owner == sid:
+            pass  # mio: chiudi subito
+        elif owner:
+            if age is None or age < REAP_FOREIGN_AGE_S:
+                return  # di un'altra sessione, non orfano: non toccare
+        elif age is not None and age < REAP_MIN_AGE_S:
+            return  # legacy senza owner: orizzonte prudente
         budget["status"] = "closed"
         budget["outcome"] = "abandoned"
         budget["closed_at"] = now_iso()
@@ -493,7 +530,7 @@ def cmd_session_summary(args):
         transcript = data.get("transcript_path")
         session_id = data.get("session_id")
         cwd = data.get("cwd")
-    reap_open_budget(cwd)  # prima del check transcript: l'orfano va mietuto comunque
+    reap_open_budget(cwd, session_id)  # prima del check transcript: l'orfano va mietuto comunque
     reap_delegations(session_id)
     reap_read_cache(session_id)
     if not transcript or not Path(transcript).is_file():
@@ -784,10 +821,29 @@ CACHE_CAP = 500          # voci massime
 CACHE_TTL_DAYS = 90      # scadenza
 
 
+def cache_effective_key(caller_key, model):
+    """Chiave effettiva = chiave del chiamante + versione plugin + modello.
+    Un upgrade di plugin o un cambio di executor invalida la cache DA SOLO:
+    un hit stale post-upgrade propaga a costo zero output di una logica che
+    non esiste più (review duale 2026-07-10, proposta Gemini). La versione
+    viene da plugin.json accanto allo script; assente → 'unknown' (degrada
+    a invalidazione per modello soltanto)."""
+    try:
+        pj = Path(__file__).resolve().parent.parent / ".claude-plugin" / "plugin.json"
+        ver = json.loads(pj.read_text()).get("version", "unknown")
+    except Exception:
+        ver = "unknown"
+    return hashlib.sha256(
+        f"{caller_key}:{ver}:{model or '-'}".encode()).hexdigest()
+
+
 def cmd_cache_get(args):
     if not args:
-        sys.exit("cache-get richiede KEY (sha256 di schema_version+prompt+input)")
+        sys.exit("cache-get richiede KEY (sha256 di schema_version+prompt+input) "
+                 "[--model M]")
     key = args[0]
+    opts = parse_opts(args[1:], {"--model": None})
+    key = cache_effective_key(key, opts["--model"])
     con = open_db()
     row = con.execute("SELECT output, ts FROM llm_cache WHERE key=?", (key,)).fetchone()
     con.close()
@@ -807,7 +863,8 @@ def cmd_cache_put(args):
     verified = "--verified" in args
     if verified:
         args.remove("--verified")
-    opts = parse_opts(args, {"--file": None, "--output": None})
+    opts = parse_opts(args, {"--file": None, "--output": None, "--model": None})
+    key = cache_effective_key(key, opts["--model"])
     if not verified:
         sys.exit("cache-put rifiutato: serve --verified — si cachano SOLO output "
                  "passati da verifica deterministica rung-1 (un output cached non "

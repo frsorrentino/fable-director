@@ -1,0 +1,4 @@
+{"timestamp":"2030-01-01T10:00:00Z","message":{"usage":{"output_tokens":40}}}
+{"message":{"usage":{"output_tokens":25}}}
+questa riga non è json
+{"timestamp":"2030-01-01T10:05:00Z","message":{"usage":{"output_tokens":5}}}

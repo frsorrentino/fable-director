@@ -55,6 +55,11 @@ save_artifacts() { # $1=arm $2=taskfile $3=idx — salva i deliverable PRIMA del
   local base="$OUT/$(basename "$2" .md)__$1__$3"
   [ -f fixtures/reviews/triage.csv ] && cp fixtures/reviews/triage.csv "$base.triage.csv"
   [ -f fixtures/reviews_xl/triage.csv ] && cp fixtures/reviews_xl/triage.csv "$base.triage.csv"
+  # Artefatti 01-03: senza, la qualità di quelle shape resta non verificata
+  # (review duale 2026-07-10) — aggregate.py li valida contro il ricalcolo.
+  [ -f fixtures/batch/results.csv ] && cp fixtures/batch/results.csv "$base.results.csv"
+  [ -f fixtures/classify/labels.csv ] && cp fixtures/classify/labels.csv "$base.labels.csv"
+  [ -f fixtures/batch/report.txt ] && cp fixtures/batch/report.txt "$base.report.txt"
   return 0
 }
 
