@@ -25,10 +25,19 @@ Casi budget file:
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+# Windows cp1252: senza utf-8 il deny con ≈ → × crasha e il fail-open lo
+# ingoia → ogni delega senza budget passerebbe in silenzio (issue #1).
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 
 def parse_ts(s):
@@ -268,9 +277,10 @@ def main():
     except (json.JSONDecodeError, ValueError):
         return
     cwd = data.get("cwd") or os.getcwd()
-    # Slug: identico a cwd_slug() in fd-telemetry.py (leggibile + hash anti-collisione)
-    slug = ("-" + str(cwd).strip("/").replace("/", "-").replace(".", "-")
-            + "-" + hashlib.sha256(str(cwd).encode()).hexdigest()[:8])
+    # Slug: identico a cwd_slug() in fd-telemetry.py (canonico + hash)
+    s = str(cwd).replace("\\", "/")
+    slug = (re.sub(r"[^A-Za-z0-9]+", "-", s).strip("-")
+            + "-" + hashlib.sha256(s.encode()).hexdigest()[:8])
     bfile = Path.home() / ".claude" / "fable-director" / "budgets" / f"{slug}.json"
     telemetry = Path(__file__).with_name("fd-telemetry.py")
     open_cmd = (f'{telemetry} budget-open --task "..." --expected-output N '

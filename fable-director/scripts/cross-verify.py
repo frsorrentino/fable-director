@@ -54,6 +54,13 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Windows cp1252: output con caratteri non-Latin-1 crasherebbe (issue #1).
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
 CONFIG_PATH = Path.home() / ".claude" / "fable-director" / "cross-family.json"
 DB_PATH = Path.home() / ".claude" / "fable-director" / "telemetry.db"
 # Marker "chiamata cross-family in corso" per il segmento [XF] dello statusline

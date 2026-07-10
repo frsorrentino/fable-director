@@ -72,8 +72,13 @@ def project_dirs_for_cwd():
 
 
 def load_budget_file():
-    """Budget file scritto da fd-telemetry.py budget-open per il cwd corrente."""
-    slug = "-" + str(Path.cwd()).strip("/").replace("/", "-").replace(".", "-")
+    """Budget file scritto da fd-telemetry.py budget-open per il cwd corrente.
+    Slug identico a cwd_slug() in fd-telemetry.py (canonico + hash)."""
+    import hashlib
+    import re
+    s = str(Path.cwd()).replace("\\", "/")
+    slug = (re.sub(r"[^A-Za-z0-9]+", "-", s).strip("-")
+            + "-" + hashlib.sha256(s.encode()).hexdigest()[:8])
     bfile = Path.home() / ".claude" / "fable-director" / "budgets" / f"{slug}.json"
     if not bfile.is_file():
         return None

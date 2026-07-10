@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.12.4-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.12.5-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -44,6 +44,7 @@ Budget enforcement is local and depends on Claude Code providing a readable tran
 
 ## 🆕 What's new
 
+- **1.12.5** — Windows fixes from the first external issue: UTF-8 hook output (cp1252 crashed the gate into silent allow) and OS-agnostic budget slugs — enforcement now actually works on Windows.
 - **1.12.4** — Five hardening fixes from an adversarial cross-family review (Codex): budget-bypass closed, slug collisions fixed, concurrent-session reaper made safe, fail-closed input truncation, external executor now enforces its own budget.
 - **1.12.3** — Cross-family verifier goes two-lane: dead DeepSeek lane removed (last free variant left OpenRouter), defaults upgraded and verified live in 1.12.2 — `gemini-3-flash-preview` + `gpt-5.6-terra`, with an explicit `gemini-stable` fallback, never a silent one.
 - **1.12.1** — Kernel fast path: a single-turn task pays zero ritual — the policy must never cost more than the task.

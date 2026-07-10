@@ -77,10 +77,11 @@ try:
     except Exception:
         pass
     cwd=d.get("cwd") or os.getcwd()
-    # slug identico a cwd_slug() in fd-telemetry.py (leggibile + hash anti-collisione)
-    import hashlib as _hl
-    slug=("-"+str(cwd).strip("/").replace("/","-").replace(".","-")
-          +"-"+_hl.sha256(str(cwd).encode()).hexdigest()[:8])
+    # slug identico a cwd_slug() in fd-telemetry.py (canonico + hash)
+    import hashlib as _hl, re as _re
+    _s=str(cwd).replace("\\","/")
+    slug=(_re.sub(r"[^A-Za-z0-9]+","-",_s).strip("-")
+          +"-"+_hl.sha256(_s.encode()).hexdigest()[:8])
     bf=Path.home()/".claude"/"fable-director"/"budgets"/f"{slug}.json"
     b_open=None; b_status=None; b_warned=False; b_eff=None; b_exp=0
     if bf.is_file():

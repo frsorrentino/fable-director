@@ -48,10 +48,20 @@ Sottocomandi:
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+# Windows: stdout/stderr default cp1252 → i nostri messaggi con ≈ → × ▶
+# crashano in UnicodeEncodeError e il fail-open li ingoia (issue #1).
+# Reconfigure innocuo su POSIX.
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 BASE = Path.home() / ".claude" / "fable-director"
 DB_PATH = BASE / "telemetry.db"
@@ -75,13 +85,19 @@ def parse_ts(s):
 
 
 def cwd_slug(cwd):
-    """Slug leggibile + hash breve del path canonico: il solo replace
-    collide (`a.b` e `a-b` → stesso file, trovato dalla review cross-family
-    2026-07-10). L'hash rompe la collisione, il prefisso resta leggibile.
-    Da tenere IDENTICO in pre-delegation-gate.py, stop-budget-check.py,
-    statusline-ctx.sh e benchmarks/run.sh."""
-    s = str(cwd)
-    base = "-" + s.strip("/").replace("/", "-").replace(".", "-")
+    """Slug leggibile + hash breve del path CANONICALIZZATO.
+    - hash: rompe le collisioni del solo replace (`a.b` vs `a-b` → stesso
+      file, review cross-family 2026-07-10);
+    - base OS-agnostica via re.sub (issue #1: su Windows backslash e drive
+      colon rendevano il filename illegale — `E:\\...` non scriveva MAI);
+    - canonicalizzazione `\\`→`/` PRIMA dell'hash: su Windows il gate riceve
+      il cwd con `/` e la telemetria con `\\` — senza, i due producono slug
+      diversi e il budget di uno è invisibile all'altro.
+    Da tenere IDENTICO in: pre-delegation-gate.py, stop-budget-check.py,
+    external-exec.py, statusline-ctx.sh, session-cost-report.py
+    (load_budget_file) e benchmarks/run.sh."""
+    s = str(cwd).replace("\\", "/")
+    base = re.sub(r"[^A-Za-z0-9]+", "-", s).strip("-")
     return f"{base}-{hashlib.sha256(s.encode()).hexdigest()[:8]}"
 
 

@@ -37,9 +37,17 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+# Windows cp1252: i messaggi con × ≥ crasherebbero print() (issue #1).
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 USAGE_KEYS = ("input_tokens", "output_tokens",
               "cache_read_input_tokens", "cache_creation_input_tokens")
@@ -137,9 +145,10 @@ def main():
     if data.get("stop_hook_active"):
         return
     cwd = data.get("cwd") or os.getcwd()
-    # Slug: identico a cwd_slug() in fd-telemetry.py (leggibile + hash anti-collisione)
-    slug = ("-" + str(cwd).strip("/").replace("/", "-").replace(".", "-")
-            + "-" + hashlib.sha256(str(cwd).encode()).hexdigest()[:8])
+    # Slug: identico a cwd_slug() in fd-telemetry.py (canonico + hash)
+    s = str(cwd).replace("\\", "/")
+    slug = (re.sub(r"[^A-Za-z0-9]+", "-", s).strip("-")
+            + "-" + hashlib.sha256(s.encode()).hexdigest()[:8])
     bfile = Path.home() / ".claude" / "fable-director" / "budgets" / f"{slug}.json"
     if not bfile.is_file():
         return

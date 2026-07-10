@@ -46,6 +46,7 @@ Exit: 0 ok · 1 unavailable/error · 2 needs_context. Zero dipendenze (stdlib).
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -54,6 +55,13 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+
+# Windows cp1252: output con caratteri non-Latin-1 crasherebbe (issue #1).
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 CONFIG_PATH = Path.home() / ".claude" / "fable-director" / "cross-family.json"
 ACTIVE_PATH = Path.home() / ".claude" / "fable-director" / "xfam-active.json"
@@ -92,8 +100,10 @@ def require_open_budget():
     quindi QUI, deterministico: nessun budget open per il cwd → errore con il
     comando esatto. Enforcement end-to-end, non promesso."""
     cwd = os.getcwd()
-    slug = ("-" + str(cwd).strip("/").replace("/", "-").replace(".", "-")
-            + "-" + hashlib.sha256(str(cwd).encode()).hexdigest()[:8])
+    # Slug: identico a cwd_slug() in fd-telemetry.py (canonico + hash)
+    s = str(cwd).replace("\\", "/")
+    slug = (re.sub(r"[^A-Za-z0-9]+", "-", s).strip("-")
+            + "-" + hashlib.sha256(s.encode()).hexdigest()[:8])
     bfile = Path.home() / ".claude" / "fable-director" / "budgets" / f"{slug}.json"
     try:
         budget = json.loads(bfile.read_text()) if bfile.is_file() else None
