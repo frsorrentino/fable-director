@@ -74,7 +74,7 @@ No-progress termination (independent of retries and budget): if the last ~5 turn
 
 ## Falsifiable pre-budget
 
-Before executing any task that involves delegation or orchestration, the plan states one line: `approach / fallback / expected input tokens / expected output tokens`. Estimation anchors (don't guess from feel): expected input ≈ bytes of files/outputs to be read ÷ 4, times the number of passes; expected output ≈ size of the DELIVERABLE only (schema × N items), reasoning excluded. Cache is never budgeted ex ante (noise that improves no decision) — analyzed ex post only.
+Before executing any task that involves delegation or orchestration, the plan states one line: `approach / fallback / expected input tokens / expected output tokens`. Estimation anchors (don't guess from feel): expected input ≈ bytes of files/outputs to be read ÷ 4, times the number of passes — a FRESH-token budget: cache reads are excluded from enforcement accounting by design; expected output ≈ size of the DELIVERABLE only (schema × N items), reasoning excluded. Cache is never budgeted ex ante (noise that improves no decision) — analyzed ex post only.
 
 Then IMMEDIATELY mirror the estimate machine-readably — a PreToolUse gate denies any Agent/Task/Workflow call with no open budget, so opening it is not optional:
 `<plugin>/scripts/fd-telemetry.py budget-open --task "..." --expected-output N [--expected-input N] [--type slug] [--route inline|workflow|script|agent] [--reason "axis2>axis4"] [--alternative "..."] [--effort low|medium|high|xhigh|max]`

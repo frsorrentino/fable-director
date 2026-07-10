@@ -34,9 +34,11 @@ cat > "$OUT/bench-settings.json" <<EOF
 }
 EOF
 
-# Slug del budget file per QUESTO cwd (stessa logica di fd-telemetry/gate):
-# va pulito tra i run, o il budget del run N autorizza/sporca il run N+1.
-BUDGET_FILE="$HOME/.claude/fable-director/budgets/-$(pwd | sed 's|^/||; s|/|-|g; s|\.|-|g').json"
+# Slug del budget file per QUESTO cwd (stessa logica di fd-telemetry/gate,
+# leggibile + hash anti-collisione): va pulito tra i run, o il budget del
+# run N autorizza/sporca il run N+1.
+CWD_HASH=$(printf '%s' "$(pwd)" | sha256sum | cut -c1-8)
+BUDGET_FILE="$HOME/.claude/fable-director/budgets/-$(pwd | sed 's|^/||; s|/|-|g; s|\.|-|g')-${CWD_HASH}.json"
 
 model_arg=(); [ -n "${MODEL:-}" ] && model_arg=(--model "$MODEL")
 

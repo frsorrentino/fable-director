@@ -28,7 +28,12 @@ Uso:
   external-exec.py --spec-file F | --spec "..."
                    [--input FILE]... [--out FILE] [--schema-json]
                    [--provider gemini|gemini-stable|codex] [--type SLUG]
-                   [--items N] [--timeout 120]
+                   [--items N] [--timeout 120] [--allow-truncate]
+
+Pre-budget OBBLIGATORIO e verificato qui (il gate PreToolUse non vede le
+chiamate Bash): senza budget open per il cwd lo script esce con errore.
+Input oltre il cap → errore esplicito; il troncamento è solo opt-in
+(--allow-truncate) e viene dichiarato al modello nel prompt.
 
 Output (grep-abile):
   STATUS: ok|needs_context|unavailable|error
@@ -37,9 +42,8 @@ Output (grep-abile):
   OUTPUT: <path deliverable | ->
   DETAIL: <breve>
 Exit: 0 ok · 1 unavailable/error · 2 needs_context. Zero dipendenze (stdlib).
-Il pre-budget resta dovuto: questa è una delega, aprilo con budget-open
-(--route script --effort low è la dichiarazione onesta per questa rotta).
 """
+import hashlib
 import json
 import os
 import shutil
@@ -82,6 +86,28 @@ def unavailable(reason):
     sys.exit(1)
 
 
+def require_open_budget():
+    """Il gate PreToolUse copre solo Agent/Task/Workflow: questo script gira
+    via Bash e lo aggirerebbe (review cross-family 2026-07-10). Il check vive
+    quindi QUI, deterministico: nessun budget open per il cwd → errore con il
+    comando esatto. Enforcement end-to-end, non promesso."""
+    cwd = os.getcwd()
+    slug = ("-" + str(cwd).strip("/").replace("/", "-").replace(".", "-")
+            + "-" + hashlib.sha256(str(cwd).encode()).hexdigest()[:8])
+    bfile = Path.home() / ".claude" / "fable-director" / "budgets" / f"{slug}.json"
+    try:
+        budget = json.loads(bfile.read_text()) if bfile.is_file() else None
+    except (json.JSONDecodeError, OSError):
+        budget = None
+    if not isinstance(budget, dict) or budget.get("status") != "open":
+        out("error", detail=(
+            "nessun pre-budget aperto per questo cwd: anche la rotta esterna "
+            "è una delega. Apri il budget e riprova: fd-telemetry.py "
+            "budget-open --task \"...\" --expected-output N --route script "
+            "[--effort low] [--type slug]"))
+        sys.exit(1)
+
+
 def log_exec(payload):
     """Best-effort: telemetria oggettiva, mai bloccante."""
     try:
@@ -100,7 +126,7 @@ def parse_args(argv):
             "--provider": None, "--type": None, "--items": None,
             "--timeout": "120"}
     inputs = []
-    flags = {"--schema-json": False}
+    flags = {"--schema-json": False, "--allow-truncate": False}
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -181,6 +207,8 @@ def main():
     if not spec_text or not spec_text.strip():
         sys.exit(__doc__)
 
+    require_open_budget()
+
     if not CONFIG_PATH.is_file():
         unavailable(f"config assente ({CONFIG_PATH}): cross-verify.py --init")
     try:
@@ -202,9 +230,20 @@ def main():
     user_msg = f"TASK SPEC:\n{spec_text}\n"
     for fpath in inputs:
         try:
-            content = Path(fpath).read_text(errors="replace")[:INPUT_CAP]
+            content = Path(fpath).read_text(errors="replace")
         except OSError as e:
             unavailable(f"input illeggibile ({fpath}): {e}")
+        if len(content) > INPUT_CAP:
+            # Fail-closed: un deliverable calcolato su input troncato in
+            # silenzio è il peggior esito possibile (review cross-family
+            # 2026-07-10). Troncare è una scelta del chiamante, mai dello script.
+            if not flags["--allow-truncate"]:
+                out("error", name, prov["model"], "input-oversize", "-",
+                    f"{fpath}: {len(content)} char > cap {INPUT_CAP} — spezza "
+                    f"l'input o passa --allow-truncate (esplicito)")
+                sys.exit(1)
+            content = content[:INPUT_CAP]
+            user_msg += f"\n[NOTA: {fpath} TRONCATO a {INPUT_CAP} char su richiesta]\n"
         user_msg += f"\nINPUT FILE {fpath}:\n{content}\n"
     if flags["--schema-json"]:
         user_msg += ("\nOUTPUT FORMAT: strict JSON only — a single valid JSON "

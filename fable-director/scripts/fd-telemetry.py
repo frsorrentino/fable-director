@@ -45,6 +45,7 @@ Sottocomandi:
                Si scrive SOLO con --verified (output passato da verifica deterministica
                rung-1). KEY = sha256 di schema_version + prompt + contenuto input.
 """
+import hashlib
 import json
 import os
 import sqlite3
@@ -74,7 +75,14 @@ def parse_ts(s):
 
 
 def cwd_slug(cwd):
-    return "-" + str(cwd).strip("/").replace("/", "-").replace(".", "-")
+    """Slug leggibile + hash breve del path canonico: il solo replace
+    collide (`a.b` e `a-b` → stesso file, trovato dalla review cross-family
+    2026-07-10). L'hash rompe la collisione, il prefisso resta leggibile.
+    Da tenere IDENTICO in pre-delegation-gate.py, stop-budget-check.py,
+    statusline-ctx.sh e benchmarks/run.sh."""
+    s = str(cwd)
+    base = "-" + s.strip("/").replace("/", "-").replace(".", "-")
+    return f"{base}-{hashlib.sha256(s.encode()).hexdigest()[:8]}"
 
 
 def open_db():
@@ -237,6 +245,18 @@ def cmd_budget_open(args):
     if opts["--effort"] and opts["--effort"] not in EFFORT_LEVELS:
         sys.exit(f"--effort non valido: {opts['--effort']} "
                  f"(ammessi: {', '.join(sorted(EFFORT_LEVELS))})")
+    # Stime non positive = enforcement 2×/3× morto by construction (lo Stop
+    # hook esce su exp_out <= 0): un bypass, non una stima. Rifiuta rumorosamente.
+    try:
+        exp_out = int(opts["--expected-output"])
+        exp_in = int(opts["--expected-input"] or 0)
+    except ValueError:
+        sys.exit("--expected-output/--expected-input devono essere interi")
+    if exp_out <= 0:
+        sys.exit("--expected-output deve essere > 0: una stima non positiva "
+                 "disattiva l'enforcement 2×/3× (bypass, non stima)")
+    if exp_in < 0:
+        sys.exit("--expected-input non può essere negativo")
     cwd = opts["--cwd"] or os.getcwd()
     BUDGETS.mkdir(parents=True, exist_ok=True)
     budget = {
@@ -250,8 +270,8 @@ def cmd_budget_open(args):
         # effort dichiarato: leva reale solo se la delega usa un agent con
         # effort pinnato (fd-executor/fd-verifier); il gate confronta i due.
         "effort": opts["--effort"],
-        "expected_output_tokens": int(opts["--expected-output"]),
-        "expected_input_tokens": int(opts["--expected-input"] or 0),
+        "expected_output_tokens": exp_out,
+        "expected_input_tokens": exp_in,
         # cost_ack: l'utente ha già approvato un task sopra la soglia di costo
         # (checkpoint del gate presentato e accettato) → il gate non ri-chiede.
         "cost_ack": cost_ack,
@@ -303,11 +323,21 @@ def cmd_log(args):
     print(f"loggato: {event}")
 
 
+REAP_MIN_AGE_S = 6 * 3600  # sotto: potrebbe essere di una sessione concorrente viva
+
+
 def reap_open_budget(cwd):
     """SessionEnd: un budget ancora 'open' che il modello non ha chiuso è orfano.
     Lo chiudo come abandoned così un Stop hook di una sessione futura non agisce
     su un budget morto e il report non resta falsato da un task svanito in
     silenzio. Tocco SOLO status=open — flagged/closed/stale restano intatti.
+    SOLO se più vecchio di REAP_MIN_AGE_S: il budget file è per-cwd, non
+    per-sessione — due sessioni concorrenti sullo stesso cwd condividono il
+    file, e chiudere alla fine della MIA sessione un budget fresco appena
+    aperto dall'altra le spegnerebbe gate e Stop hook in silenzio (trovato
+    dalla review cross-family 2026-07-10). Un budget davvero orfano supera
+    comunque l'orizzonte 24h di gate/Stop: il reaper serve solo a non
+    lasciare file aperti per giorni, non deve essere aggressivo.
     Best-effort: non deve mai far fallire la session-summary."""
     if not cwd:
         return
@@ -318,6 +348,10 @@ def reap_open_budget(cwd):
         budget = json.loads(bfile.read_text())
         if budget.get("status") != "open":
             return
+        declared = parse_ts(budget.get("declared_at"))
+        age = (datetime.now(timezone.utc) - declared).total_seconds() if declared else None
+        if age is not None and age < REAP_MIN_AGE_S:
+            return  # fresco: possibile sessione concorrente viva, non toccare
         budget["status"] = "closed"
         budget["outcome"] = "abandoned"
         budget["closed_at"] = now_iso()

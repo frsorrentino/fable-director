@@ -4,7 +4,10 @@
 Il learning loop non dipende più dalla disciplina del modello a fine task:
 questo hook gira a ogni fine turno, e se esiste un budget file aperto per il
 cwd corrente confronta i token effettivi (dal transcript, dopo declared_at)
-con la stima dichiarata. Due soglie:
+con la stima dichiarata. Contabilità input = token FRESCHI (input + cache
+creation): i cache READ sono esclusi BY DESIGN — misurano riletture di
+prefisso già pagate altrove, non lavoro nuovo; il budget input va quindi
+letto come "fresh-token budget", mai come bolletta totale. Due soglie:
 - ≥2× (una volta sola): checkpoint — rivaluta la strategia ORA, un cambio di
   rotta a 2× costa meno del post-mortem a 3×. Solo soglie sul consumato,
   mai proiezioni di avanzamento (autostima del modello = rumore).
@@ -30,6 +33,7 @@ completamento (sottoconteggio temporaneo, conservativo).
 Record senza timestamp: inferenza posizionale — il JSONL è append-only
 cronologico, vale il timestamp dell'ultimo record che lo precede.
 """
+import hashlib
 import importlib.util
 import json
 import os
@@ -133,7 +137,9 @@ def main():
     if data.get("stop_hook_active"):
         return
     cwd = data.get("cwd") or os.getcwd()
-    slug = "-" + str(cwd).strip("/").replace("/", "-").replace(".", "-")
+    # Slug: identico a cwd_slug() in fd-telemetry.py (leggibile + hash anti-collisione)
+    slug = ("-" + str(cwd).strip("/").replace("/", "-").replace(".", "-")
+            + "-" + hashlib.sha256(str(cwd).encode()).hexdigest()[:8])
     bfile = Path.home() / ".claude" / "fable-director" / "budgets" / f"{slug}.json"
     if not bfile.is_file():
         return

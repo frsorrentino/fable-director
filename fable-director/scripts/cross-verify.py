@@ -186,7 +186,8 @@ def cmd_init():
 
 def parse_args(argv):
     opts = {"--claim": None, "--rubric": None, "--context-file": None,
-            "--provider": None, "--timeout": "60", "--type": None}
+            "--provider": None, "--timeout": "60", "--type": None,
+            "--allow-truncate": False}
     i = 0
     while i < len(argv):
         if argv[i] == "--init":
@@ -195,7 +196,10 @@ def parse_args(argv):
         if argv[i] == "--usage":
             cmd_usage()
             sys.exit(0)
-        if argv[i] in opts and i + 1 < len(argv):
+        if argv[i] == "--allow-truncate":
+            opts["--allow-truncate"] = True
+            i += 1
+        elif argv[i] in opts and i + 1 < len(argv):
             opts[argv[i]] = argv[i + 1]
             i += 2
         else:
@@ -286,6 +290,12 @@ def main():
             context = Path(opts["--context-file"]).read_text(errors="replace")
         except OSError as e:
             unavailable(f"context-file illeggibile: {e}")
+
+    # Fail-closed sul troncamento: un verdetto emesso su un artefatto tagliato
+    # in silenzio non è una verifica (review cross-family 2026-07-10).
+    if len(context) > 100_000 and not opts["--allow-truncate"]:
+        unavailable(f"artifact {len(context)} char > cap 100000 — spezza il "
+                    f"claim su porzioni o passa --allow-truncate (esplicito)")
 
     user_msg = f"CLAIM TO VERIFY:\n{opts['--claim']}\n"
     if opts["--rubric"]:

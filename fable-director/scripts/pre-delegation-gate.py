@@ -22,6 +22,7 @@ Casi budget file:
   PRIMA di nuove deleghe (altrimenti il blocco 3× si aggira delegando).
 - assente / closed / stale / corrotto → deny: apri un budget.
 """
+import hashlib
 import json
 import os
 import sqlite3
@@ -267,7 +268,9 @@ def main():
     except (json.JSONDecodeError, ValueError):
         return
     cwd = data.get("cwd") or os.getcwd()
-    slug = "-" + str(cwd).strip("/").replace("/", "-").replace(".", "-")
+    # Slug: identico a cwd_slug() in fd-telemetry.py (leggibile + hash anti-collisione)
+    slug = ("-" + str(cwd).strip("/").replace("/", "-").replace(".", "-")
+            + "-" + hashlib.sha256(str(cwd).encode()).hexdigest()[:8])
     bfile = Path.home() / ".claude" / "fable-director" / "budgets" / f"{slug}.json"
     telemetry = Path(__file__).with_name("fd-telemetry.py")
     open_cmd = (f'{telemetry} budget-open --task "..." --expected-output N '

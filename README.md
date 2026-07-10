@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.12.3-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.12.4-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -36,6 +36,7 @@ fable-director cuts the problem at the root, with enforcement — not with a hin
 
 ## 🆕 What's new
 
+- **1.12.4** — Five hardening fixes from an adversarial cross-family review (Codex): budget-bypass closed, slug collisions fixed, concurrent-session reaper made safe, fail-closed input truncation, external executor now enforces its own budget.
 - **1.12.3** — Cross-family verifier goes two-lane: dead DeepSeek lane removed (last free variant left OpenRouter), defaults upgraded and verified live in 1.12.2 — `gemini-3-flash-preview` + `gpt-5.6-terra`, with an explicit `gemini-stable` fallback, never a silent one.
 - **1.12.1** — Kernel fast path: a single-turn task pays zero ritual — the policy must never cost more than the task.
 - **1.12.0** — External executor (experimental): non-code batches on free external tiers, zero Claude tokens.
