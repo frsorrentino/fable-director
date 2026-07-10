@@ -1,0 +1,25 @@
+name: transcript-contract
+# Il contratto transcript (quali path dello schema JSONL l'enforcement
+# considera affidabili) deve reggere a ogni push: un FAIL qui = il parsing
+# è cambiato e il rilascio va fermato — stessa regola della checklist locale,
+# ma enforced dal CI, non dalla disciplina di chi committa.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Suite contratto transcript
+        run: python3 tests/transcript-contract/run.py
+      - name: Sintassi script plugin
+        run: |
+          python3 -m py_compile fable-director/scripts/*.py \
+            fable-director/skills/delega-efficiente/tools/session-cost-report.py
+          bash -n fable-director/scripts/statusline-ctx.sh benchmarks/run.sh
