@@ -40,6 +40,18 @@ fable-director cuts the problem at the root, with enforcement — not with a hin
 
 Budget enforcement is local and depends on Claude Code providing a readable transcript with the expected schema. Telemetry and the playbook stay under `~/.claude/fable-director/` and `~/.claude/` on your machine. An external route that is unavailable is never treated as verified or executed.
 
+## 🔁 How it learns from its own mistakes
+
+Every mistake becomes a written lesson — and writing it is not optional:
+
+1. **A blown estimate blocks the session until the lesson is written.** When real spend passes 3× the declared budget, the Stop hook refuses to close the turn until a one-line post-mortem (*which assumption broke?*) lands in the playbook. The overrun itself is already logged automatically.
+2. **Lessons live in a small playbook with counters.** A rule is born `[candidate]` from one incident and becomes confirmed only on its **second independent occurrence** — one bad day never becomes doctrine. Every rule carries `uses / ok / ko` counters, updated by outcome.
+3. **Rules earn their place or die.** The playbook is hard-capped at 30 lines: at the cap, the counters decide what gets merged or deleted. Unused rules don't accumulate.
+4. **Data can override the policy — but only with evidence.** Telemetry breaks outcomes down per task type; measured data may change a routing rule only where there are **at least 10 closed tasks** of that type. Below that, rules stay rules.
+5. **Recurring work stops costing.** A task done twice gets crystallized into a script: near-zero AI cost from then on, with a playbook line pointing at it.
+
+Honest boundary, same as the table above: the *writing* of lessons is hook-enforced; *applying* them at the next decision is policy the model follows. And the playbook lives outside the plugin (`~/.claude/delega-playbook.md`), so updates never erase what it learned.
+
 ---
 
 ## 🆕 What's new
@@ -89,11 +101,7 @@ To be clear: these deep cuts apply to **specific jobs the plugin can script or r
 externally** — not to your Claude usage as a whole. The 20-25% above is what a single-shot
 benchmark can see; these two rows are where the design aims, on the jobs that qualify.
 
-**And it improves with time, by design.** The plugin learns from its own history: every
-incident becomes a heuristic in its playbook (kept or killed by outcome counters, never by
-feel), and work that repeats gets crystallized into a purpose-built script — so your most
-frequent jobs drift toward zero AI cost. The benchmark measures day one; the design
-compounds after it.
+**And it improves with time, by design** — see [How it learns from its own mistakes](#-how-it-learns-from-its-own-mistakes) above. The benchmark measures day one; the design compounds after it.
 
 **Included whatever the savings:** predictable behavior (same task → same steps),
 automatic brakes on spending (a wrong cost estimate gets caught *while it happens*, not on
