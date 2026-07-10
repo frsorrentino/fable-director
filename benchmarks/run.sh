@@ -43,13 +43,14 @@ model_arg=(); [ -n "${MODEL:-}" ] && model_arg=(--model "$MODEL")
 reset_fixtures() {
   python3 gen_fixtures.py >/dev/null
   rm -f fixtures/batch/results.csv fixtures/batch/report.txt fixtures/classify/labels.csv
-  rm -f fixtures/reviews/triage.csv
+  rm -f fixtures/reviews/triage.csv fixtures/reviews_xl/triage.csv
   rm -f "$BUDGET_FILE"
 }
 
 save_artifacts() { # $1=arm $2=taskfile $3=idx — salva i deliverable PRIMA del prossimo reset
   local base="$OUT/$(basename "$2" .md)__$1__$3"
   [ -f fixtures/reviews/triage.csv ] && cp fixtures/reviews/triage.csv "$base.triage.csv"
+  [ -f fixtures/reviews_xl/triage.csv ] && cp fixtures/reviews_xl/triage.csv "$base.triage.csv"
   return 0
 }
 
@@ -65,7 +66,9 @@ run_one() { # $1=arm(off|on) $2=taskfile $3=idx
   save_artifacts "$1" "$2" "$3"
 }
 
-for t in ${TASKS:-tasks/*.md}; do
+# Default: shape 01-04. La 05 (worker-heavy, ~150k token di lettura per run)
+# si lancia esplicitamente: TASKS='tasks/05*.md'.
+for t in ${TASKS:-tasks/0[1-4]*.md}; do
   for i in $(seq 1 "$RUNS"); do
     run_one off "$t" "$i"
     run_one on  "$t" "$i"

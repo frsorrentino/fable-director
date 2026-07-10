@@ -1,0 +1,1202 @@
+{
+ "rev001": {
+  "sentiment": "positivo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev002": {
+  "sentiment": "positivo",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev003": {
+  "sentiment": "misto",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev004": {
+  "sentiment": "negativo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev005": {
+  "sentiment": "positivo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev006": {
+  "sentiment": "misto",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev007": {
+  "sentiment": "misto",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev008": {
+  "sentiment": "positivo",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev009": {
+  "sentiment": "misto",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev010": {
+  "sentiment": "misto",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev011": {
+  "sentiment": "negativo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev012": {
+  "sentiment": "positivo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev013": {
+  "sentiment": "negativo",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev014": {
+  "sentiment": "positivo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev015": {
+  "sentiment": "negativo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev016": {
+  "sentiment": "positivo",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev017": {
+  "sentiment": "negativo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev018": {
+  "sentiment": "positivo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev019": {
+  "sentiment": "positivo",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev020": {
+  "sentiment": "negativo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev021": {
+  "sentiment": "negativo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev022": {
+  "sentiment": "positivo",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev023": {
+  "sentiment": "misto",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev024": {
+  "sentiment": "negativo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev025": {
+  "sentiment": "misto",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev026": {
+  "sentiment": "misto",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev027": {
+  "sentiment": "positivo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev028": {
+  "sentiment": "misto",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev029": {
+  "sentiment": "negativo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev030": {
+  "sentiment": "negativo",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev031": {
+  "sentiment": "misto",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev032": {
+  "sentiment": "misto",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev033": {
+  "sentiment": "misto",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev034": {
+  "sentiment": "positivo",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev035": {
+  "sentiment": "misto",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev036": {
+  "sentiment": "positivo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev037": {
+  "sentiment": "positivo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev038": {
+  "sentiment": "positivo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev039": {
+  "sentiment": "positivo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev040": {
+  "sentiment": "positivo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev041": {
+  "sentiment": "negativo",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev042": {
+  "sentiment": "misto",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev043": {
+  "sentiment": "positivo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev044": {
+  "sentiment": "positivo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev045": {
+  "sentiment": "negativo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev046": {
+  "sentiment": "negativo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev047": {
+  "sentiment": "misto",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev048": {
+  "sentiment": "misto",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev049": {
+  "sentiment": "positivo",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev050": {
+  "sentiment": "negativo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev051": {
+  "sentiment": "misto",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev052": {
+  "sentiment": "positivo",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev053": {
+  "sentiment": "negativo",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev054": {
+  "sentiment": "misto",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev055": {
+  "sentiment": "positivo",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev056": {
+  "sentiment": "negativo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev057": {
+  "sentiment": "positivo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev058": {
+  "sentiment": "positivo",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev059": {
+  "sentiment": "misto",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev060": {
+  "sentiment": "positivo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev061": {
+  "sentiment": "positivo",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev062": {
+  "sentiment": "misto",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev063": {
+  "sentiment": "negativo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev064": {
+  "sentiment": "positivo",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev065": {
+  "sentiment": "negativo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev066": {
+  "sentiment": "misto",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev067": {
+  "sentiment": "positivo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev068": {
+  "sentiment": "positivo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev069": {
+  "sentiment": "misto",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev070": {
+  "sentiment": "negativo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev071": {
+  "sentiment": "misto",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev072": {
+  "sentiment": "misto",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev073": {
+  "sentiment": "negativo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev074": {
+  "sentiment": "negativo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev075": {
+  "sentiment": "negativo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev076": {
+  "sentiment": "positivo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev077": {
+  "sentiment": "positivo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev078": {
+  "sentiment": "negativo",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev079": {
+  "sentiment": "misto",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev080": {
+  "sentiment": "negativo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev081": {
+  "sentiment": "positivo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev082": {
+  "sentiment": "positivo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev083": {
+  "sentiment": "negativo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev084": {
+  "sentiment": "misto",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev085": {
+  "sentiment": "negativo",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev086": {
+  "sentiment": "misto",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev087": {
+  "sentiment": "misto",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev088": {
+  "sentiment": "negativo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev089": {
+  "sentiment": "positivo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev090": {
+  "sentiment": "negativo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev091": {
+  "sentiment": "misto",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev092": {
+  "sentiment": "positivo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev093": {
+  "sentiment": "negativo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev094": {
+  "sentiment": "negativo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev095": {
+  "sentiment": "negativo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev096": {
+  "sentiment": "negativo",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev097": {
+  "sentiment": "negativo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev098": {
+  "sentiment": "positivo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev099": {
+  "sentiment": "negativo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev100": {
+  "sentiment": "misto",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev101": {
+  "sentiment": "positivo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev102": {
+  "sentiment": "positivo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev103": {
+  "sentiment": "positivo",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev104": {
+  "sentiment": "negativo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev105": {
+  "sentiment": "negativo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev106": {
+  "sentiment": "positivo",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev107": {
+  "sentiment": "positivo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev108": {
+  "sentiment": "misto",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev109": {
+  "sentiment": "positivo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev110": {
+  "sentiment": "negativo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev111": {
+  "sentiment": "negativo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev112": {
+  "sentiment": "positivo",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev113": {
+  "sentiment": "misto",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev114": {
+  "sentiment": "misto",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev115": {
+  "sentiment": "negativo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev116": {
+  "sentiment": "misto",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev117": {
+  "sentiment": "positivo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev118": {
+  "sentiment": "negativo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev119": {
+  "sentiment": "misto",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev120": {
+  "sentiment": "negativo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev121": {
+  "sentiment": "positivo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev122": {
+  "sentiment": "positivo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev123": {
+  "sentiment": "positivo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev124": {
+  "sentiment": "positivo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev125": {
+  "sentiment": "misto",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev126": {
+  "sentiment": "misto",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev127": {
+  "sentiment": "misto",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev128": {
+  "sentiment": "negativo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev129": {
+  "sentiment": "misto",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev130": {
+  "sentiment": "negativo",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev131": {
+  "sentiment": "negativo",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev132": {
+  "sentiment": "positivo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev133": {
+  "sentiment": "misto",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev134": {
+  "sentiment": "positivo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev135": {
+  "sentiment": "misto",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev136": {
+  "sentiment": "positivo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev137": {
+  "sentiment": "negativo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev138": {
+  "sentiment": "negativo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev139": {
+  "sentiment": "negativo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev140": {
+  "sentiment": "misto",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev141": {
+  "sentiment": "misto",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev142": {
+  "sentiment": "misto",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev143": {
+  "sentiment": "negativo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev144": {
+  "sentiment": "misto",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev145": {
+  "sentiment": "positivo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev146": {
+  "sentiment": "misto",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev147": {
+  "sentiment": "positivo",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev148": {
+  "sentiment": "negativo",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev149": {
+  "sentiment": "negativo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev150": {
+  "sentiment": "negativo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev151": {
+  "sentiment": "negativo",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev152": {
+  "sentiment": "misto",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev153": {
+  "sentiment": "misto",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev154": {
+  "sentiment": "misto",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev155": {
+  "sentiment": "misto",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev156": {
+  "sentiment": "negativo",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev157": {
+  "sentiment": "positivo",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev158": {
+  "sentiment": "negativo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev159": {
+  "sentiment": "positivo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev160": {
+  "sentiment": "negativo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev161": {
+  "sentiment": "positivo",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev162": {
+  "sentiment": "positivo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev163": {
+  "sentiment": "misto",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev164": {
+  "sentiment": "negativo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev165": {
+  "sentiment": "misto",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev166": {
+  "sentiment": "positivo",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev167": {
+  "sentiment": "negativo",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev168": {
+  "sentiment": "misto",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev169": {
+  "sentiment": "negativo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev170": {
+  "sentiment": "negativo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev171": {
+  "sentiment": "misto",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev172": {
+  "sentiment": "positivo",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev173": {
+  "sentiment": "negativo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev174": {
+  "sentiment": "negativo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev175": {
+  "sentiment": "negativo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev176": {
+  "sentiment": "misto",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev177": {
+  "sentiment": "negativo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev178": {
+  "sentiment": "positivo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev179": {
+  "sentiment": "negativo",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev180": {
+  "sentiment": "misto",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev181": {
+  "sentiment": "positivo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev182": {
+  "sentiment": "negativo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev183": {
+  "sentiment": "positivo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev184": {
+  "sentiment": "positivo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev185": {
+  "sentiment": "negativo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev186": {
+  "sentiment": "misto",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev187": {
+  "sentiment": "misto",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev188": {
+  "sentiment": "misto",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev189": {
+  "sentiment": "negativo",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev190": {
+  "sentiment": "negativo",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev191": {
+  "sentiment": "negativo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev192": {
+  "sentiment": "misto",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev193": {
+  "sentiment": "negativo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev194": {
+  "sentiment": "negativo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev195": {
+  "sentiment": "negativo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev196": {
+  "sentiment": "misto",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev197": {
+  "sentiment": "positivo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev198": {
+  "sentiment": "positivo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev199": {
+  "sentiment": "misto",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev200": {
+  "sentiment": "positivo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev201": {
+  "sentiment": "negativo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev202": {
+  "sentiment": "negativo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev203": {
+  "sentiment": "negativo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev204": {
+  "sentiment": "misto",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev205": {
+  "sentiment": "positivo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev206": {
+  "sentiment": "misto",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev207": {
+  "sentiment": "positivo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev208": {
+  "sentiment": "positivo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev209": {
+  "sentiment": "negativo",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev210": {
+  "sentiment": "positivo",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev211": {
+  "sentiment": "negativo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev212": {
+  "sentiment": "misto",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev213": {
+  "sentiment": "positivo",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev214": {
+  "sentiment": "misto",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev215": {
+  "sentiment": "negativo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev216": {
+  "sentiment": "misto",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev217": {
+  "sentiment": "positivo",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev218": {
+  "sentiment": "misto",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev219": {
+  "sentiment": "positivo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev220": {
+  "sentiment": "negativo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev221": {
+  "sentiment": "negativo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev222": {
+  "sentiment": "positivo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev223": {
+  "sentiment": "negativo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev224": {
+  "sentiment": "negativo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev225": {
+  "sentiment": "positivo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev226": {
+  "sentiment": "misto",
+  "tema": "prezzo",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev227": {
+  "sentiment": "negativo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev228": {
+  "sentiment": "positivo",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev229": {
+  "sentiment": "positivo",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev230": {
+  "sentiment": "misto",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev231": {
+  "sentiment": "negativo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev232": {
+  "sentiment": "misto",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev233": {
+  "sentiment": "positivo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev234": {
+  "sentiment": "negativo",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev235": {
+  "sentiment": "positivo",
+  "tema": "batteria",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev236": {
+  "sentiment": "misto",
+  "tema": "qualita",
+  "segnalazione_sicurezza": "YES"
+ },
+ "rev237": {
+  "sentiment": "negativo",
+  "tema": "spedizione",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev238": {
+  "sentiment": "negativo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev239": {
+  "sentiment": "negativo",
+  "tema": "usabilita",
+  "segnalazione_sicurezza": "NO"
+ },
+ "rev240": {
+  "sentiment": "negativo",
+  "tema": "assistenza",
+  "segnalazione_sicurezza": "NO"
+ }
+}

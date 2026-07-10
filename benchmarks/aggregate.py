@@ -8,7 +8,9 @@ import csv, json, sys, statistics as st
 from pathlib import Path
 from collections import defaultdict
 
-EXPECTED = Path(__file__).parent / "expected" / "04-reviews.json"
+# Shape con ground truth semantica: (prefisso task, file expected)
+GRADED = [("04", Path(__file__).parent / "expected" / "04-reviews.json"),
+          ("05", Path(__file__).parent / "expected" / "05-reviews.json")]
 
 TOK = ("input_tokens", "output_tokens",
        "cache_creation_input_tokens", "cache_read_input_tokens")
@@ -54,15 +56,15 @@ def summarize(name, data):
     if per_task_pct:
         print(f"  {'MEDIA per-task':28s} {'':>26}{'':>16}  → risparmio {st.mean(per_task_pct):5.1f}%")
 
-def quality(d):
-    """Accuracy del task 04 vs ground truth, per arm: il risparmio conta solo
+def quality(d, prefix, expected_path):
+    """Accuracy del task vs ground truth, per arm: il risparmio conta solo
     a parità di risultato verificato. Safety = la metrica che pesa (error
     cost alto): recall mancata lì vale più di ogni token risparmiato."""
-    if not EXPECTED.is_file():
+    if not expected_path.is_file():
         return
-    exp = json.loads(EXPECTED.read_text())
+    exp = json.loads(expected_path.read_text())
     rows_by_arm = defaultdict(list)  # arm -> [(sent_ok, tema_ok, safety_pred, rid), ...]
-    for f in sorted(Path(d).glob("04-*__*__*.triage.csv")):
+    for f in sorted(Path(d).glob(f"{prefix}-*__*__*.triage.csv")):
         arm = f.stem.split("__")[1]
         got = {}
         try:
@@ -75,7 +77,7 @@ def quality(d):
         rows_by_arm[arm].append(got)
     if not rows_by_arm:
         return
-    print("\n=== Qualità task 04 (vs ground truth, media sui run) ===")
+    print(f"\n=== Qualità task {prefix} (vs ground truth, media sui run) ===")
     for arm in sorted(rows_by_arm):
         sent = tema = 0.0
         srec, sprec = [], []
@@ -102,6 +104,7 @@ if __name__ == "__main__":
     tokens, costs = load(d)
     summarize("Token billable (somma input+output+cache)", tokens)
     summarize("Costo USD", costs)
-    quality(d)
+    for prefix, expected_path in GRADED:
+        quality(d, prefix, expected_path)
     print("\nNota: il risparmio dipende dalla forma del task. Riporta N run, media e spread. "
           "Non estrapolare a 'ogni caso'.")

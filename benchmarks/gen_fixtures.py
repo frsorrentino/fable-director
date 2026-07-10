@@ -118,7 +118,55 @@ def gen_reviews(n=40, n_safety=6):
         json.dumps(expected, ensure_ascii=False, indent=1))
 
 
+def gen_reviews_xl(n=240, n_safety=36):
+    """Shape 05: come la 04 ma worker-heavy — N recensioni LUNGHE (12-16 frasi,
+    ~400-700 token l'una, ~150k token totali di lettura obbligata). È la forma
+    dove il differenziale di topologia può emergere (ancora cookbook ~2.5×:
+    84-98% dei token di input sui worker): l'orchestratore non può evitare che
+    qualcuno legga tutto — la domanda misurata è A CHE TARIFFA. Ground truth
+    in expected/05-reviews.json, stessa struttura della 04.
+    Il tema dominante resta non ambiguo: frasi del tema dominante SEMPRE in
+    maggioranza stretta su ogni altro tema."""
+    d = ROOT / "reviews_xl"; d.mkdir(parents=True, exist_ok=True)
+    themes = list(POS)
+    safety_ids = set(random.sample(range(1, n + 1), n_safety))
+    expected = {}
+    for i in range(1, n + 1):
+        rid = f"rev{i:03d}"
+        tema = random.choice(themes)
+        others = [t for t in themes if t != tema]
+        sentiment = random.choice(["positivo", "negativo", "misto"])
+        if i in safety_ids:
+            sentiment = random.choice(["negativo", "misto"])
+        frasi = random.choices(FILLER, k=5)
+        # dominante: 12-16 frasi; ogni altro tema al massimo 3 → mai ambiguo
+        n_dom = random.randint(12, 16)
+        if sentiment == "positivo":
+            frasi += random.choices(POS[tema], k=n_dom)
+            for t in random.sample(others, 3):
+                frasi += random.choices(POS[t], k=random.randint(2, 3))
+        elif sentiment == "negativo":
+            frasi += random.choices(NEG[tema], k=n_dom)
+            for t in random.sample(others, 3):
+                frasi += random.choices(NEG[t], k=random.randint(2, 3))
+        else:  # misto: dominante negativo in maggioranza + positivi dello stesso tema
+            frasi += random.choices(NEG[tema], k=n_dom - 3)
+            frasi += random.choices(POS[tema], k=3)
+            for t in random.sample(others, 3):
+                frasi += random.choices(POS[t], k=random.randint(2, 3))
+        if i in safety_ids:
+            frasi.append(random.choice(SAFETY))
+        random.shuffle(frasi)
+        (d / f"{rid}.txt").write_text(" ".join(frasi) + "\n")
+        expected[rid] = {"sentiment": sentiment, "tema": tema,
+                         "segnalazione_sicurezza": "YES" if i in safety_ids else "NO"}
+    exp_dir = Path(__file__).parent / "expected"
+    exp_dir.mkdir(parents=True, exist_ok=True)
+    (exp_dir / "05-reviews.json").write_text(
+        json.dumps(expected, ensure_ascii=False, indent=1))
+
+
 if __name__ == "__main__":
     ROOT.mkdir(parents=True, exist_ok=True)
-    gen_batch(); gen_classify(); gen_reviews()
+    gen_batch(); gen_classify(); gen_reviews(); gen_reviews_xl()
     print(f"fixtures generate in {ROOT}")
