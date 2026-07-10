@@ -32,6 +32,14 @@ fable-director cuts the problem at the root, with enforcement — not with a hin
 - ✋ **`Stop` (enforcement):** at each turn end, compares real token usage against the declared budget. Warns once at 2×; at 3× **blocks the turn** until the post-mortem lands in the playbook.
 - 📉 **`SessionEnd` (telemetry):** logs session totals to SQLite in the background — statistics without spending a model token.
 
+## What is enforced, what is advisory, what leaves your machine
+
+| Enforced locally | Advisory to the model | Leaves your machine |
+|---|---|---|
+| The `PreToolUse` gate denies `Agent`/`Task`/`Workflow` delegation without an open machine-readable pre-budget. The Stop hook checks an open budget at 2× and blocks at 3×. `external-exec.py` verifies an open budget itself. | The kernel's routing axes, "never delegate" rules, script promotion, verification ladder, and playbook are policy: they guide decisions but do not mechanically force a route or a quality judgment. | External Gemini/Codex routes are opt-in. When used, the claim, rubric, context, spec, and input content supplied to that route are sent to its configured provider. |
+
+Budget enforcement is local and depends on Claude Code providing a readable transcript with the expected schema. Telemetry and the playbook stay under `~/.claude/fable-director/` and `~/.claude/` on your machine. An external route that is unavailable is never treated as verified or executed.
+
 ---
 
 ## 🆕 What's new
@@ -104,7 +112,18 @@ are a figure you read, not a percentage on a banner.
 
 Everything below comes from the reproducible A/B harness in [`benchmarks/`](benchmarks/)
 (same task *without* and *with* the policy, tokens read from the real `claude -p` output,
-N runs per side).
+N runs per side). A positive percentage means savings; a negative one means the policy cost more.
+
+**Summary — all measured shapes, one table** (per-run detail in the blocks below):
+
+| Measured task | Sample | Spread | Token saving | USD saving | Failure or limit |
+|---|---:|---:|---:|---:|---|
+| **05 — 240 long reviews, ~124k tokens mandatory reading** (2026-07-10) | **N=4 off / N=3 on** | **±33%** | **+24.6%** | +1.7% (≈ parity) | One on-run died on the plan's 5h session limit and was excluded. Quality: on ≥ off; safety recall **97%** in both arms. |
+| **01 — batch-deterministic** (2026-07-10, fast path) | N=3 per arm | on ±103; off ±11k | **+22.5%** | +4.8% | The kernel fast path made the on-arm near-deterministic; small, task-specific result. |
+| **02 — classification** (2026-07-10, fast path) | N=3 per arm | off ±176; on ±181 | **−5.1%** | −7.0% | A small task still pays the kernel's fixed cost. |
+| **04 — 40 short reviews** (2026-07-09) | N=2 per side | not reported | −173% | −135% | Zero delegations attempted: the policy was pure overhead. Theme quality 98% vs 100%. |
+
+The read-heavy result measures **disciplined delegation vs naive delegation**, not delegation vs inline: the off-arm also delegated. Recurring script promotion and external execution may save more on qualifying work, but they are not measured by this single-session table.
 
 <!-- BENCH:RESULT — policy effect (equal model, sonnet + fable) + director topology attempt: measured 2026-07-09. -->
 > 📐 **Measured — policy effect at equal model** (full enforcement stack via `--settings`; shape-04 quality numbers before the 2026-07-08 fixture fix are not comparable):
@@ -215,6 +234,8 @@ the plugin manages them with the same discipline as everything else: **no silent
 (a missing key or a down endpoint fails loudly, never pretends), every call logged to
 telemetry, output contracts checked. They serve two distinct roles:
 
+**Privacy.** External models are optional. `cross-verify.py` sends the claim, rubric, and any `--context-file` artifact you provide; experimental `external-exec.py` sends the task spec and submitted `--input` content to the selected Gemini API or Codex CLI provider. Treat those materials as third-party disclosures: do not submit secrets, personal data, or proprietary content you are not permitted to share. Local telemetry records call metadata such as provider, model, task type, outcome, and validation status — not the submitted artifact or executor output.
+
 **Role 1 — independent verifier** (`scripts/cross-verify.py`). An all-Claude ensemble shares correlated blind spots by construction; a different model family (Gemini, GPT) catches what same-family verification can't — and it's **out of your Claude quota**. A third OpenRouter-based lane (DeepSeek) existed until 2026-07: dropped when the last free DeepSeek variant left OpenRouter — two uncorrelated families are enough, and a lane that can silently die isn't worth its maintenance.
 
 **When Claude invokes it on its own.** It is rung 4 of the verification ladder in the `delega-efficiente` skill — **optional and rare by design**. The director escalates to it only for the *highest-stakes* claims that have no objective test: an irreversible decision, a client-facing number it can't verify deterministically, a critical assumption everything else depends on. It is NOT called on every task — most verification stops at rung 1 (deterministic assertions) or rung 3 (same-family fresh-context verifier). When a call is in flight you see `[XF GEMINI▲]` in the statusline; today's calls show as `[XF CODEX×2]`.
@@ -266,11 +287,12 @@ Routing cuts **cost per token** (cheap executor does the heavy work). A separate
 
 ## ⚠️ Known limits (honest by design)
 
-- **Enforcement is local-only.** Hooks (pre-delegation gate, 2×/3× Stop check, telemetry) run on your machine. Sessions on Claude Managed Agents, cloud routines, or any remote harness run **outside** the enforcement stack: the policy kernel still applies if injected, but nothing blocks there.
-- **Statusline degrades silently** on Claude Code versions that don't expose the quota fields (< 2.1.x): missing segments simply don't render — no error.
-- **Claude Code's quiet model fallback.** If a subagent pins a model that isn't available on your plan/session, Claude Code silently falls back to another model — it does not fail. Routing decisions that assume a specific executor tier should verify it (the statusline shows the active model for the main loop only).
-- **Transcript schema dependency.** Token accounting reads Claude Code's undocumented JSONL transcript format. Since 1.7.0 a schema sentinel fails loudly (warning + `schema_anomaly` event, enforcement suspended) instead of silently counting zeros — but accounting remains unavailable until the plugin is updated for the new format.
-- **Per-agent `effort` needs a recent Claude Code.** The `fd-executor`/`fd-verifier` agents pin their reasoning tier via the `effort` frontmatter field. Older Claude Code versions ignore unknown frontmatter fields: the agents still work, they just inherit the session effort — silent degradation, no error. Effort coherence (budget `--effort` vs pinned tier) is a warn-only check by design: it never blocks a delegation.
+- **Claude Code versions.** The optional statusline needs Claude Code ≥ 2.1.x for `context_window` and `rate_limits`; older versions omit those segments without an error. Older Claude Code versions may ignore the `effort` frontmatter on `fd-executor` and `fd-verifier`, so those agents inherit the session effort instead — silent degradation, no error. Effort coherence (budget `--effort` vs pinned tier) is a warn-only check by design.
+- **Concurrent sessions.** An open budget is stored as one file per working directory: `~/.claude/fable-director/budgets/<cwd-slug>.json`. Two Claude Code sessions using the same directory can share or overwrite that budget state (since 1.12.4 the SessionEnd reaper no longer closes a concurrent session's fresh budget, but the file is still shared). Do not run concurrent budgeted sessions from one working directory; use separate worktrees or working directories.
+- **Transcript dependency.** Token accounting reads Claude Code's undocumented JSONL transcript schema. If at least 20 valid records contain no recognized usage or timestamp fields, the schema sentinel warns, logs `schema_anomaly`, and suspends budget enforcement rather than silently counting zero. Update the plugin before relying on accounting again.
+- **In-flight subagents.** The Stop hook counts subagent usage after it appears in the main transcript, so work still in flight can be temporarily undercounted.
+- **Remote environments.** Managed Agents, cloud routines, and remote harnesses are outside the local hook stack: the injected policy may still apply, but the local gate, Stop check, and telemetry do not.
+- **Quiet model fallback.** Claude Code can silently substitute an unavailable subagent model. Treat a requested model as declared; verify the effective model afterward with `session-cost-report.py`.
 
 ---
 
