@@ -2,9 +2,14 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.12.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.12.1-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
+
+**Positioning, in three clauses:**
+1. **Quality is a constraint, token minimization is the objective** — quality never enters the trade-off; tokens get cut only in the space the constraint leaves open.
+2. **Optimization is deterministic** — enforced by blocking scripts and hooks, not by prompt suggestions the model can ignore.
+3. **Transparency is guaranteed** — objective telemetry and benchmarks that publish their own limits, negative numbers included.
 
 ---
 
@@ -20,11 +25,11 @@ fable-director injects an **always-on routing policy** and makes it **enforced b
 
 ## 🆕 What's new
 
+- **1.12.1** — Kernel fast path (single-turn task, no delegation → zero ritual: the policy must never cost more than the task), three-clause positioning and a plain-language benchmark conclusions section — both born from the measured small-task overhead.
 - **1.12.0** — External executor (experimental): `external-exec.py` routes non-code axis-4 batches to free external tiers (Gemini Flash, Codex CLI) at zero Claude tokens — cross-family discipline (no silent fallback), built-in JSON rung-1, `external_exec` telemetry per provider/type; the route stays per-case until `report` shows DENSE ok-rate.
 - **1.11.1** — `[BDG]` statusline segment shows a live consumed/expected ratio + declared effort tier (`[BDG 0.7×·high]`, Stop-hook accounting, incremental scan): the 2× checkpoint becomes visible on approach, not as a surprise block.
 - **1.11.0** — Effort becomes a routing lever: two shipped agents with pinned reasoning tiers (`fd-executor`, effort `low`, for axis-4 batches; `fd-verifier`, effort `high`, for rung-3 adversarial verification), `budget-open --effort` to declare the tier, gate warns (never denies) on declared≠pinned mismatch, `report` breaks flag-rate down per tier — measurement first, enforcement only if the data earns it.
 - **1.10.10** — Self-review with the plugin's own ladder (8 finder angles → inline verify → cross-family on Gemini *and* Codex): 6 real bugs fixed — expensive delegations missing from `[DLG]`, timezone-shifted commit windows in yield analysis, double-counted cost reports, discarded cross-family verdicts on uppercase fences, a `≡` marker that never matched, a misleading stale-budget deny — plus 2 hot-path efficiency cuts and doc-drift fixes.
-- **1.10.9** — Cost checkpoint: a delegation above the cost ceiling (default 50k expected output, quota-aware) asks *you* instead of silently spending; `--cost-ack` to approve once per task.
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 
@@ -94,6 +99,16 @@ savings are a figure you read, not a percentage on a banner.
 > **Honest reading, including the surprise.** ¹ On the small shape the policy is pure overhead: telemetry shows zero delegations attempted — the top model correctly declined to delegate 40 micro-items (axis 6), and the delta is policy ceremony at top-model rates. On the worker-heavy shape the forensics upend the framing: **the off-arm delegates too** — Fable natively fans out to sonnet workers without any policy. So the measured differential is not "delegation vs inline"; it is **disciplined delegation vs naive delegation**: fewer, more stable turns (3-7 vs 3-32), ~25% fewer billable tokens at equal USD cost (worker cache reads dominate billing in both arms), slightly better sentiment accuracy — and the enforcement stack fired for real mid-run (budgets opened, one 26× `budget_flag` caught a bad estimate, rung-1+2 verification logged). ² First N=2 measured −51% tokens; consolidation to N=4/3 halved it — variance is high (±150-180k tokens per arm), which is why the spread is published with the number. One on-run died on the plan's 5h session limit and is excluded (aggregate.py now skips `is_error` runs). Safety recall is below 100% in *both* arms on this harder shape — the shape's ceiling, reported not hidden.
 >
 > Reproduce: `cd benchmarks && RUNS=3 bash run.sh` (equal model) · `MODEL=claude-fable-5 TASKS='tasks/05*.md' RUNS=2 bash run.sh` (topology, ~$15/side).
+
+### What the benchmarks actually say — in plain language
+
+1. **On small tasks the plugin doesn't save — it costs a little.** The kernel and checks add a few hundred tokens per session: visible on a task worth a few cents. If you install this to save on small one-shots, you'll be disappointed — we say it up front. (Since 1.12.1 the kernel carries an explicit fast path — single-turn task, no delegation → zero ritual — which attacks the behavioral share of that overhead; the fixed share stays, as an insurance premium does.)
+2. **The plugin knows when NOT to delegate.** On the small judgment task, the policy arm correctly refused to delegate 40 micro-items: delegating there doesn't pay, and the policy encodes it. Right behavior — paid for in ceremony.
+3. **On read-heavy work the saving is real: ~25% of tokens at equal cost and quality.** 240 long reviews: −24.6% billable tokens (high variance, ±33%), USD unchanged, quality equal or slightly better.
+4. **The most interesting finding: the top model already delegates on its own.** Even with no plugin, Fable fans work out to cheaper models. The plugin's value is not *making delegation happen* — it's making it **disciplined**: 3-7 turns instead of 3-32, explicit contracts, verified outputs, and a budget check that genuinely caught a 26× wrong estimate mid-benchmark.
+5. **What no single-shot benchmark can measure** is where the plugin actually aims: turning recurring tasks into scripts (zero cost from the second occurrence) and accruing verified heuristics in the playbook. Those effects show up over weeks of use, not in one session.
+
+**One sentence:** this is not a plugin that saves tokens on every task — it makes spend predictable, verified and disciplined, and on read-heavy loads it cuts about a quarter of the tokens without giving up quality.
 
 ---
 

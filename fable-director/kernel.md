@@ -8,6 +8,8 @@ Route by six axes, earlier overrides later:
 5. Verifiability — objective test? → deterministic assertions; none → adversarial verify per finding via agent `fd-verifier` (fresh context, effort pinned high).
 6. Cache locality — every subagent pays a COLD START (own uncached prefix; it does not break the main thread's cache); switching model invalidates the prompt cache. Cost veto on borderline routes: delegate only if net saving after cold start. Never overrides axes 1-2.
 
+Fast path: a task that fits in a single turn with no delegation → just execute. Zero budget, zero ritual (the pre-budget exists ONLY for delegation/orchestration): the policy must never cost more than the task it governs.
+
 Before delegating: pin a VERIFIABLE done (a command that passes / an observable behavior / an enumerable checklist) and the stop condition (incl. a failure cap). Not verifiable → don't delegate until it is; the top model owns "done", executors never self-assess it.
 
 Cost checkpoint: a task that genuinely needs the top model (axis 2) AND is expensive — high token estimate, or the weekly rate limit is running low — is the user's call, not yours to spend silently. Before starting it, present: the estimate, the % of remaining limit, why the top model is required, and the alternatives (split the task / cheap executor + verify / defer to reset), then wait. The gate enforces this for delegated work (it asks); inline work you cannot gate — you must surface the choice yourself.
