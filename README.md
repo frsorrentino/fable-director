@@ -19,7 +19,18 @@ A powerful agent tends to do *everything* itself: it reads huge files, repeats d
 
 ## The solution
 
-fable-director injects an **always-on routing policy** and makes it **enforced by deterministic hooks**. It's not a hint in the prompt the model can ignore: it's enforcement.
+fable-director cuts the problem at the root, with enforcement — not with a hint in the prompt the model can ignore:
+
+1. **Enforced budget control** — a pre-delegation gate and a Stop hook block the model when it spends beyond its own estimate.
+2. **Work off your Claude quota** — adversarial verification and (experimentally) non-code bulk work can run on free external models (Gemini, Codex); Claude keeps the planning and checking share.
+3. **Objective local telemetry** — session logs parsed in the background into a local SQLite database: token usage, cache efficiency, delegation overhead. Zero model tokens spent on bookkeeping.
+
+## 🏗️ How it works — four hooks in the Claude Code lifecycle
+
+- 🟢 **`SessionStart` (kernel):** injects the routing policy — the 6 axes — in ~500 tokens; the full policy body loads only on demand.
+- 🛑 **`PreToolUse` (gate):** intercepts every `Agent`/`Task`/`Workflow` call — no machine-readable budget opened first (`budget-open`) → **the call is denied**.
+- ✋ **`Stop` (enforcement):** at each turn end, compares real token usage against the declared budget. Warns once at 2×; at 3× **blocks the turn** until the post-mortem lands in the playbook.
+- 📉 **`SessionEnd` (telemetry):** logs session totals to SQLite in the background — statistics without spending a model token.
 
 ---
 
