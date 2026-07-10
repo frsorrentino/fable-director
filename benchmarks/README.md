@@ -55,6 +55,16 @@ Output: `results/<timestamp>/` (raw JSON + `summary.txt`).
   policy overhead at top-model rates. Conclusion codified: the topology differential needs a
   fixture with genuinely worker-heavy reads (hundreds of items / large files); shape 04 is too
   small by construction. Publishing the negative number instead of rerunning until it flips.
+- 2026-07-10: shape 05 (240 long reviews, ~124k tokens mandatory reading) delivered the
+  differential — **−51% billable tokens, −7% USD, quality equal-or-better** — but the forensics
+  changed what the A/B means: **the off-arm delegates natively too** (Fable fans out to sonnet
+  workers with no policy at all). The harness therefore measures *disciplined vs naive
+  delegation*, not *delegation vs inline*: the policy arm converged in 3-5 turns vs 11-32,
+  halved billable tokens, and the enforcement genuinely fired mid-run (a 26× `budget_flag` on a
+  bad estimate, rung-1+2 verification logged). USD moves little because worker cache reads
+  dominate billing in both arms. Both arms score safety recall <100% on this shape (96-97%):
+  the shape's ceiling, reported as-is. Caveat: N=2, and the off-arm's native strategy is
+  itself high-variance (11 vs 32 turns between its two runs).
 
 ### What this harness measures — and what it doesn't
 

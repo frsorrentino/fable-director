@@ -84,9 +84,16 @@ savings are a figure you read, not a percentage on a banner.
 >
 > **The equal-model effect is model-dependent.** On sonnet the policy pays where work is deterministic (+17% on 01, and it stabilizes behavior: spread ±267 vs ±40k tokens). On fable the baseline is already so lean (off-arm 3× smaller than sonnet's) that the kernel+hooks overhead dominates the small shapes — only the judgment-heavy shape (04) stays positive at equal quality.
 >
-> 📐 **Measured — director topology, first attempt** (`MODEL=claude-fable-5`, shape 04, N=2, 2026-07-09): **negative at this scale** — off-arm 4 turns / $0.90, on-arm 26-44 turns / $2.11 (−135% USD), theme accuracy 98% vs 100%. Telemetry shows **zero delegations attempted and zero gate events**: the top model correctly declined to delegate 40 micro-items (axis 6 — no differential to harvest), so the whole delta is the behavioral overhead of the policy at top-model rates on a small single-shot task. The cookbook's ~2.5× anchor requires worker-heavy token loads this bench shape doesn't have; measuring it honestly needs a heavier fixture (planned). What the single-shot harness structurally *cannot* see: script promotion on recurring tasks and the learning loop — the two levers the policy is actually built around.
+> 📐 **Measured — director topology** (`MODEL=claude-fable-5` orchestrating, N=2 per side):
 >
-> Reproduce: `cd benchmarks && RUNS=3 bash run.sh` (equal model) · `MODEL=claude-fable-5 TASKS='tasks/04*.md' RUNS=2 bash run.sh` (topology).
+> | Shape | Tokens saved | Cost saved | Quality (on vs off) |
+> |---|---|---|---|
+> | 04 — 40 short reviews (2026-07-09) | −173%¹ | −135%¹ | theme 98% vs 100% |
+> | **05 — 240 long reviews, ~124k tokens mandatory reading (2026-07-10)** | **+51.0%** | +7.1% | **on ≥ off** (sentiment 98% vs 95%, safety recall 97% vs 96%, precision 100% both) |
+>
+> **Honest reading, including the surprise.** ¹ On the small shape the policy is pure overhead: telemetry shows zero delegations attempted — the top model correctly declined to delegate 40 micro-items (axis 6), and the delta is policy ceremony at top-model rates. On the worker-heavy shape the forensics upend the framing: **the off-arm delegates too** — Fable natively fans out to sonnet workers without any policy. So the measured differential is not "delegation vs inline"; it is **disciplined delegation vs naive delegation**: the policy arm did the same job in 3-5 turns instead of 11-32, with −51% billable tokens (cache churn cut in half), at slightly *better* quality — and the enforcement stack fired for real mid-run (budgets opened, one 26× `budget_flag` caught a bad estimate, rung-1+2 verification logged). Cost in USD moves little (−7%): most billing sits in worker cache reads that both arms pay. Safety recall is below 100% in *both* arms on this harder shape — the shape's ceiling, reported not hidden.
+>
+> Reproduce: `cd benchmarks && RUNS=3 bash run.sh` (equal model) · `MODEL=claude-fable-5 TASKS='tasks/05*.md' RUNS=2 bash run.sh` (topology, ~$15/side).
 
 ---
 
