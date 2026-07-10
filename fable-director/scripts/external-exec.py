@@ -27,7 +27,7 @@ Config: riusa ~/.claude/fable-director/cross-family.json (cross-verify.py
 Uso:
   external-exec.py --spec-file F | --spec "..."
                    [--input FILE]... [--out FILE] [--schema-json]
-                   [--provider gemini|deepseek|codex] [--type SLUG]
+                   [--provider gemini|gemini-stable|codex] [--type SLUG]
                    [--items N] [--timeout 120]
 
 Output (grep-abile):

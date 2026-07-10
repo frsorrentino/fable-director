@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.12.2-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.12.3-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -131,7 +131,7 @@ One glance at model, context and plan quotas — so you see the rate limit comin
 | `[5H 71%→17:30]` | 5-hour plan-window quota used + local reset time (the "Current session" in `/usage`) | plan rate limits |
 | `[7D 46%→14 Jul]` | Weekly plan quota used + reset date | plan rate limits |
 | `[BDG …]` | fable-director **pre-budget**: live consumed/expected output ratio + declared effort tier | budget file + session transcript (incremental) |
-| `[XF …]` | **Cross-family verifier** (Gemini / Codex / DeepSeek) activity | marker file + local telemetry |
+| `[XF …]` | **Cross-family verifier** (Gemini / Codex) activity | marker file + local telemetry |
 | `[DLG …]` | Work **delegated to subagents** this session, tokens per model | session transcript |
 
 Segments with nothing to say disappear (no budget open → no `[BDG]`; no delegation → no `[DLG]`; no cross-family use today → no `[XF]`). Quota colors: green < 60%, yellow ≥ 60%, red ≥ 80%. With the **caveman** plugin its badge stays in front.
@@ -178,7 +178,7 @@ Then restart Claude Code. `--remove` to take it out. It won't touch a third-part
 
 ## 🧬 Cross-family verifier — when and how
 
-An all-Claude ensemble shares correlated blind spots by construction; a different model family (Gemini, GPT, DeepSeek) catches what same-family verification can't. `scripts/cross-verify.py` is that lane — and it's **out of your Claude quota** (Gemini free tier / ChatGPT plan / OpenRouter free).
+An all-Claude ensemble shares correlated blind spots by construction; a different model family (Gemini, GPT) catches what same-family verification can't. `scripts/cross-verify.py` is that lane — and it's **out of your Claude quota** (Gemini free tier / ChatGPT plan). A third OpenRouter-based lane (DeepSeek) existed until 2026-07: dropped when the last free DeepSeek variant left OpenRouter — two uncorrelated families are enough for the rung, and a lane that can silently die isn't worth its maintenance.
 
 **When Claude invokes it on its own.** It is rung 4 of the verification ladder in the `delega-efficiente` skill — **optional and rare by design**. The director escalates to it only for the *highest-stakes* claims that have no objective test: an irreversible decision, a client-facing number it can't verify deterministically, a critical assumption everything else depends on. It is NOT called on every task — most verification stops at rung 1 (deterministic assertions) or rung 3 (same-family fresh-context verifier). When a call is in flight you see `[XF GEMINI▲]` in the statusline; today's calls show as `[XF CODEX×2]`.
 
@@ -191,7 +191,7 @@ An all-Claude ensemble shares correlated blind spots by construction; a differen
      --claim "the migration script is idempotent" \
      --rubric "running it twice must not duplicate rows" \
      --context-file migration.sql \
-     --provider gemini          # or codex | deepseek; omit → config default
+     --provider gemini          # or codex | gemini-stable; omit → config default
    ```
    Output is grep-able (`STATUS` / `PROVIDER` / `VERDICT: refuted|supported|uncertain` / `REASONING`). `--usage` shows today's local call counts against the declared free-tier limits.
 

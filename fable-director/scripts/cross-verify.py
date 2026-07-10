@@ -2,7 +2,7 @@
 """Cross-family verifier — controllo avversariale da una famiglia di modelli diversa.
 
 Un ensemble tutto-Claude condivide errori CORRELATI by construction; un lineage
-diverso (Gemini, DeepSeek) ha punti ciechi non sovrapposti. Questo script è il
+diverso (Gemini, GPT/Codex) ha punti ciechi non sovrapposti. Questo script è il
 gradino opzionale in cima alla verification ladder (rung 3+): claim ad alta
 posta, raro, fuori dalla quota Claude.
 
@@ -19,7 +19,7 @@ URL e modelli vivono nel config, non nel codice: i free tier cambiano senza
 preavviso — il punto di verità deve essere modificabile senza toccare lo script.
 Chiavi API: via env var (campo api_key_env) o campo api_key nel config.
 
-Provider: HTTP OpenAI-compatibile (gemini, deepseek) o "type": "cli"
+Provider: HTTP OpenAI-compatibile (gemini) o "type": "cli"
 (codex: sottoprocesso Codex CLI, login ChatGPT — spec via stdin, output su
 file mktemp unico, preflight `command -v`).
 
@@ -28,7 +28,7 @@ Uso:
   cross-verify.py --usage        # contatore locale vs limiti dichiarati (i
                                  # free tier non espongono la quota via API)
   cross-verify.py --claim "..." --rubric "..." [--context-file F]
-                  [--provider gemini|deepseek|codex] [--timeout 60] [--type SLUG]
+                  [--provider gemini|gemini-stable|codex] [--timeout 60] [--type SLUG]
 
 --type = tipo di task (es. cross-lingua, security-review, spec-compliance):
 loggato nella telemetria così `fd-telemetry.py report` può dire EMPIRICAMENTE
@@ -77,13 +77,6 @@ DEFAULT_CONFIG = {
             "api_key_env": "GEMINI_API_KEY",
             "limits": {"rpd": 1500, "rpm": 10},
             "note": "ripiego stabile ESPLICITO (--provider gemini-stable) quando la preview 503a"
-        },
-        "deepseek": {
-            "base_url": "https://openrouter.ai/api/v1",
-            "model": "deepseek/deepseek-v4-flash:free",
-            "api_key_env": "OPENROUTER_API_KEY",
-            "limits": {"rpd": 100},
-            "note": "OpenRouter free tier ~100 req/giorno per chiave"
         },
         "codex": {
             "type": "cli",
