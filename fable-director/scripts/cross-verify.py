@@ -64,10 +64,19 @@ DEFAULT_CONFIG = {
     "providers": {
         "gemini": {
             "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+            "model": "gemini-3-flash-preview",
+            "api_key_env": "GEMINI_API_KEY",
+            "limits": {"rpd": 1500, "rpm": 10},
+            "note": "free tier AI Studio (verificato 2026-07-10) — 503 intermittenti da "
+                    "preview: unavailable → rotta same-family, MAI fallback silenzioso. "
+                    "La subscription consumer AI Pro NON alimenta l'API"
+        },
+        "gemini-stable": {
+            "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
             "model": "gemini-2.5-flash",
             "api_key_env": "GEMINI_API_KEY",
             "limits": {"rpd": 1500, "rpm": 10},
-            "note": "free tier AI Studio — la subscription consumer AI Pro NON alimenta l'API"
+            "note": "ripiego stabile ESPLICITO (--provider gemini-stable) quando la preview 503a"
         },
         "deepseek": {
             "base_url": "https://openrouter.ai/api/v1",
@@ -78,12 +87,14 @@ DEFAULT_CONFIG = {
         },
         "codex": {
             "type": "cli",
-            "command": ["codex", "exec", "--model", "gpt-5.5",
+            "command": ["codex", "exec", "--model", "gpt-5.6-terra",
                         "-c", "model_reasoning_effort=high",
                         "--sandbox", "read-only", "--skip-git-repo-check",
                         "--output-last-message", "{output_file}"],
-            "model": "gpt-5.5",
-            "note": "richiede Codex CLI installata + login ChatGPT (quota finestra 5h del piano; nessuna API di lettura quota)"
+            "model": "gpt-5.6-terra",
+            "note": "richiede Codex CLI >=0.144 (npm i -g @openai/codex@latest) + login "
+                    "ChatGPT (quota finestra 5h; nessuna API di lettura quota). Alternative "
+                    "built-in: gpt-5.6-sol (detail), gpt-5.6-luna (repeatable)"
         }
     }
 }
