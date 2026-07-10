@@ -65,6 +65,11 @@ Output: `results/<timestamp>/` (raw JSON + `summary.txt`).
   dominate billing in both arms. Both arms score safety recall <100% on this shape (96-97%):
   the shape's ceiling, reported as-is. Caveat: N=2, and the off-arm's native strategy is
   itself high-variance (11 vs 32 turns between its two runs).
+- 2026-07-10 (fast-path verification): shapes 01-02 re-measured on fable after the 1.12.1
+  kernel fast path. Shape 01 flipped −38.9% → **+22.5%** tokens (on-arm spread ±103: the
+  policy makes behavior near-deterministic); shape 02 unchanged at ≈−5% = the kernel's fixed
+  share on a 70k baseline. The fix targeted ONLY the behavioral overhead — axis 2 and
+  verification untouched — and the claim was verified by measurement, not asserted.
 - 2026-07-10 (consolidation): two more run-pairs → **N=4 off / N=3 on** (one on-run died on
   the plan's 5h session limit, excluded; `aggregate.py` now skips `is_error` runs instead of
   counting their partial usage). Consolidated: **+24.6% tokens (±33%), +1.7% USD, quality

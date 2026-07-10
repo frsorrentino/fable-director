@@ -80,14 +80,14 @@ savings are a figure you read, not a percentage on a banner.
 <!-- BENCH:RESULT — policy effect (equal model, sonnet + fable) + director topology attempt: measured 2026-07-09. -->
 > 📐 **Measured — policy effect at equal model** (full enforcement stack via `--settings`; shape-04 quality numbers before the 2026-07-08 fixture fix are not comparable):
 >
-> | Task shape | sonnet-5, N=3 (07-08) — tokens / USD | fable-5, N=3 (07-09) — tokens / USD |
-> |---|---|---|
-> | 01 batch-deterministic | **+17.1% / +10.8%** | −38.9% / −15.1% |
-> | 02 classification | +6.2% / −2.4% | −5.4% / −8.8% |
-> | 03 mixed | +3.0% / −2.8% | −24.2% / −12.7% |
-> | 04 semantic triage | (pre-fix, not comparable) | **+11.4% / +13.2%**, quality 100% both arms |
+> | Task shape | sonnet-5, N=3 (07-08) — tokens / USD | fable-5, N=3 (07-09, pre fast-path) | fable-5, N=3 (07-10, **with 1.12.1 fast path**) |
+> |---|---|---|---|
+> | 01 batch-deterministic | **+17.1% / +10.8%** | −38.9% / −15.1% | **+22.5% / +4.8%** |
+> | 02 classification | +6.2% / −2.4% | −5.4% / −8.8% | −5.1% / −7.0% |
+> | 03 mixed | +3.0% / −2.8% | −24.2% / −12.7% | (not re-measured) |
+> | 04 semantic triage | (pre-fix, not comparable) | **+11.4% / +13.2%**, quality 100% both arms | (not re-measured) |
 >
-> **The equal-model effect is model-dependent.** On sonnet the policy pays where work is deterministic (+17% on 01, and it stabilizes behavior: spread ±267 vs ±40k tokens). On fable the baseline is already so lean (off-arm 3× smaller than sonnet's) that the kernel+hooks overhead dominates the small shapes — only the judgment-heavy shape (04) stays positive at equal quality.
+> **The equal-model effect is model-dependent — and the fast path was measured, not assumed.** On sonnet the policy pays where work is deterministic (+17% on 01, and it stabilizes behavior: spread ±267 vs ±40k tokens). On fable the pre-1.12.1 numbers were negative on small shapes: the measured overhead had a behavioral share (policy ceremony on tasks too small to benefit). The 1.12.1 kernel fast path removed it: shape 01 flipped from −38.9% to **+22.5%** tokens (on-arm spread ±103 vs off ±11k — near-deterministic behavior), while shape 02 stayed at ≈−5%: that residue is the kernel's fixed share (~3.5k tokens on a 70k baseline), the insurance premium that remains by design.
 >
 > 📐 **Measured — director topology** (`MODEL=claude-fable-5` orchestrating, N=2 per side):
 >
@@ -102,7 +102,7 @@ savings are a figure you read, not a percentage on a banner.
 
 ### What the benchmarks actually say — in plain language
 
-1. **On small tasks the plugin doesn't save — it costs a little.** The kernel and checks add a few hundred tokens per session: visible on a task worth a few cents. If you install this to save on small one-shots, you'll be disappointed — we say it up front. (Since 1.12.1 the kernel carries an explicit fast path — single-turn task, no delegation → zero ritual — which attacks the behavioral share of that overhead; the fixed share stays, as an insurance premium does.)
+1. **On small tasks the plugin costs a small fixed premium (~5%), no longer a big behavioral one.** The 1.12.1 fast path (single-turn task, no delegation → zero ritual) was verified by re-measurement: the deterministic shape flipped from −39% to +22.5% tokens, the tiny classification shape keeps only the kernel's fixed ~5% share — the insurance premium that remains by design. If you install this to save on small one-shots, that premium is what you pay.
 2. **The plugin knows when NOT to delegate.** On the small judgment task, the policy arm correctly refused to delegate 40 micro-items: delegating there doesn't pay, and the policy encodes it. Right behavior — paid for in ceremony.
 3. **On read-heavy work the saving is real: ~25% of tokens at equal cost and quality.** 240 long reviews: −24.6% billable tokens (high variance, ±33%), USD unchanged, quality equal or slightly better.
 4. **The most interesting finding: the top model already delegates on its own.** Even with no plugin, Fable fans work out to cheaper models. The plugin's value is not *making delegation happen* — it's making it **disciplined**: 3-7 turns instead of 3-32, explicit contracts, verified outputs, and a budget check that genuinely caught a 26× wrong estimate mid-benchmark.
