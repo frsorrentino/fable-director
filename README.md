@@ -61,11 +61,12 @@ Here is the honest answer, plain and measured:
 | **Repetitive mechanical work** (e.g. process 30 data files) | Works, but each run behaves differently | **~20% fewer tokens** and near-identical behavior every run | ✅ **saves** |
 | **Quick small tasks** (one question, one small fix) | Baseline | **~5% more** — the fixed price of the safety checks, like an insurance premium | ➖ small premium |
 | **Quality of results** | 94-100% accurate on our test sets | Equal or better everywhere the plugin saves (e.g. 98% vs 95%); never traded for savings | 🛡️ **protected** |
-| **Recurring jobs** (the same task every week) | Full AI cost, every single time | The plugin turns it into a script: **up to ~100% of the AI cost cut from the second time on** | ✅ **the biggest saving — grows with use** |
-| **Non-code batches** (classify, extract, transform — experimental) | On your Claude quota | Routed to free external models: **that batch leaves your Claude bill entirely** | ✅ **100% off the Claude quota** |
+| **Recurring jobs** (the same task every week) | Full AI cost, every single time | The plugin turns the repeatable core into a script: from the second run on, **that specific job** costs close to zero — the first run and the surrounding supervision still cost normally | ✅ **the biggest saving — grows with use** |
+| **Non-code batches** (classify, extract, transform — experimental) | On your Claude quota | The bulk work runs on free external models; Claude still plans and checks the result, so a supervision share stays on your quota | ✅ **bulk off the Claude quota** |
 
-The 20-25% figures above are what a *single-shot* benchmark can see. The two bottom rows
-are where the design actually aims — and they cut far deeper, up to the whole cost of the job.
+To be clear: these deep cuts apply to **specific jobs the plugin can script or route
+externally** — not to your Claude usage as a whole. The 20-25% above is what a single-shot
+benchmark can see; these two rows are where the design aims, on the jobs that qualify.
 
 **And it improves with time, by design.** The plugin learns from its own history: every
 incident becomes a heuristic in its playbook (kept or killed by outcome counters, never by
