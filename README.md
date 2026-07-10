@@ -51,31 +51,37 @@ Full history: [CHANGELOG.md](CHANGELOG.md).
 
 ## 💸 How much do you save?
 
-No magic number: savings depend on your work mix, and this plugin is the first to refuse made-up estimates. But you know **where** they come from and you can **measure** them.
+No magic number: savings depend on the kind of work. We ran the **same tasks with and
+without the plugin**, several times each, and counted real tokens and real dollars.
+Here is the honest answer, plain and measured:
 
-**Where the savings come from:**
+| Kind of work | Without the plugin | With the plugin | Verdict |
+|---|---|---|---|
+| **Big reading jobs** (e.g. analyze 240 long customer reviews) | The AI reads everything and hands work around chaotically — anywhere from 3 to 32 steps, cost swings run to run | Same result in 3-7 steps, **~25% fewer tokens**, same dollars, quality equal or slightly better | ✅ **saves** |
+| **Repetitive mechanical work** (e.g. process 30 data files) | Works, but each run behaves differently | **~20% fewer tokens** and near-identical behavior every run | ✅ **saves** |
+| **Quick small tasks** (one question, one small fix) | Baseline | **~5% more** — the fixed price of the safety checks, like an insurance premium | ➖ small premium |
+| **Quality of results** | 94-100% accurate on our test sets | Equal or better everywhere the plugin saves (e.g. 98% vs 95%); never traded for savings | 🛡️ **protected** |
+| **Recurring jobs** (the same task every week) | Full AI cost, every time | The plugin turns it into a script: **near-zero AI cost from the second time on** — real but by nature not visible in a one-shot benchmark | ✅ **biggest win over time** |
 
-- **Deterministic work → script:** a repeatable batch run by a script costs **0 model tokens**, versus the *N* calls of a naïve agent. On recurring deterministic work the cut is close to 100%.
-- **Cardinality → mid-tier model:** *N* similar items go to a grouped mid-tier model instead of the top model, with a canary verified before the fan-out.
-- **Cache locality:** a cost veto avoids subagent cold starts and cache invalidations that often cost more than the delegated work itself.
-- **Lightweight kernel:** ~500 tokens per session always on, the heavy body loaded only when needed.
+**Three things you buy regardless of savings:** predictable behavior (same task → same
+steps), automatic brakes on spending (a wrong cost estimate gets caught *while it happens*,
+not on the bill), and verified quality (results are checked, not assumed).
 
-**Measure it on your real work** — instead of taking our word for it:
+**Measure it on your own work** — instead of taking our word for it:
 
 ```bash
 python3 fable-director/skills/delega-efficiente/tools/session-cost-report.py
 ```
 
-It reads the real JSONL transcripts and prints cost per model/main/subagents, cache hit ratio
-and delegation overhead. The `SessionEnd` hook accumulates the same data to SQLite: your
-savings are a figure you read, not a percentage on a banner.
+It reads your real session logs and prints what each model actually cost you. Your savings
+are a figure you read, not a percentage on a banner.
 
-> Illustrative example (not a benchmark): converting 12 files with a promoted script →
-> ~0 model tokens, versus ~12 model round-trips if the agent did it by hand.
+<details>
+<summary>📐 <b>The full measured numbers</b> (for technical readers: N, spread, dates, methodology)</summary>
 
-**Reproducible benchmark.** [`benchmarks/`](benchmarks/) contains an A/B harness (same task
-*without* and *with* the policy, tokens read from the real `claude -p` output, N runs per side,
-4 task shapes). Numbers below come from this harness, with methodology, N and spread.
+Everything below comes from the reproducible A/B harness in [`benchmarks/`](benchmarks/)
+(same task *without* and *with* the policy, tokens read from the real `claude -p` output,
+N runs per side).
 
 <!-- BENCH:RESULT — policy effect (equal model, sonnet + fable) + director topology attempt: measured 2026-07-09. -->
 > 📐 **Measured — policy effect at equal model** (full enforcement stack via `--settings`; shape-04 quality numbers before the 2026-07-08 fixture fix are not comparable):
@@ -100,13 +106,15 @@ savings are a figure you read, not a percentage on a banner.
 >
 > Reproduce: `cd benchmarks && RUNS=3 bash run.sh` (equal model) · `MODEL=claude-fable-5 TASKS='tasks/05*.md' RUNS=2 bash run.sh` (topology, ~$15/side).
 
+</details>
+
 ### What the benchmarks actually say — in plain language
 
-1. **On small tasks the plugin costs a small fixed premium (~5%), no longer a big behavioral one.** The 1.12.1 fast path (single-turn task, no delegation → zero ritual) was verified by re-measurement: the deterministic shape flipped from −39% to +22.5% tokens, the tiny classification shape keeps only the kernel's fixed ~5% share — the insurance premium that remains by design. If you install this to save on small one-shots, that premium is what you pay.
-2. **The plugin knows when NOT to delegate.** On the small judgment task, the policy arm correctly refused to delegate 40 micro-items: delegating there doesn't pay, and the policy encodes it. Right behavior — paid for in ceremony.
-3. **On read-heavy work the saving is real: ~25% of tokens at equal cost and quality.** 240 long reviews: −24.6% billable tokens (high variance, ±33%), USD unchanged, quality equal or slightly better.
-4. **The most interesting finding: the top model already delegates on its own.** Even with no plugin, Fable fans work out to cheaper models. The plugin's value is not *making delegation happen* — it's making it **disciplined**: 3-7 turns instead of 3-32, explicit contracts, verified outputs, and a budget check that genuinely caught a 26× wrong estimate mid-benchmark.
-5. **What no single-shot benchmark can measure** is where the plugin actually aims: turning recurring tasks into scripts (zero cost from the second occurrence) and accruing verified heuristics in the playbook. Those effects show up over weeks of use, not in one session.
+1. **On small tasks the plugin costs a small fixed premium (~5%).** That's the price of the always-on safety checks — an insurance premium. It used to be bigger: we measured the overhead, fixed its avoidable part (version 1.12.1), and re-measured to confirm — the repetitive-work test flipped from −39% to +22.5% tokens saved.
+2. **The plugin knows when NOT to hand work around.** On a task of 40 tiny items it correctly refused to delegate: splitting work that small costs more than it saves, and the plugin encodes that.
+3. **On big reading jobs the saving is real: ~25% of tokens at equal cost and quality.** 240 long reviews: −24.6% tokens (variance is high, ±33% — we publish it), dollars unchanged, quality equal or slightly better.
+4. **The most interesting finding: the top model already delegates on its own.** Even with no plugin, it hands work to cheaper models — chaotically. The plugin's value is not *making delegation happen* — it's making it **disciplined**: 3-7 steps instead of 3-32, explicit instructions, checked results, and a spending brake that genuinely caught a 26× wrong cost estimate *during* the benchmark.
+5. **What no single-shot benchmark can measure** is where the plugin actually aims: turning recurring tasks into scripts (near-zero cost from the second time on) and accumulating verified know-how in its playbook. Those effects show up over weeks of use, not in one session.
 
 **One sentence:** this is not a plugin that saves tokens on every task — it makes spend predictable, verified and disciplined, and on read-heavy loads it cuts about a quarter of the tokens without giving up quality.
 
