@@ -172,26 +172,35 @@ try:
             if b_open: bst={"declared":b_open.get("declared_at"),"out":0}
         if size > state.get("off",0):
             last_ts=pts(state.get("last_ts"))
-            with open(tp, errors="replace") as fh:
+            # lettura binaria, offset avanzato SOLO a fine riga completa:
+            # una riga in scrittura viene ripresa al giro dopo — prima
+            # veniva consumata a meta e i suoi token persi per sempre
+            # (review esterna 2026-07-11; stessa disciplina dello Stop hook)
+            with open(tp,"rb") as fh:
                 fh.seek(state.get("off",0))
-                for line in fh:
-                    try: rec=json.loads(line)
-                    except Exception: continue
-                    rts=pts(rec.get("timestamp"))
-                    ts=rts or last_ts
-                    if rts: last_ts=rts
-                    if b_decl and ts and ts>=b_decl:
-                        for u in usages(rec):
-                            bst["out"]=bst.get("out",0)+(u.get("output_tokens") or 0)
-                    if not rec.get("isSidechain"): continue
-                    msg=rec.get("message") or {}
-                    u=msg.get("usage") or {}
-                    out=u.get("output_tokens") or 0
-                    if not out: continue
-                    mm=norm(msg.get("model") or "?")
-                    key="≡" if mm==main_norm else (msg.get("model") or "?").replace("claude-","").upper()[:10]
-                    state["models"][key]=state["models"].get(key,0)+out
-                state["off"]=fh.tell()
+                data=fh.read()
+            rows=data.split(b"\n")
+            tail=rows.pop()
+            consumed=len(data)-len(tail)
+            for raw in rows:
+                if not raw.strip(): continue
+                try: rec=json.loads(raw.decode(errors="replace"))
+                except Exception: continue
+                rts=pts(rec.get("timestamp"))
+                ts=rts or last_ts
+                if rts: last_ts=rts
+                if b_decl and ts and ts>=b_decl:
+                    for u in usages(rec):
+                        bst["out"]=bst.get("out",0)+(u.get("output_tokens") or 0)
+                if not rec.get("isSidechain"): continue
+                msg=rec.get("message") or {}
+                u=msg.get("usage") or {}
+                out=u.get("output_tokens") or 0
+                if not out: continue
+                mm=norm(msg.get("model") or "?")
+                key="≡" if mm==main_norm else (msg.get("model") or "?").replace("claude-","").upper()[:10]
+                state["models"][key]=state["models"].get(key,0)+out
+            state["off"]=state.get("off",0)+consumed
             if last_ts: state["last_ts"]=last_ts.isoformat()
             state["budget"]=bst if b_open else {}
             sf.parent.mkdir(parents=True, exist_ok=True)

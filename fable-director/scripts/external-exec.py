@@ -125,6 +125,21 @@ def require_open_budget():
             "budget-open --task \"...\" --expected-output N --route external "
             "[--effort low] [--type slug]"))
         sys.exit(1)
+    # Stesso orizzonte 24h del gate pre-delega: un budget aperto ieri non
+    # autorizza disclosure esterna oggi (review esterna 2026-07-11).
+    try:
+        dt = datetime.fromisoformat(
+            str(budget.get("declared_at")).replace("Z", "+00:00"))
+        stale = (datetime.now(timezone.utc) - dt).total_seconds() > 86400
+    except (ValueError, TypeError):
+        stale = True
+    if stale:
+        out("error", detail=(
+            "the open budget is older than 24h or has no valid declared_at "
+            "(abandoned task). Close it (budget-close --outcome abandoned) "
+            "and open a fresh pre-budget — same horizon as the delegation "
+            "gate."))
+        sys.exit(1)
     # data-class restricted: il confine privacy del README (la rotta esterna
     # è disclosure verso terzi) reso enforceable, non solo dichiarato.
     if budget.get("data_class") == "restricted":
@@ -132,6 +147,49 @@ def require_open_budget():
             "external route BLOCKED: the budget declares --data-class "
             "restricted (inputs must not leave the machine). Run on the "
             "normal Claude route."))
+        sys.exit(1)
+    return budget
+
+
+def check_out_perimeter(budget, out_path):
+    """--out scrive dove il chiamante dice: deve rispettare lo STESSO
+    perimetro delle Write del modello — never_write sempre, paths del
+    budget dentro il progetto (review esterna 2026-07-11). Realpath contro
+    i symlink, stessa semantica di perimeter-gate.py."""
+    import fnmatch
+    ap = os.path.realpath(out_path).replace("\\", "/")
+    try:
+        rel = os.path.relpath(
+            ap, os.path.realpath(os.getcwd())).replace("\\", "/")
+        inside = not rel.startswith("..")
+    except ValueError:
+        rel, inside = ap, False
+    base = Path(rel).name
+
+    def hits(pats):
+        return any(
+            fnmatch.fnmatch(rel, str(p).replace("\\", "/"))
+            or fnmatch.fnmatch(ap, str(p).replace("\\", "/"))
+            or fnmatch.fnmatch(base, str(p).replace("\\", "/"))
+            for p in pats)
+
+    nw = []
+    for cf in (Path(os.getcwd()) / ".fd-perimeter.json",
+               Path.home() / ".claude" / "fable-director" / "perimeter.json"):
+        if cf.is_file():
+            try:
+                nw += list(json.loads(cf.read_text()).get("never_write") or [])
+            except (json.JSONDecodeError, OSError):
+                pass
+    if nw and hits(nw):
+        out("error", detail=(f"--out '{out_path}' matches a never_write "
+                             f"pattern — refused, pick another destination"))
+        sys.exit(1)
+    paths = (budget or {}).get("paths") or []
+    if inside and paths and not hits(paths):
+        out("error", detail=(f"--out '{out_path}' is outside the budget's "
+                             f"declared perimeter ({', '.join(map(str, paths))})"
+                             f" — budget-amend first or write elsewhere"))
         sys.exit(1)
 
 
@@ -386,7 +444,9 @@ def main():
     if not spec_text or not spec_text.strip():
         sys.exit(__doc__)
 
-    require_open_budget()
+    budget = require_open_budget()
+    if opts["--out"]:
+        check_out_perimeter(budget, opts["--out"])
 
     if not CONFIG_PATH.is_file():
         unavailable(f"config missing ({CONFIG_PATH}): cross-verify.py --init")

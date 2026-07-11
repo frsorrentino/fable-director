@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.15.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.15.1-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -58,6 +58,7 @@ Honest boundary, same as the table above: the *writing* of lessons is hook-enfor
 
 ## 🆕 What's new
 
+- **1.15.1** — Eight fixes from the final three-track bug hunt: symlink perimeter bypass, Windows cross-drive fail-open, amend race, stale-budget external calls, `--out` perimeter, statusline token loss
 - **1.15.0** — Interface round: alarms in plain words, `/help` legend, `/status --detail` with "now:" line, all messages in English
 - **1.14.0** — Write perimeter (budget bounds what a task may touch, `never_write` walls), task receipts, MCP context metering
 - **1.13.5** — Estimate calibration, 7D burn-rate forecast, script-promotion queue, `--verify` contract, enforceable `--data-class restricted`, enforcement-suspended banner

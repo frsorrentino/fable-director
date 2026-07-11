@@ -30,9 +30,13 @@ def main():
     server = parts[1] if len(parts) > 1 else "?"
     import sqlite3
     from datetime import datetime, timezone
-    db = Path.home() / ".claude" / "fable-director" / "telemetry.db"
-    con = sqlite3.connect(db, timeout=0.5)
+    base = Path.home() / ".claude" / "fable-director"
+    base.mkdir(parents=True, exist_ok=True)  # install fresca: dir assente
+    con = sqlite3.connect(base / "telemetry.db", timeout=0.5)
     con.execute("PRAGMA busy_timeout=500")
+    con.execute("CREATE TABLE IF NOT EXISTS events("
+                "id INTEGER PRIMARY KEY, ts TEXT NOT NULL, session_id TEXT, "
+                "cwd TEXT, event TEXT NOT NULL, payload TEXT)")
     con.execute(
         "INSERT INTO events(ts, event, payload) VALUES(?,?,?)",
         (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),

@@ -399,6 +399,14 @@ def cmd_budget_amend(args):
     if budget.get("status") != "open":
         sys.exit("budget-amend requires an OPEN budget")
     new = [p.strip() for p in opts["--add-paths"].split(",") if p.strip()]
+    # Ri-lettura FRESCA immediatamente prima della write: uno Stop hook
+    # concorrente può aver flaggato il budget tra la nostra read e qui —
+    # sovrascrivere riaprirebbe un budget bloccato (review esterna 2026-07-11).
+    # La finestra residua è µs; la mutazione avviene sull'oggetto fresco.
+    budget = json.loads(bfile.read_text())
+    if budget.get("status") != "open":
+        sys.exit(f"budget-amend aborted: budget status changed to "
+                 f"'{budget.get('status')}' meanwhile — resolve that first")
     paths = budget.get("paths") or []
     budget["paths"] = paths + [p for p in new if p not in paths]
     budget.setdefault("amendments", []).append(

@@ -383,7 +383,9 @@ def xf_advisory(budget):
                    "Advisory only.")
         if msg is None:
             return None
-        mark.write_text(json.dumps({"date": today}))
+        tmp = mark.with_name(f"{mark.name}.{os.getpid()}.tmp")
+        tmp.write_text(json.dumps({"date": today}))
+        os.replace(tmp, mark)  # atomico: letto da gate concorrenti
         return msg
     except Exception:
         return None

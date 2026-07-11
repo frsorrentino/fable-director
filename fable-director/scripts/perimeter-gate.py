@@ -21,6 +21,8 @@ vincolati dal livello 2: gli script di appoggio restano liberi. Il livello
 
 Matching fnmatch su path relativo al cwd, path assoluto e basename
 (`*` attraversa anche le directory: "content/*" copre i sottoalberi).
+NB: fnmatch è case-sensitive su POSIX e case-insensitive su Windows —
+scrivi i pattern nel case reale dei file.
 
 Fail-open by design (identico al gate pre-delega): errore interno → allow.
 Uscita rapida a costo ~zero quando nessun livello è configurato.
@@ -88,9 +90,17 @@ def main():
     if not fp:
         return
     cwd = data.get("cwd") or os.getcwd()
-    abs_path = norm(os.path.abspath(os.path.join(cwd, str(fp))))
-    rel_path = norm(os.path.relpath(abs_path, norm(os.path.abspath(cwd))))
-    inside_project = not rel_path.startswith("..")
+    # realpath, non abspath: un symlink dentro il progetto che punta fuori
+    # non deve scavalcare perimetro né never_write (review esterna 2026-07-11)
+    abs_path = norm(os.path.realpath(os.path.join(cwd, str(fp))))
+    try:
+        rel_path = norm(os.path.relpath(abs_path, os.path.realpath(cwd)))
+        inside_project = not rel_path.startswith("..")
+    except ValueError:
+        # Windows, drive diversi: relpath impossibile. Il livello never_write
+        # resta applicabile (pattern assoluti/basename); il livello 2 no.
+        rel_path = abs_path
+        inside_project = False
 
     # Livello 1 — never_write: progetto prima, globale poi.
     nw = []
