@@ -31,7 +31,12 @@ Sottocomandi:
                --verify "cmd/checklist" = evidenza di accettazione dichiarata
                (il gate avvisa una volta se assente, mai nega);
                --data-class public|internal|restricted = classificazione input:
-               restricted BLOCCA external-exec.py e cross-verify.py per il cwd
+               restricted BLOCCA external-exec.py e cross-verify.py per il cwd;
+               --paths "glob[,glob]" = perimetro scritture del task (enforced
+               dal hook perimeter-gate su Write/Edit dentro il progetto)
+  budget-amend --add-paths "glob[,glob]" [--reason S]
+               estende il perimetro del budget aperto (emendamento esplicito,
+               loggato come perimeter_amend)
   budget-close [--outcome ok|flagged|abandoned]
                marca il budget file closed e logga task_close; il consuntivo
                (actual in/out) viene catturato dallo state file dello Stop
@@ -290,7 +295,7 @@ def cmd_budget_open(args):
                              "--approach": None, "--fallback": None, "--cwd": None,
                              "--route": None, "--reason": None, "--alternative": None,
                              "--effort": None, "--verify": None,
-                             "--data-class": None})
+                             "--data-class": None, "--paths": None})
     if opts["--data-class"] and opts["--data-class"] not in (
             "public", "internal", "restricted"):
         sys.exit("--data-class non valido (ammessi: public, internal, "
@@ -354,6 +359,11 @@ def cmd_budget_open(args):
         # rotte esterne (external-exec/cross-verify) deterministicamente.
         "verify": opts["--verify"],
         "data_class": opts["--data-class"],
+        # paths: perimetro scritture dichiarato (glob fnmatch, virgole) —
+        # enforced dal hook perimeter-gate su Write/Edit dentro il progetto;
+        # si estende solo con budget-amend (emendamento esplicito, loggato).
+        "paths": [p.strip() for p in (opts["--paths"] or "").split(",")
+                  if p.strip()] or None,
         "expected_output_tokens": exp_out,
         "expected_input_tokens": exp_in,
         # cost_ack: l'utente ha già approvato un task sopra la soglia di costo
@@ -371,6 +381,33 @@ def cmd_budget_open(args):
     write_json_atomic(bfile, budget)
     log_event("task_open", budget, cwd=cwd)
     print(f"budget aperto: {bfile}")
+
+
+def cmd_budget_amend(args):
+    """Emendamento ESPLICITO del perimetro del budget aperto: il deny del
+    perimeter-gate non si aggira, si emenda — e l'emendamento resta nel
+    decision record (quante volte il lavoro reale sfonda il perimetro
+    dichiarato è un dato di calibrazione, come le stime)."""
+    opts = parse_opts(args, {"--add-paths": None, "--reason": None,
+                             "--cwd": None})
+    if not opts["--add-paths"]:
+        sys.exit("budget-amend richiede --add-paths \"glob[,glob]\"")
+    cwd = opts["--cwd"] or os.getcwd()
+    bfile = BUDGETS / f"{cwd_slug(cwd)}.json"
+    if not bfile.is_file():
+        sys.exit(f"nessun budget file: {bfile}")
+    budget = json.loads(bfile.read_text())
+    if budget.get("status") != "open":
+        sys.exit("budget-amend richiede un budget OPEN")
+    new = [p.strip() for p in opts["--add-paths"].split(",") if p.strip()]
+    paths = budget.get("paths") or []
+    budget["paths"] = paths + [p for p in new if p not in paths]
+    budget.setdefault("amendments", []).append(
+        {"added": new, "reason": opts["--reason"], "at": now_iso()})
+    write_json_atomic(bfile, budget)
+    log_event("perimeter_amend", {"added": new, "reason": opts["--reason"],
+                                  "task": budget.get("task")}, cwd=cwd)
+    print(f"perimetro emendato: +{', '.join(new)}")
 
 
 def cmd_budget_close(args):
@@ -406,6 +443,33 @@ def cmd_budget_close(args):
     except OSError:
         pass
     log_event("task_close", budget, cwd=cwd)
+    # Ricevuta locale (provenance): snapshot machine-readable del task chiuso
+    # — stima vs consuntivo, contratto verify, perimetro, emendamenti, esito.
+    # Zero token modello: la scrive questo script, nessuno la rilegge se non
+    # per audit. Cap 200 file (le più vecchie muoiono).
+    try:
+        rdir = BUDGETS.parent / "receipts"
+        rdir.mkdir(parents=True, exist_ok=True)
+        receipt = {k: budget.get(k) for k in (
+            "task", "type", "route", "effort", "expected_output_tokens",
+            "expected_input_tokens", "actual_output_tokens",
+            "actual_input_tokens", "outcome", "verify", "data_class",
+            "paths", "amendments", "declared_at", "closed_at", "owner_sid")}
+        receipt["cwd"] = cwd
+        try:
+            receipt["plugin_version"] = json.loads(
+                (Path(__file__).parent.parent / ".claude-plugin"
+                 / "plugin.json").read_text()).get("version")
+        except (json.JSONDecodeError, OSError):
+            pass
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        (rdir / f"{cwd_slug(cwd)}-{stamp}.json").write_text(
+            json.dumps(receipt, ensure_ascii=False, indent=1))
+        old = sorted(rdir.glob("*.json"), key=lambda p: p.stat().st_mtime)
+        for p in old[:-200]:
+            p.unlink()
+    except Exception:
+        pass
     print(f"budget chiuso ({opts['--outcome']}): {budget.get('task')}")
 
 
@@ -806,6 +870,28 @@ def cmd_report(args):
             print(f"  {t}: {n} task chiusi ok, ~{fmt(tok)} token output "
                   f"spesi su rotte modello")
 
+    # Perimetro: deny e emendamenti — tanti emendamenti = perimetri dichiarati
+    # sistematicamente più stretti del lavoro reale (dato di calibrazione).
+    pdeny = [p for e, p in events if e == "perimeter_deny"]
+    pamend = [p for e, p in events if e == "perimeter_amend"]
+    if pdeny or pamend:
+        nw = sum(1 for p in pdeny if p.get("level") == "never_write")
+        print(f"\nPerimetro scritture: {len(pdeny)} deny "
+              f"(di cui {nw} never_write), {len(pamend)} emendamenti")
+
+    mcps = [p for e, p in events if e == "mcp_meter"]
+    if mcps:
+        by_srv = {}
+        for m in mcps:
+            k = m.get("server") or "?"
+            by_srv.setdefault(k, [0, 0])
+            by_srv[k][0] += 1
+            by_srv[k][1] += m.get("bytes") or 0
+        print("\nPeso MCP in contesto (i risultati tool entrano interi — "
+              "qui si vede chi gonfia):")
+        for k, (n, byt) in sorted(by_srv.items(), key=lambda x: -x[1][1]):
+            print(f"  {k}: {n} chiamate, ~{fmt(byt // 4)} token stimati")
+
     promos = [p for e, p in events if e == "script_promotion"]
     if promos:
         tok = sum(p.get("tokens_pre_promotion") or 0 for p in promos)
@@ -992,6 +1078,7 @@ def main():
         sys.exit(__doc__)
     cmd, args = sys.argv[1], sys.argv[2:]
     dispatch = {"budget-open": cmd_budget_open, "budget-close": cmd_budget_close,
+                "budget-amend": cmd_budget_amend,
                 "log": cmd_log, "session-summary": cmd_session_summary,
                 "report": cmd_report,
                 "cache-get": cmd_cache_get, "cache-put": cmd_cache_put}

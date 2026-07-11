@@ -19,6 +19,26 @@
             "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/pre-delegation-gate.py\""
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/perimeter-gate.py\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/mcp-meter.py\""
+          }
+        ]
       }
     ],
     "Stop": [

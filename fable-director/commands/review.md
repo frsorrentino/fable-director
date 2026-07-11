@@ -20,6 +20,8 @@ Analizza SOLO questi segnali (ognuno è un allarme del report o un contatore del
 - sforamenti ≥3× e densità per tipo task (override dati ammesso solo su celle DENSE, N≥10)
 - flag-rate per tier effort dichiarato (low che flagga spesso = tier insufficiente per quel tipo) e `effort_mismatch` ricorrenti (rotta dichiarata ≠ esecutore reale)
 - executor esterni: ok-rate per provider/tipo (promozione a rotta stabile solo su celle DENSE, N≥10)
+- perimetro: molti `perimeter_amend` = perimetri dichiarati troppo stretti; `perimeter_deny` ricorrenti su never_write = task che puntano dove non devono
+- peso MCP per server (risultati che gonfiano il contesto → filtrare/pattern/script)
 - `schema_anomaly` (contabilità inaffidabile → aggiornare il plugin)
 - playbook: euristiche morte (mai usate), candidate stagnanti, cap vicino
 

@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.13.5-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.14.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -25,18 +25,20 @@ fable-director cuts the problem at the root, with enforcement — not with a hin
 2. **Work off your Claude quota** — adversarial verification and (experimentally) non-code bulk work can run on free external models (Gemini, Codex); Claude keeps the planning and checking share.
 3. **Objective local telemetry** — session logs parsed in the background into a local SQLite database: token usage, cache efficiency, delegation overhead. Zero model tokens spent on bookkeeping.
 
-## 🏗️ How it works — four hooks in the Claude Code lifecycle
+## 🏗️ How it works — hooks in the Claude Code lifecycle
 
 - 🟢 **`SessionStart` (kernel):** injects the routing policy — the 6 axes — in ~500 tokens; the full policy body loads only on demand.
 - 🛑 **`PreToolUse` (gate):** intercepts every `Agent`/`Task`/`Workflow` call — no machine-readable budget opened first (`budget-open`) → **the call is denied**.
+- 🚧 **`PreToolUse` (perimeter):** the budget can declare *where* the task may write (`--paths`); `Write`/`Edit` outside it are **denied** until an explicit amendment. Your own `never_write` patterns (`.fd-perimeter.json` — e.g. `migrations/*`, `.env*`) are denied unconditionally, budget or not.
+- ⚖️ **`PostToolUse` (MCP meter):** measures how many bytes each MCP server's results push into context — the report shows who bloats; zero model tokens.
 - ✋ **`Stop` (enforcement):** at each turn end, compares real token usage against the declared budget. Warns once at 2×; at 3× **blocks the turn** until the post-mortem lands in the playbook.
-- 📉 **`SessionEnd` (telemetry):** logs session totals to SQLite in the background — statistics without spending a model token.
+- 📉 **`SessionEnd` (telemetry):** logs session totals to SQLite in the background — statistics without spending a model token. Every closed task also leaves a local **receipt** (estimate vs actual, verification contract, perimeter, amendments) under `~/.claude/fable-director/receipts/`.
 
 ## What is enforced, what is advisory, what leaves your machine
 
 | Enforced locally | Advisory to the model | Leaves your machine |
 |---|---|---|
-| The `PreToolUse` gate denies `Agent`/`Task`/`Workflow` delegation without an open machine-readable pre-budget. The Stop hook checks an open budget at 2× and blocks at 3×. `external-exec.py` verifies an open budget itself. | The kernel's routing axes, "never delegate" rules, script promotion, verification ladder, and playbook are policy: they guide decisions but do not mechanically force a route or a quality judgment. | External Gemini/Codex routes are opt-in. When used, the claim, rubric, context, spec, and input content supplied to that route are sent to its configured provider. |
+| The `PreToolUse` gate denies `Agent`/`Task`/`Workflow` delegation without an open machine-readable pre-budget. The Stop hook checks an open budget at 2× and blocks at 3×. `external-exec.py` verifies an open budget itself. The perimeter hook denies `Write`/`Edit` outside the budget's declared `--paths` and always denies your `never_write` patterns. `--data-class restricted` blocks external routes. | The kernel's routing axes, "never delegate" rules, script promotion, verification ladder, and playbook are policy: they guide decisions but do not mechanically force a route or a quality judgment. | External Gemini/Codex routes are opt-in. When used, the claim, rubric, context, spec, and input content supplied to that route are sent to its configured provider. |
 
 Budget enforcement is local and depends on Claude Code providing a readable transcript with the expected schema. Telemetry and the playbook stay under `~/.claude/fable-director/` and `~/.claude/` on your machine. An external route that is unavailable is never treated as verified or executed.
 
@@ -56,6 +58,7 @@ Honest boundary, same as the table above: the *writing* of lessons is hook-enfor
 
 ## 🆕 What's new
 
+- **1.14.0** — Write perimeter (budget bounds what a task may touch, `never_write` walls), task receipts, MCP context metering
 - **1.13.5** — Estimate calibration, 7D burn-rate forecast, script-promotion queue, `--verify` contract, enforceable `--data-class restricted`, enforcement-suspended banner
 - **1.13.4** — Free-tier onboarding: doctor + first-run notice, per-task gate suggestions, Claude/external ledgers separated
 - **1.13.3** — Self-audit of the instruction files: stale multipliers, drifted specs, review command caught up
