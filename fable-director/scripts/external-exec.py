@@ -98,8 +98,8 @@ def out(status, provider="-", model="-", check="-", output="-", detail="-"):
 
 def unavailable(reason):
     out("unavailable", detail=(
-        f"{reason} — esegui sulla rotta Claude normale (asse 4 standard). "
-        f"MAI trattare unavailable come eseguito."))
+        f"{reason} — run on the normal Claude route (standard axis 4). "
+        f"NEVER treat unavailable as executed."))
     sys.exit(1)
 
 
@@ -120,18 +120,18 @@ def require_open_budget():
         budget = None
     if not isinstance(budget, dict) or budget.get("status") != "open":
         out("error", detail=(
-            "nessun pre-budget aperto per questo cwd: anche la rotta esterna "
-            "è una delega. Apri il budget e riprova: fd-telemetry.py "
-            "budget-open --task \"...\" --expected-output N --route script "
+            "no open pre-budget for this cwd: the external route is a "
+            "delegation too. Open the budget and retry: fd-telemetry.py "
+            "budget-open --task \"...\" --expected-output N --route external "
             "[--effort low] [--type slug]"))
         sys.exit(1)
     # data-class restricted: il confine privacy del README (la rotta esterna
     # è disclosure verso terzi) reso enforceable, non solo dichiarato.
     if budget.get("data_class") == "restricted":
         out("error", detail=(
-            "rotta esterna BLOCCATA: il budget dichiara --data-class "
-            "restricted (input che non possono uscire dalla macchina). "
-            "Esegui sulla rotta Claude normale."))
+            "external route BLOCKED: the budget declares --data-class "
+            "restricted (inputs must not leave the machine). Run on the "
+            "normal Claude route."))
         sys.exit(1)
 
 
@@ -178,34 +178,34 @@ def today_usage():
 def doctor(ping=False):
     """Setup guidato + diagnosi: mai chiamate modello senza --ping."""
     here = Path(__file__).parent
-    print("FABLE-DIRECTOR — doctor executor esterni")
+    print("FABLE-DIRECTOR — external executors doctor")
     if not CONFIG_PATH.is_file():
         print(f"""
-Config assente: {CONFIG_PATH}
+Config missing: {CONFIG_PATH}
 
-Gli executor esterni spostano batch NON quality-sensitive fuori dalla tua
-quota Claude (Claude continua a pianificare e verificare). Due strade GRATUITE:
+External executors move NON-quality-sensitive batches off your Claude quota
+(Claude keeps planning and verifying). Two FREE paths:
 
-  1. Hai un account Google?  Chiave API Gemini gratuita:
+  1. Got a Google account?  Free Gemini API key:
      https://aistudio.google.com/apikey
-     Free tier con limiti che si RESETTANO OGNI GIORNO: un giorno senza
-     chiamate = capacita gratuita persa.
-  2. Hai un account ChatGPT? Codex CLI, uso incluso nel piano:
-     npm install -g @openai/codex   poi   codex login
+     Free-tier limits RESET EVERY DAY: a day without calls is free
+     capacity lost.
+  2. Got a ChatGPT account? Codex CLI, usage included in your plan:
+     npm install -g @openai/codex   then   codex login
 
-Preferisci modelli a pagamento? Stesse voci di config con la tua chiave API
-a pagamento — la telemetria confronta gli esiti allo stesso modo.
+Prefer paid models? Same config entries with your paid API key — the
+telemetry judges outcomes the same way.
 
 Setup:
   python3 "{here / 'cross-verify.py'}" --init
-  (poi inserisci la chiave nel config o via env var indicata)
-Ricontrolla:
+  (then put the key in the config or the indicated env var)
+Re-check:
   python3 "{here / 'external-exec.py'}" --doctor [--ping]""")
         sys.exit(1)
     try:
         cfg = json.loads(CONFIG_PATH.read_text())
     except (json.JSONDecodeError, OSError) as e:
-        print(f"config illeggibile: {e}")
+        print(f"config unreadable: {e}")
         sys.exit(1)
     usage = today_usage()
     problems = 0
@@ -216,7 +216,7 @@ Ricontrolla:
             cmd = prov.get("command") or []
             binary = cmd[0] if cmd else None
             if binary and shutil.which(binary):
-                checks.append(f"binario '{binary}' presente")
+                checks.append(f"binary '{binary}' present")
                 auth = prov.get("auth_check")
                 if auth:
                     try:
@@ -226,27 +226,27 @@ Ricontrolla:
                             checks.append("login OK")
                         else:
                             ok = False
-                            checks.append(f"login MANCANTE (exit {rc}) — "
-                                          f"esegui: {' '.join(auth[:1])} login")
+                            checks.append(f"login MISSING (exit {rc}) — "
+                                          f"run: {' '.join(auth[:1])} login")
                     except Exception as e:
-                        checks.append(f"auth_check non eseguibile ({e})")
+                        checks.append(f"auth_check not runnable ({e})")
                 else:
-                    checks.append("auth_check non configurato nel provider "
-                                  "(opzionale: es. [\"codex\",\"login\","
+                    checks.append("auth_check not configured for provider "
+                                  "(optional, e.g. [\"codex\",\"login\","
                                   "\"status\"])")
             else:
                 ok = False
-                checks.append(f"binario '{binary}' NON installato "
+                checks.append(f"binary '{binary}' NOT installed "
                               f"({prov.get('note', '')})")
         else:
             key = prov.get("api_key") or os.environ.get(
                 prov.get("api_key_env", ""), "")
             if key:
-                checks.append("chiave API presente")
+                checks.append("API key present")
             else:
                 ok = False
-                checks.append(f"chiave API ASSENTE — export "
-                              f"{prov.get('api_key_env')}=... o api_key nel config")
+                checks.append(f"API key MISSING — export "
+                              f"{prov.get('api_key_env')}=... or api_key in config")
         if ping and ok:
             probe = "Reply with exactly: OK"
             try:
@@ -280,20 +280,20 @@ Ricontrolla:
                 checks.append(f"ping OK ({str(resp).strip()[:40]!r})")
             except Exception as e:
                 ok = False
-                checks.append(f"ping FALLITO: {str(e)[:160]}")
+                checks.append(f"ping FAILED: {str(e)[:160]}")
         rpd = (prov.get("limits") or {}).get("rpd")
         used = usage.get(name, 0)
-        checks.append(f"oggi {used} chiamate"
-                      + (f" / {rpd} rpd dichiarati" if rpd else ""))
+        checks.append(f"today {used} calls"
+                      + (f" / {rpd} declared rpd" if rpd else ""))
         if used == 0 and ok:
-            checks.append("free tier del giorno INUTILIZZATO (reset "
-                          "giornaliero: capacita persa se non usata)")
+            checks.append("today's free tier UNUSED (daily reset: unused "
+                          "capacity is lost)")
         mark = "OK " if ok else "FAIL"
         problems += 0 if ok else 1
         print(f"[{mark}] {name} ({prov.get('model', '?')}): "
               + " · ".join(checks))
-    print(f"\nesito: {'tutto configurato' if not problems else str(problems) + ' provider da sistemare'}"
-          + ("" if ping else " (statico — aggiungi --ping per una verifica live, 1 richiesta per provider)"))
+    print(f"\nresult: {'all configured' if not problems else str(problems) + ' provider(s) to fix'}"
+          + ("" if ping else " (static — add --ping for a live check, 1 request per provider)"))
     sys.exit(0 if not problems else 1)
 
 
@@ -317,7 +317,7 @@ def parse_args(argv):
             opts[a] = argv[i + 1]
             i += 2
         else:
-            sys.exit(f"argomento non riconosciuto: {a}\n{__doc__}")
+            sys.exit(f"unrecognized argument: {a}\n{__doc__}")
     return opts, inputs, flags
 
 
@@ -336,9 +336,9 @@ def call_http(prov, name, api_key, user_msg, timeout):
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read().decode(errors="replace"))
     except urllib.error.HTTPError as e:
-        unavailable(f"HTTP {e.code} da {name} (rate limit/endpoint cambiato?)")
+        unavailable(f"HTTP {e.code} from {name} (rate limit / endpoint changed?)")
     except (urllib.error.URLError, TimeoutError, OSError) as e:
-        unavailable(f"rete/timeout verso {name}: {e}")
+        unavailable(f"network/timeout towards {name}: {e}")
     try:
         return data["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError):
@@ -350,8 +350,8 @@ def call_cli(prov, name, user_msg, timeout):
     mktemp unico, timeout — stessa disciplina di cross-verify.py."""
     cmd_template = prov.get("command") or []
     if not cmd_template or not shutil.which(cmd_template[0]):
-        unavailable(f"CLI '{cmd_template[0] if cmd_template else '?'}' non "
-                    f"installata per '{name}' ({prov.get('note', '')})")
+        unavailable(f"CLI '{cmd_template[0] if cmd_template else '?'}' not "
+                    f"installed for '{name}' ({prov.get('note', '')})")
     fd, out_file = tempfile.mkstemp(prefix="external-exec-", suffix=".txt")
     os.close(fd)
     cmd = [a.replace("{output_file}", out_file) for a in cmd_template]
@@ -382,47 +382,47 @@ def main():
         try:
             spec_text = Path(opts["--spec-file"]).read_text(errors="replace")
         except OSError as e:
-            sys.exit(f"spec-file illeggibile: {e}")
+            sys.exit(f"unreadable spec-file: {e}")
     if not spec_text or not spec_text.strip():
         sys.exit(__doc__)
 
     require_open_budget()
 
     if not CONFIG_PATH.is_file():
-        unavailable(f"config assente ({CONFIG_PATH}): cross-verify.py --init")
+        unavailable(f"config missing ({CONFIG_PATH}): cross-verify.py --init")
     try:
         cfg = json.loads(CONFIG_PATH.read_text())
     except (json.JSONDecodeError, OSError) as e:
-        unavailable(f"config illeggibile: {e}")
+        unavailable(f"config unreadable: {e}")
     name = opts["--provider"] or cfg.get("default")
     prov = (cfg.get("providers") or {}).get(name)
     if not prov:
-        unavailable(f"provider '{name}' non definito nel config")
+        unavailable(f"provider '{name}' not defined in config")
     is_cli = prov.get("type") == "cli"
     api_key = ""
     if not is_cli:
         api_key = prov.get("api_key") or os.environ.get(prov.get("api_key_env", ""), "")
         if not api_key:
-            unavailable(f"chiave API assente per '{name}' "
-                        f"(export {prov.get('api_key_env')}=... o api_key nel config)")
+            unavailable(f"API key missing for '{name}' "
+                        f"(export {prov.get('api_key_env')}=... or api_key in config)")
 
     user_msg = f"TASK SPEC:\n{spec_text}\n"
     for fpath in inputs:
         try:
             content = Path(fpath).read_text(errors="replace")
         except OSError as e:
-            unavailable(f"input illeggibile ({fpath}): {e}")
+            unavailable(f"unreadable input ({fpath}): {e}")
         if len(content) > INPUT_CAP:
             # Fail-closed: un deliverable calcolato su input troncato in
             # silenzio è il peggior esito possibile (review cross-family
             # 2026-07-10). Troncare è una scelta del chiamante, mai dello script.
             if not flags["--allow-truncate"]:
                 out("error", name, prov["model"], "input-oversize", "-",
-                    f"{fpath}: {len(content)} char > cap {INPUT_CAP} — spezza "
-                    f"l'input o passa --allow-truncate (esplicito)")
+                    f"{fpath}: {len(content)} chars > cap {INPUT_CAP} — split "
+                    f"the input or pass --allow-truncate (explicit)")
                 sys.exit(1)
             content = content[:INPUT_CAP]
-            user_msg += f"\n[NOTA: {fpath} TRONCATO a {INPUT_CAP} char su richiesta]\n"
+            user_msg += f"\n[NOTE: {fpath} TRUNCATED to {INPUT_CAP} chars on request]\n"
         user_msg += f"\nINPUT FILE {fpath}:\n{content}\n"
     if flags["--schema-json"]:
         user_msg += ("\nOUTPUT FORMAT: strict JSON only — a single valid JSON "
@@ -447,7 +447,7 @@ def main():
             pass
 
     if content is None or not str(content).strip():
-        out("error", name, prov["model"], detail="risposta vuota dal provider")
+        out("error", name, prov["model"], detail="empty response from provider")
         log_exec({"provider": name, "model": prov["model"],
                   "type": opts.get("--type"), "ok": False, "check": "empty",
                   "chars_in": len(user_msg)})
@@ -473,8 +473,8 @@ def main():
             check = "json-valid"
         except json.JSONDecodeError as e:
             out("error", name, prov["model"], "json-invalid", "-",
-                f"output fuori schema JSON ({e}) — NON consegnare a valle, "
-                f"retry o rotta Claude")
+                f"output violates JSON schema ({e}) — do NOT hand downstream, "
+                f"retry or Claude route")
             log_exec({"provider": name, "model": prov["model"],
                       "type": opts.get("--type"), "ok": False,
                       "check": "json-invalid", "chars_in": len(user_msg)})
@@ -487,7 +487,7 @@ def main():
             dest = opts["--out"]
         except OSError as e:
             out("error", name, prov["model"], check, "-",
-                f"scrittura --out fallita: {e}")
+                f"--out write failed: {e}")
             sys.exit(1)
     out("ok", name, prov["model"], check, dest,
         f"{len(content)} char (~{len(content) // 4} token)")

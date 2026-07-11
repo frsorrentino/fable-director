@@ -103,10 +103,11 @@ def main():
                 pass
     if nw and matches(abs_path, rel_path, nw):
         log_deny("perimeter_deny", {"path": rel_path, "level": "never_write"})
-        deny(f"FABLE-DIRECTOR perimetro: '{rel_path}' è in never_write "
-             f"(protezione permanente dell'utente). Nessun task AI può "
-             f"scriverlo: se serve davvero, è l'utente a rimuovere il "
-             f"pattern da .fd-perimeter.json — non aggirare.")
+        deny(f"✕ FABLE-DIRECTOR write DENIED — '{rel_path}' matches a "
+             f"never_write pattern (permanent user protection).\n"
+             f"No AI task may write it: if it is truly needed, the USER "
+             f"removes the pattern from .fd-perimeter.json — do not work "
+             f"around this.")
         return
 
     # Livello 2 — perimetro dichiarato dal budget aperto (solo nel progetto).
@@ -131,11 +132,11 @@ def main():
         return
     log_deny("perimeter_deny", {"path": rel_path, "level": "budget",
                                 "declared": paths})
-    deny(f"FABLE-DIRECTOR perimetro: '{rel_path}' è fuori dal perimetro "
-         f"dichiarato per questo task ({', '.join(map(str, paths))}). "
-         f"Se il task lo richiede davvero, emenda ESPLICITAMENTE e ritenta:\n"
+    deny(f"✕ FABLE-DIRECTOR write DENIED — '{rel_path}' is outside this "
+         f"task's declared perimeter ({', '.join(map(str, paths))}).\n"
+         f"If the task truly needs it, amend EXPLICITLY and retry:\n"
          f"fd-telemetry.py budget-amend --add-paths \"{rel_path}\" "
-         f"--reason \"perché serve\"")
+         f"--reason \"why it is needed\"")
 
 
 if __name__ == "__main__":

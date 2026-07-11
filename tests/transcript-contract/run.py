@@ -57,7 +57,7 @@ def stop_totals(fixture, home):
                        input=json.dumps({"cwd": cwd,
                                          "transcript_path": str(fixture)}),
                        env=env, capture_output=True, text=True)
-    sentinel = "sentinella schema" in r.stdout
+    sentinel = "schema sentinel" in r.stdout
     state_files = list(budgets.glob("*.state.json"))
     if not state_files:
         return None, None, sentinel

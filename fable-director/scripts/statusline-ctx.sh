@@ -211,23 +211,24 @@ try:
                    for k,v in sorted(c.items(), key=lambda x:-x[1])]
             if parts: dlg="≈"+",".join(parts[:4])
     # [BDG] = classe:testo — la classe colore (g/y/r) si decide qui, la shell
-    # mappa solo ANSI. flagged → 3×; open → ratio live (soglie identiche allo
-    # Stop hook: verde <2×, giallo ≥2×, rosso ≥3×) + effort dichiarato;
-    # senza transcript degrada a ok|2× dal solo budget file.
+    # mappa solo ANSI. Principio: quieto quando sano (sigla compatta BDG),
+    # PAROLE INTERE quando in allarme (2x, 3x, enforcement rotto) + marcatori
+    # testuali che sopravvivono senza colore. Soglie identiche allo Stop hook.
     if b_status=="flagged":
-        bdg="r:3×"
+        bdg="r:✕ BUDGET 3× — POST-MORTEM DUE"
     elif b_status=="open":
         eff=("·"+str(b_eff)) if b_eff else ""
         if spent is not None and b_exp>0:
             ratio=spent/b_exp
-            cls="g" if ratio<2 else ("y" if ratio<3 else "r")
-            bdg=f"{cls}:{ratio:.1f}×{eff}"
+            if ratio>=3: bdg=f"r:✕ BUDGET {ratio:.1f}× OF ESTIMATE{eff}"
+            elif ratio>=2: bdg=f"y:⚠ BUDGET {ratio:.1f}× OF ESTIMATE{eff}"
+            else: bdg=f"g:BDG {ratio:.1f}×{eff}"
         else:
-            bdg=("y:2×" if b_warned else "g:ok")+eff
+            bdg=("y:⚠ BUDGET 2× OF ESTIMATE"+eff) if b_warned else ("g:BDG ok"+eff)
     # schema_anomaly sul budget aperto = contabilita transcript inaffidabile:
-    # enforcement di fatto sospeso — va urlato, non contato zero in silenzio
+    # enforcement di fatto spento — va urlato, non contato zero in silenzio
     if b_sch and b_status=="open":
-        bdg="r:ENF⚠"
+        bdg="r:✕ ENFORCEMENT OFF"
     # [XF] verifier cross-family (Gemini/DeepSeek/Codex): niente quota real-time
     # dai provider → ▶ = chiamata IN CORSO (marker di cross-verify.py, ignorato
     # se >15 min: processo morto); ×N = chiamate di oggi dalla telemetria locale.
@@ -265,6 +266,9 @@ try:
     if xparts: xf=",".join(xparts[:3])
 except Exception:
     pass
+# bdg puo contenere spazi (allarmi a parole intere) ma la shell fa read
+# word-split: gli spazi viaggiano come virgole, la shell li ripristina
+bdg=str(bdg).replace(" ",",")
 print(model,pct,rl,rlt,wk,wkt,bdg,xf,dlg)
 ' 2>/dev/null)
 EOF
@@ -289,13 +293,28 @@ if [ "$wk" != "-" ]; then
   [ "$wkt" != "-" ] && seg="${seg}→${wkt}"
   out="$out $(printf "$(color_for "$wk")%s]\033[0m" "$seg")"
 fi
+# Il testo BDG include già la propria etichetta (compatta da sano, parole
+# intere in allarme): la shell mappa solo il colore.
 case "$bdg" in
-  g:*) out="$out $(printf '\033[38;5;114m[BDG %s]\033[0m' "${bdg#g:}")" ;;
-  y:*) out="$out $(printf '\033[38;5;220m[BDG %s]\033[0m' "${bdg#y:}")" ;;
-  r:*) out="$out $(printf '\033[38;5;196m[BDG %s]\033[0m' "${bdg#r:}")" ;;
+  g:*) out="$out $(printf '\033[38;5;114m[%s]\033[0m' "$(printf '%s' "${bdg#g:}" | tr ',' ' ')")" ;;
+  y:*) out="$out $(printf '\033[38;5;220m[%s]\033[0m' "$(printf '%s' "${bdg#y:}" | tr ',' ' ')")" ;;
+  r:*) out="$out $(printf '\033[38;5;196m[%s]\033[0m' "$(printf '%s' "${bdg#r:}" | tr ',' ' ')")" ;;
 esac
+seg_xf=""; seg_dlg=""
 [ "$xf" != "-" ] && [ -n "$xf" ] && \
-  out="$out $(printf '\033[38;5;216m[XF %s]\033[0m' "$(printf '%s' "$xf" | tr ',' ' ')")"
+  seg_xf="$(printf '\033[38;5;216m[XF %s]\033[0m' "$(printf '%s' "$xf" | tr ',' ' ')")"
 [ "$dlg" != "-" ] && [ -n "$dlg" ] && \
-  out="$out $(printf '\033[38;5;183m[DLG %s]\033[0m' "$(printf '%s' "$dlg" | tr ',' ' ')")"
-printf '%s' "${out# }"
+  seg_dlg="$(printf '\033[38;5;183m[DLG %s]\033[0m' "$(printf '%s' "$dlg" | tr ',' ' ')")"
+# Degradazione deterministica su schermi stretti: cade prima DLG, poi XF —
+# MAI budget/quota/stati di errore. Lunghezza misurata senza codici ANSI.
+plain_len() { printf '%s' "$1" | sed 's/\x1b\[[0-9;]*m//g' | wc -c; }
+full="$out"
+[ -n "$seg_xf" ] && full="$full $seg_xf"
+[ -n "$seg_dlg" ] && full="$full $seg_dlg"
+if [ "$(plain_len "$full")" -gt 120 ] && [ -n "$seg_dlg" ]; then
+  full="$out"; [ -n "$seg_xf" ] && full="$full $seg_xf"
+fi
+if [ "$(plain_len "$full")" -gt 120 ] && [ -n "$seg_xf" ]; then
+  full="$out"
+fi
+printf '%s' "${full# }"

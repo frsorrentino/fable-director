@@ -231,11 +231,11 @@ def main():
                 "n_records": n_rec, "transcript": str(transcript),
                 "auto": True}, cwd)
             print(json.dumps({"systemMessage": (
-                f"FABLE-DIRECTOR sentinella schema: {n_rec} record nel "
-                f"transcript ma zero campi '{missing}' riconosciuti — il "
-                f"formato transcript di Claude Code è probabilmente cambiato. "
-                f"Enforcement budget SOSPESO (i conteggi sarebbero 0): "
-                f"aggiornare il plugin fable-director."
+                f"✕ FABLE-DIRECTOR schema sentinel — {n_rec} transcript "
+                f"records but zero recognized '{missing}' fields: the Claude "
+                f"Code transcript format has likely changed.\n"
+                f"Consequence: budget ENFORCEMENT IS OFF (counts would read "
+                f"0). Tell the user and update the fable-director plugin."
             )}, ensure_ascii=False))
         return
 
@@ -248,13 +248,15 @@ def main():
             budget["warned"] = True
             write_json_atomic(bfile, budget)
             print(json.dumps({"decision": "block", "reason": (
-                f"FABLE-DIRECTOR checkpoint 2×: consumo attuale (output {actual_out}, "
-                f"input fresh {actual_in}) ha superato il doppio del pre-budget per il "
-                f"task '{budget.get('task')}'. NON è il blocco 3×: rivaluta ORA la "
-                f"strategia — cambiare rotta adesso costa meno del post-mortem. Se "
-                f"cambi rotta logga: fd-telemetry.py log reversal --json "
-                f"'{{\"from\":\"...\",\"to\":\"...\",\"at\":\"2x-checkpoint\"}}'. Se la "
-                f"rotta resta valida, prosegui e chiudi il turno normalmente."
+                f"⚠ FABLE-DIRECTOR 2× checkpoint — actual spend (output "
+                f"{actual_out}, fresh input {actual_in}) passed TWICE the "
+                f"pre-budget for task '{budget.get('task')}'.\n"
+                f"This is not the 3× block: reassess the route NOW — "
+                f"switching here costs less than a post-mortem at 3×.\n"
+                f"If you switch: fd-telemetry.py log reversal --json "
+                f"'{{\"from\":\"...\",\"to\":\"...\",\"at\":\"2x-checkpoint\"}}'\n"
+                f"If the route still holds, continue and close the turn "
+                f"normally."
             )}))
         return
 
@@ -276,14 +278,15 @@ def main():
                    "actual": actual, "expected": expected, "auto": True}, cwd)
 
     reason = (
-        f"FABLE-DIRECTOR budget enforcement: {dim} effettivo {actual} token ≥ 3× "
-        f"la stima dichiarata ({expected}) per il task '{budget.get('task')}'. "
-        f"Lo sforamento è GIÀ registrato in telemetria (evento budget_flag, auto). "
-        f"Prima di chiudere resta OBBLIGATORIO il mini post-mortem: (1) identifica "
-        f"quale assunzione del pre-budget è saltata; (2) scrivi l'entry [candidata] "
-        f"nel playbook ~/.claude/delega-playbook.md (root cause → euristica); (3) "
-        f"chiudi il budget: fd-telemetry.py budget-close --outcome flagged. Script "
-        f"in <plugin fable-director>/scripts/."
+        f"✕ FABLE-DIRECTOR 3× block — actual {dim} {actual} tokens ≥ 3× the "
+        f"declared estimate ({expected}) for task '{budget.get('task')}'.\n"
+        f"Closure is blocked until the mini post-mortem is written (the bust "
+        f"itself is already logged: budget_flag event, automatic):\n"
+        f"(1) which pre-budget assumption broke?\n"
+        f"(2) write the [candidate] entry in ~/.claude/delega-playbook.md "
+        f"(root cause → heuristic)\n"
+        f"(3) fd-telemetry.py budget-close --outcome flagged  (scripts in "
+        f"<plugin fable-director>/scripts/)"
     )
     print(json.dumps({"decision": "block", "reason": reason}))
 

@@ -144,7 +144,7 @@ def cmd_usage():
     chiave è usata anche altrove, sottostima. Il limite vero resta rumoroso
     comunque: HTTP 429 → STATUS unavailable."""
     if not CONFIG_PATH.is_file():
-        sys.exit(f"config assente: cross-verify.py --init")
+        sys.exit(f"config missing: cross-verify.py --init")
     cfg = json.loads(CONFIG_PATH.read_text())
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     counts = {}
@@ -164,32 +164,32 @@ def cmd_usage():
                     counts[p["provider"]] = counts.get(p["provider"], 0) + 1
         except sqlite3.Error:
             pass
-    print(f"# cross-family usage — oggi {today} UTC (contatore LOCALE: "
-          f"non vede uso della chiave fuori da questa macchina)")
+    print(f"# cross-family usage — today {today} UTC (LOCAL counter: "
+          f"cannot see key usage outside this machine)")
     for name, prov in (cfg.get("providers") or {}).items():
         n = counts.get(name, 0)
         rpd = (prov.get("limits") or {}).get("rpd")
-        lim = f"/{rpd} rpd dichiarato" if rpd else " (nessun limite dichiarato nel config)"
+        lim = f"/{rpd} declared rpd" if rpd else " (no limit declared in config)"
         print(f"  {name}: {n}{lim}")
         if rpd and n >= rpd * 0.8:
-            print(f"    ⚠ ALLARME (non target): ≥80% del limite dichiarato")
+            print(f"    ⚠ ALARM (not a target): ≥80% of the declared limit")
 
 
 def cmd_init():
     if CONFIG_PATH.is_file():
-        print(f"config già presente: {CONFIG_PATH} (non sovrascrivo)")
+        print(f"config already present: {CONFIG_PATH} (not overwriting)")
         return
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     CONFIG_PATH.write_text(json.dumps(DEFAULT_CONFIG, ensure_ascii=False, indent=2))
-    print(f"config creata: {CONFIG_PATH}")
-    print("Prossimi passi —")
+    print(f"config created: {CONFIG_PATH}")
+    print("Next steps —")
     for name, p in DEFAULT_CONFIG["providers"].items():
         if p.get("api_key_env"):
             print(f"  {name}: export {p['api_key_env']}=...  # {p.get('note', '')}")
         else:
             print(f"  {name}: {p.get('note', '')}")
-    print("URL/modelli nel config sono la fotografia di luglio 2026: "
-          "riverificali, i free tier cambiano senza preavviso.")
+    print("Config URLs/models are a July 2026 snapshot: re-verify them, "
+          "free tiers change without notice.")
 
 
 def parse_args(argv):
@@ -288,22 +288,22 @@ def main():
             _b = json.loads(_bf.read_text())
             if (_b.get("status") == "open"
                     and _b.get("data_class") == "restricted"):
-                unavailable("budget del cwd dichiara --data-class restricted: "
-                            "verifica esterna bloccata, usa rung 3 (fd-verifier)")
+                unavailable("this cwd's budget declares --data-class restricted: "
+                            "external verification blocked, use rung 3 (fd-verifier)")
     except (json.JSONDecodeError, OSError):
         pass
 
     # Preflight — ogni mancanza è rumorosa, mai fallback silenzioso.
     if not CONFIG_PATH.is_file():
-        unavailable(f"config assente ({CONFIG_PATH}): esegui cross-verify.py --init")
+        unavailable(f"config missing ({CONFIG_PATH}): run cross-verify.py --init")
     try:
         cfg = json.loads(CONFIG_PATH.read_text())
     except (json.JSONDecodeError, OSError) as e:
-        unavailable(f"config illeggibile: {e}")
+        unavailable(f"config unreadable: {e}")
     name = opts["--provider"] or cfg.get("default")
     prov = (cfg.get("providers") or {}).get(name)
     if not prov:
-        unavailable(f"provider '{name}' non definito nel config")
+        unavailable(f"provider '{name}' not defined in config")
     is_cli = prov.get("type") == "cli"
     api_key = ""
     if not is_cli:
@@ -317,7 +317,7 @@ def main():
         try:
             context = Path(opts["--context-file"]).read_text(errors="replace")
         except OSError as e:
-            unavailable(f"context-file illeggibile: {e}")
+            unavailable(f"unreadable context-file: {e}")
 
     # Fail-closed sul troncamento: un verdetto emesso su un artefatto tagliato
     # in silenzio non è una verifica (review cross-family 2026-07-10).

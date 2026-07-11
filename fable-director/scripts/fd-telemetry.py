@@ -298,25 +298,24 @@ def cmd_budget_open(args):
                              "--data-class": None, "--paths": None})
     if opts["--data-class"] and opts["--data-class"] not in (
             "public", "internal", "restricted"):
-        sys.exit("--data-class non valido (ammessi: public, internal, "
-                 "restricted)")
+        sys.exit("invalid --data-class (allowed: public, internal, restricted)")
     if not opts["--task"] or not opts["--expected-output"]:
-        sys.exit("budget-open richiede --task e --expected-output")
+        sys.exit("budget-open requires --task and --expected-output")
     if opts["--effort"] and opts["--effort"] not in EFFORT_LEVELS:
-        sys.exit(f"--effort non valido: {opts['--effort']} "
-                 f"(ammessi: {', '.join(sorted(EFFORT_LEVELS))})")
+        sys.exit(f"invalid --effort: {opts['--effort']} "
+                 f"(allowed: {', '.join(sorted(EFFORT_LEVELS))})")
     # Stime non positive = enforcement 2×/3× morto by construction (lo Stop
     # hook esce su exp_out <= 0): un bypass, non una stima. Rifiuta rumorosamente.
     try:
         exp_out = int(opts["--expected-output"])
         exp_in = int(opts["--expected-input"] or 0)
     except ValueError:
-        sys.exit("--expected-output/--expected-input devono essere interi")
+        sys.exit("--expected-output/--expected-input must be integers")
     if exp_out <= 0:
-        sys.exit("--expected-output deve essere > 0: una stima non positiva "
-                 "disattiva l'enforcement 2×/3× (bypass, non stima)")
+        sys.exit("--expected-output must be > 0: a non-positive estimate "
+                 "disables the 2×/3× enforcement (a bypass, not an estimate)")
     if exp_in < 0:
-        sys.exit("--expected-input non può essere negativo")
+        sys.exit("--expected-input cannot be negative")
     cwd = opts["--cwd"] or os.getcwd()
     BUDGETS.mkdir(parents=True, exist_ok=True)
     # Lease: owner = sessione che apre (CLAUDE_CODE_SESSION_ID nell'env Bash).
@@ -334,12 +333,12 @@ def cmd_budget_open(args):
                      (datetime.now(timezone.utc) - declared_prev).total_seconds() < 86400)
             if (prev.get("status") == "open" and fresh and prev_owner
                     and owner and prev_owner != owner):
-                sys.exit(f"budget-open rifiutato: esiste un budget OPEN di "
-                         f"un'altra sessione ({prev_owner[:8]}…, task "
-                         f"'{prev.get('task')}') per questo cwd. Sovrascriverlo "
-                         f"ne distruggerebbe l'enforcement. Usa --force solo se "
-                         f"sai che quella sessione è morta, o lavora da un cwd/"
-                         f"worktree separato.")
+                sys.exit(f"budget-open refused: another session ({prev_owner[:8]}…, "
+                         f"task '{prev.get('task')}') has an OPEN budget for "
+                         f"this cwd. Overwriting it would destroy its "
+                         f"enforcement. Use --force only if you know that "
+                         f"session is dead, or work from a separate "
+                         f"cwd/worktree.")
         except (json.JSONDecodeError, OSError):
             pass  # file corrotto: la nuova open lo rimpiazza (atomicamente)
     budget = {
@@ -380,7 +379,7 @@ def cmd_budget_open(args):
     bfile = BUDGETS / f"{cwd_slug(cwd)}.json"
     write_json_atomic(bfile, budget)
     log_event("task_open", budget, cwd=cwd)
-    print(f"budget aperto: {bfile}")
+    print(f"budget open: {bfile}")
 
 
 def cmd_budget_amend(args):
@@ -391,14 +390,14 @@ def cmd_budget_amend(args):
     opts = parse_opts(args, {"--add-paths": None, "--reason": None,
                              "--cwd": None})
     if not opts["--add-paths"]:
-        sys.exit("budget-amend richiede --add-paths \"glob[,glob]\"")
+        sys.exit("budget-amend requires --add-paths \"glob[,glob]\"")
     cwd = opts["--cwd"] or os.getcwd()
     bfile = BUDGETS / f"{cwd_slug(cwd)}.json"
     if not bfile.is_file():
         sys.exit(f"nessun budget file: {bfile}")
     budget = json.loads(bfile.read_text())
     if budget.get("status") != "open":
-        sys.exit("budget-amend richiede un budget OPEN")
+        sys.exit("budget-amend requires an OPEN budget")
     new = [p.strip() for p in opts["--add-paths"].split(",") if p.strip()]
     paths = budget.get("paths") or []
     budget["paths"] = paths + [p for p in new if p not in paths]
@@ -407,7 +406,7 @@ def cmd_budget_amend(args):
     write_json_atomic(bfile, budget)
     log_event("perimeter_amend", {"added": new, "reason": opts["--reason"],
                                   "task": budget.get("task")}, cwd=cwd)
-    print(f"perimetro emendato: +{', '.join(new)}")
+    print(f"perimeter amended: +{', '.join(new)}")
 
 
 def cmd_budget_close(args):
@@ -470,7 +469,7 @@ def cmd_budget_close(args):
             p.unlink()
     except Exception:
         pass
-    print(f"budget chiuso ({opts['--outcome']}): {budget.get('task')}")
+    print(f"budget closed ({opts['--outcome']}): {budget.get('task')}")
 
 
 ALLOWED_EVENTS = {"task_open", "task_close", "budget_flag", "retry", "escalation",
@@ -480,17 +479,17 @@ ALLOWED_EVENTS = {"task_open", "task_close", "budget_flag", "retry", "escalation
 
 def cmd_log(args):
     if not args:
-        sys.exit(f"log richiede EVENT fra: {', '.join(sorted(ALLOWED_EVENTS))}")
+        sys.exit(f"log requires EVENT among: {', '.join(sorted(ALLOWED_EVENTS))}")
     event = args.pop(0)
     if event not in ALLOWED_EVENTS:
-        sys.exit(f"evento non ammesso: {event} (niente metriche soggettive)")
+        sys.exit(f"event not allowed: {event} (no subjective metrics)")
     opts = parse_opts(args, {"--json": "{}", "--session-id": None, "--cwd": None})
     try:
         payload = json.loads(opts["--json"])
     except json.JSONDecodeError as e:
-        sys.exit(f"--json non valido: {e}")
+        sys.exit(f"invalid --json: {e}")
     log_event(event, payload, session_id=opts["--session-id"], cwd=opts["--cwd"])
-    print(f"loggato: {event}")
+    print(f"logged: {event}")
 
 
 REAP_MIN_AGE_S = 6 * 3600     # legacy senza owner: sotto, non toccare
@@ -641,9 +640,9 @@ def cmd_session_summary(args):
             "source": "session-summary", "missing": missing,
             "n_records": n_rec, "transcript": str(transcript), "auto": True,
         }, session_id=session_id, cwd=cwd)
-        print(f"fable-director sentinella schema: {n_rec} record ma zero "
-              f"'{missing}' riconosciuti — formato transcript cambiato? "
-              f"Contabilità token inaffidabile.", file=sys.stderr)
+        print(f"fable-director schema sentinel: {n_rec} records but zero "
+              f"recognized '{missing}' — transcript format changed? "
+              f"Token accounting unreliable.", file=sys.stderr)
     inp = main_tot["input_tokens"] + sub_tot["input_tokens"]
     out = main_tot["output_tokens"] + sub_tot["output_tokens"]
     cr = main_tot["cache_read_input_tokens"] + sub_tot["cache_read_input_tokens"]
@@ -689,13 +688,13 @@ def cmd_report(args):
         except json.JSONDecodeError:
             continue
     if not events:
-        print(f"Nessun evento negli ultimi {days} giorni.")
+        print(f"No events in the last {days} days.")
         return
 
     def fmt(n):
         return f"{n:,.0f}".replace(",", ".")
 
-    print(f"# Telemetria fable-director — ultimi {days} giorni, {len(events)} eventi\n")
+    print(f"# fable-director telemetry — last {days} days, {len(events)} events\n")
 
     sessions = [p for e, p in events if e == "session_summary"]
     if sessions:
@@ -707,7 +706,7 @@ def cmd_report(args):
         s_out = sum(s.get("subagent_output") or 0 for s in sessions)
         m = derived_metrics(inp, out, cr, cc, m_out, s_out,
                             sum(s.get("n_subagent_files") or 0 for s in sessions))
-        print(f"Sessioni: {len(sessions)} — input {fmt(inp)}, output {fmt(out)}, "
+        print(f"Sessions: {len(sessions)} — input {fmt(inp)}, output {fmt(out)}, "
               f"cache_read {fmt(cr)}, cache_creation {fmt(cc)}")
         alarms = []
         if m["cache_hit_ratio"] is not None:
@@ -729,8 +728,8 @@ def cmd_report(args):
                 alarms.append("coordination_cost > 1: l'orchestratore spende più dei subagenti")
         resets = sum(s.get("cache_resets") or 0 for s in sessions)
         if resets:
-            alarms.append(f"cache-thrash: {resets} reset di prefisso a metà sessione "
-                          f"(cambio modello/edit plugin/compact?) — diagnostico, mai blocking")
+            alarms.append(f"cache-thrash: {resets} mid-session prefix resets "
+                          f"(model switch/plugin edit/compact?) — diagnostic, never blocking")
         # Yield: output token per commit prodotto. Solo sessioni con dato git
         # (git_yield → None su cwd non-repo). RESA, non target: sessioni di
         # planning/debug non committano legittimamente, non le condanna.
@@ -739,15 +738,15 @@ def cmd_report(args):
         if with_git:
             g_out = sum(s.get("output_tokens") or 0 for s in with_git)
             if commits:
-                print(f"yield: {commits} commit da {len(with_git)} sessioni git "
-                      f"(~{fmt(g_out / commits)} output token/commit) — RESA "
-                      f"diagnostica, mai target: planning/debug non committano")
+                print(f"yield: {commits} commits from {len(with_git)} git sessions "
+                      f"(~{fmt(g_out / commits)} output tokens/commit) — "
+                      f"diagnostic YIELD, never a target: planning/debug do not commit")
             else:
-                print(f"yield: 0 commit da {len(with_git)} sessioni git "
-                      f"(~{fmt(g_out)} output token senza commit) — normale per "
-                      f"planning/debug/review; allarme solo se atteso codice")
+                print(f"yield: 0 commits from {len(with_git)} git sessions "
+                      f"(~{fmt(g_out)} output tokens without commits) — normal "
+                      f"for planning/debug/review; an alarm only if code was expected")
         for a in alarms:
-            print(f"⚠ ALLARME (non target): {a}")
+            print(f"⚠ ALARM (not a target): {a}")
 
     retries = [p for e, p in events if e == "retry"]
     if retries:
@@ -757,9 +756,9 @@ def cmd_report(args):
             by_class.setdefault(c, [0, 0])
             by_class[c][0] += 1
             by_class[c][1] += r.get("tokens_est") or 0
-        print("\nRetry per classe (spreco potenziale):")
+        print("\nRetries per class (potential waste):")
         for c, (n, tok) in sorted(by_class.items()):
-            print(f"  {c}: {n} retry, ~{fmt(tok)} token")
+            print(f"  {c}: {n} retries, ~{fmt(tok)} tokens")
 
     reversals = [p for e, p in events if e == "reversal"]
     if reversals:
@@ -768,8 +767,8 @@ def cmd_report(args):
             key = f"{r.get('from', '?')}→{r.get('to', '?')}"
             pairs[key] = pairs.get(key, 0) + 1
         pairs_s = ", ".join(f"{k}×{v}" for k, v in sorted(pairs.items(), key=lambda x: -x[1]))
-        print(f"\nReversal: {len(reversals)} ({pairs_s}) — non errori: policy iniziale "
-              f"falsificata; pattern ricorrenti = candidati playbook")
+        print(f"\nReversals: {len(reversals)} ({pairs_s}) — not errors: initial policy "
+              f"falsified; recurring patterns = playbook candidates")
 
     escs = [p for e, p in events if e == "escalation"]
     if escs:
@@ -777,15 +776,15 @@ def cmd_report(args):
         unresolved = sum(1 for x in with_outcome if not x.get("resolved"))
         extra = ""
         if with_outcome:
-            extra = (f"; con esito: {len(with_outcome)}, non risolutive: {unresolved}"
+            extra = (f"; with outcome: {len(with_outcome)}, unresolved: {unresolved}"
                      + (" ⚠ classificazione iniziale probabilmente errata" if unresolved else ""))
-        print(f"\nEscalation: {len(escs)}{extra}")
+        print(f"\nEscalations: {len(escs)}{extra}")
 
     verifs = [p for e, p in events if e == "verification"]
     if verifs:
         found = sum(1 for v in verifs if v.get("found"))
-        print(f"\nVerifiche: {len(verifs)}, problemi trovati: {found} "
-              f"(hit-rate {found / len(verifs):.2f}) — calibra la profondità, MAI saltare su error-cost alto")
+        print(f"\nVerifications: {len(verifs)}, problems found: {found} "
+              f"(hit-rate {found / len(verifs):.2f}) — calibrate depth, NEVER skip on high error-cost")
         # Cross-family per tipo di task: quali tipi il verifier di famiglia
         # diversa refuta davvero. Rende "quali tipi sono affini" una domanda
         # di dati (asserire bravura-modello decade a ogni release, vietato).
@@ -798,11 +797,11 @@ def cmd_report(args):
                 by_type[t][0] += 1
                 if v.get("found"):
                     by_type[t][1] += 1
-            print("  cross-family per tipo (hit-rate = refutazioni/chiamate; "
-                  "N≥10 = affinità confermata dai dati, non asserita):")
+            print("  cross-family per type (hit-rate = refutations/calls; "
+                  "N≥10 = affinity confirmed by data, not asserted):")
             for t, (n, fnd) in sorted(by_type.items(), key=lambda x: -x[1][0]):
                 dense = "DENSO" if n >= 10 else "sparso"
-                print(f"    {t}: {n} chiamate, {fnd} refutate "
+                print(f"    {t}: {n} calls, {fnd} refuted "
                       f"(hit-rate {fnd / n:.2f}) — {dense}")
 
     ext = [p for e, p in events if e == "external_exec"]
@@ -816,17 +815,17 @@ def cmd_report(args):
                 by_pt[key][1] += 1
             if x.get("check") in ("json-invalid", "needs_context", "empty"):
                 by_pt[key][2] += 1
-        print("\nExecutor esterni per provider/tipo (rotta sperimentale: la "
-              "promozione a playbook la decidono questi numeri, N≥10):")
+        print("\nExternal executors per provider/type (experimental route: "
+              "playbook promotion is decided by these numbers, N≥10):")
         for key, (n, ok, bad) in sorted(by_pt.items(), key=lambda x: -x[1][0]):
             dense = "DENSO" if n >= 10 else "sparso"
-            print(f"  {key}: {n} run, {ok} ok, {bad} scarti "
+            print(f"  {key}: {n} runs, {ok} ok, {bad} rejects "
                   f"(ok-rate {ok / n:.2f}) — {dense}")
         tin = sum(x.get("chars_in") or 0 for x in ext) // 4
         tout = sum(x.get("chars_out") or 0 for x in ext) // 4
-        print(f"  volume esterno stimato: ~{fmt(tin)} token in, ~{fmt(tout)} "
-              f"token out — LEDGER SEPARATO, fuori quota Claude (il budget "
-              f"2×/3× conta solo token del transcript Claude)")
+        print(f"  estimated external volume: ~{fmt(tin)} tokens in, ~{fmt(tout)} "
+              f"tokens out — SEPARATE LEDGER, off the Claude quota (the "
+              f"2×/3× budget counts Claude transcript tokens only)")
 
     # Calibrazione stime: rapporto actual/expected per tipo — l'errore di
     # stima è un dato, non una colpa. N<5 = indicativo, non direttivo.
@@ -840,13 +839,13 @@ def cmd_report(args):
             k = (p.get("type") or "(senza tipo)", p.get("route") or "?")
             by_t.setdefault(k, []).append(
                 p["actual_output_tokens"] / p["expected_output_tokens"])
-        print("\nCalibrazione stime (actual/expected output, mediana — "
-              "sopra 1 = sottostimi, sotto 1 = sovrastimi):")
+        print("\nEstimate calibration (actual/expected output, median — "
+              "above 1 you underestimate, below 1 you overestimate):")
         for (t, r), ratios in sorted(by_t.items(), key=lambda x: -len(x[1])):
             ratios.sort()
             med = ratios[len(ratios) // 2]
-            tag = "" if len(ratios) >= 5 else " (N piccolo, indicativo)"
-            print(f"  {t} [{r}]: mediana {med:.1f}× su {len(ratios)} task"
+            tag = "" if len(ratios) >= 5 else " (small N, indicative)"
+            print(f"  {t} [{r}]: median {med:.1f}× over {len(ratios)} tasks"
                   f"{tag}")
 
     # Coda script-promotion: tipi ricorrenti (≥2 chiusure ok) su rotte
@@ -863,12 +862,12 @@ def cmd_report(args):
                 or p.get("expected_output_tokens") or 0
     queue = {t: v for t, v in rec.items() if v[0] >= 2}
     if queue:
-        print("\nCandidati script-promotion (tipo ricorrente su rotta "
-              "modello — valuta la cristallizzazione, skip se già script "
-              "o interfaccia instabile):")
+        print("\nScript-promotion candidates (recurring type on model routes "
+              "— consider crystallizing, skip if already scripted or the "
+              "interface is unstable):")
         for t, (n, tok) in sorted(queue.items(), key=lambda x: -x[1][1]):
-            print(f"  {t}: {n} task chiusi ok, ~{fmt(tok)} token output "
-                  f"spesi su rotte modello")
+            print(f"  {t}: {n} tasks closed ok, ~{fmt(tok)} output tokens "
+                  f"spent on model routes")
 
     # Perimetro: deny e emendamenti — tanti emendamenti = perimetri dichiarati
     # sistematicamente più stretti del lavoro reale (dato di calibrazione).
@@ -876,8 +875,8 @@ def cmd_report(args):
     pamend = [p for e, p in events if e == "perimeter_amend"]
     if pdeny or pamend:
         nw = sum(1 for p in pdeny if p.get("level") == "never_write")
-        print(f"\nPerimetro scritture: {len(pdeny)} deny "
-              f"(di cui {nw} never_write), {len(pamend)} emendamenti")
+        print(f"\nWrite perimeter: {len(pdeny)} denies "
+              f"({nw} never_write), {len(pamend)} amendments")
 
     mcps = [p for e, p in events if e == "mcp_meter"]
     if mcps:
@@ -887,21 +886,21 @@ def cmd_report(args):
             by_srv.setdefault(k, [0, 0])
             by_srv[k][0] += 1
             by_srv[k][1] += m.get("bytes") or 0
-        print("\nPeso MCP in contesto (i risultati tool entrano interi — "
-              "qui si vede chi gonfia):")
+        print("\nMCP context weight (tool results enter whole — here you "
+              "see who bloats):")
         for k, (n, byt) in sorted(by_srv.items(), key=lambda x: -x[1][1]):
-            print(f"  {k}: {n} chiamate, ~{fmt(byt // 4)} token stimati")
+            print(f"  {k}: {n} calls, ~{fmt(byt // 4)} estimated tokens")
 
     promos = [p for e, p in events if e == "script_promotion"]
     if promos:
         tok = sum(p.get("tokens_pre_promotion") or 0 for p in promos)
-        print(f"\nScript promossi: {len(promos)} (~{fmt(tok)} token spesi prima della promozione)")
+        print(f"\nScripts promoted: {len(promos)} (~{fmt(tok)} tokens spent before promotion)")
 
     anomalies = [p for e, p in events if e == "schema_anomaly"]
     if anomalies:
-        print(f"\n⚠ ALLARME schema: {len(anomalies)} anomalie formato transcript "
-              f"(zero usage/timestamp riconosciuti) — contabilità token "
-              f"inaffidabile in quelle sessioni, aggiornare il plugin")
+        print(f"\n⚠ SCHEMA ALARM: {len(anomalies)} transcript format anomalies "
+              f"(zero recognized usage/timestamps) — token accounting "
+              f"unreliable in those sessions, update the plugin")
 
     dedups = [p for e, p in events if e == "read_dedup"]
     if dedups:
@@ -911,8 +910,8 @@ def cmd_report(args):
             by_kind[d.get("kind", "?")] = by_kind.get(d.get("kind", "?"), 0) + 1
         kinds_s = ", ".join(f"{k}×{v}" for k, v in
                             sorted(by_kind.items(), key=lambda x: -x[1]))
-        print(f"\nRead-dedup: {len(dedups)} riletture deduplicate ({kinds_s}), "
-              f"~{fmt(tok)} token risparmiati (lossless, ≈char/4)")
+        print(f"\nRead-dedup: {len(dedups)} deduplicated re-reads ({kinds_s}), "
+              f"~{fmt(tok)} tokens saved (lossless, ≈chars/4)")
 
     denies = [p for e, p in events if e == "gate_deny"]
     if denies:
@@ -934,14 +933,14 @@ def cmd_report(args):
             pairs[key] = pairs.get(key, 0) + 1
         pairs_s = ", ".join(f"{k}×{v}" for k, v in
                             sorted(pairs.items(), key=lambda x: -x[1]))
-        print(f"\nEffort mismatch: {len(mismatches)} ({pairs_s}) — budget e agent "
+        print(f"\nEffort mismatch: {len(mismatches)} ({pairs_s}) — budget and agent "
               f"in disaccordo; ricorrente = la rotta dichiarata non riflette "
               f"l'esecutore reale, candidato playbook")
 
     flags = [p for e, p in events if e == "budget_flag"]
     opened = sum(1 for e, _ in events if e == "task_open")
     closed_tasks = [p for e, p in events if e == "task_close"]
-    print(f"\nTask: {opened} aperti, {len(closed_tasks)} chiusi, {len(flags)} sforamenti ≥3×")
+    print(f"\nTasks: {opened} opened, {len(closed_tasks)} closed, {len(flags)} busts ≥3×")
 
     # Breakdown per effort dichiarato: misura se il tier low regge davvero
     # (flag rate vs tier alti). Dato che decide la promozione warn→deny;
@@ -957,11 +956,11 @@ def cmd_report(args):
             by_effort[eff][1] += 1
     if by_effort:
         order = {"low": 0, "medium": 1, "high": 2, "xhigh": 3, "max": 4}
-        print("Task per effort dichiarato (flag rate alto su low = tier "
-              "insufficiente per quel tipo):")
+        print("Tasks per declared effort (high flag rate on low = tier "
+              "insufficient for that type):")
         for eff, (n, fl) in sorted(by_effort.items(),
                                    key=lambda x: order.get(x[0], 9)):
-            print(f"  {eff}: {n} task, {fl} flaggati")
+            print(f"  {eff}: {n} tasks, {fl} flagged")
 
     # Densità per tipo: i dati sovrascrivono una regola di routing SOLO nelle
     # celle marcate dense (N≥10 task chiusi). Soglia codificata, non a giudizio.
@@ -973,16 +972,16 @@ def cmd_report(args):
         if t.get("outcome") == "flagged":
             by_type[typ][1] += 1
     if by_type:
-        print("Densità per tipo task (override dati ammesso solo se DENSA, N≥10):")
+        print("Density per task type (data override allowed only if DENSE, N≥10):")
         for typ, (n, fl) in sorted(by_type.items(), key=lambda x: -x[1][0]):
-            dense = "DENSA — eligible per override" if n >= 10 else "sparsa — solo euristiche"
-            print(f"  {typ}: {n} task, {fl} flaggati — {dense}")
+            dense = "DENSE — eligible for override" if n >= 10 else "sparse — heuristics only"
+            print(f"  {typ}: {n} tasks, {fl} flagged — {dense}")
 
     con = open_db()
     n_cache = con.execute("SELECT COUNT(*) FROM llm_cache").fetchone()[0]
     con.close()
     if n_cache:
-        print(f"\nCache idempotente: {n_cache} voci")
+        print(f"\nIdempotency cache: {n_cache} entries")
 
 
 CACHE_CAP = 500          # voci massime

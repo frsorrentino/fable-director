@@ -126,14 +126,15 @@ def cost_checkpoint(budget):
         q = (f" Quota weekly residua ~{weekly_remaining:.0f}%."
              if weekly_remaining is not None else "")
         return (
-            f"FABLE-DIRECTOR checkpoint costo: questa delega dichiara ~{dot(exp)} "
-            f"token output attesi (soglia {dot(eff_ceiling)}"
-            f"{', abbassata perché quota scarsa' if scarce else ''}).{q} "
-            "Decidi tu in base ai tuoi rate limit. Se procedi, il top model "
-            "dovrebbe averti già presentato: stima, perché serve questo costo, "
-            "alternative (spezzare il task / esecutore economico + verifica / "
-            "rimandare al reset). Per non ri-chiedere sullo stesso task, riapri "
-            "il budget con --cost-ack dopo l'ok."
+            f"⚠ FABLE-DIRECTOR cost checkpoint — this delegation declares "
+            f"~{dot(exp)} expected output tokens (threshold {dot(eff_ceiling)}"
+            f"{', lowered because quota is scarce' if scarce else ''}).{q}\n"
+            "Your call, based on your rate limits. Before proceeding the top "
+            "model should have shown you: the estimate, why this cost is "
+            "needed, and the alternatives (split the task / cheap executor + "
+            "verify / defer to reset).\n"
+            "To avoid being asked again on this same task: reopen the budget "
+            "with --cost-ack after your ok."
         )
     except Exception:
         return None
@@ -216,8 +217,8 @@ def announce_model(data):
     if not model:
         return None
     target = ti.get("subagent_type") or data.get("tool_name") or "delega"
-    return (f"FD ▶ delega a modello esplicito: {target} → {model} "
-            f"(dichiarato; effettivo verificabile post-task con "
+    return (f"FD ▶ delegating to explicit model: {target} → {model} "
+            f"(as declared; verify the effective model post-task with "
             f"session-cost-report.py)")
 
 
@@ -280,10 +281,10 @@ def effort_coherence(data, budget):
             con.close()
         except Exception:
             pass
-        return (f"FD ⚠ effort incoerente: budget dichiara '{declared}' ma "
-                f"{ti.get('subagent_type')} ha effort pinnato '{pinned}' "
-                f"(frontmatter). Delega consentita — verifica la rotta o "
-                f"riapri il budget con l'effort giusto.")
+        return (f"FD ⚠ effort mismatch — the budget declares '{declared}' but "
+                f"{ti.get('subagent_type')} has effort pinned to '{pinned}' "
+                f"(frontmatter). Delegation allowed — double-check the route "
+                f"or reopen the budget with the right effort.")
     except Exception:
         return None
 
@@ -304,10 +305,10 @@ def verify_contract(budget, bfile):
         tmp = bfile.with_name(f"{bfile.name}.{os.getpid()}.tmp")
         tmp.write_text(json.dumps(budget, ensure_ascii=False))
         os.replace(tmp, bfile)
-        return ("FD ⚠ delega senza evidenza di accettazione dichiarata: il "
-                "budget non ha --verify (comando che passa / checklist "
-                "enumerabile). Delega consentita — ma pin il done verificabile "
-                "ORA e dichiaralo al prossimo budget-open.")
+        return ("FD ⚠ delegation without declared acceptance evidence — the "
+                "budget has no --verify (a command that passes / an "
+                "enumerable checklist). Delegation allowed — but pin the "
+                "verifiable done NOW and declare it at the next budget-open.")
     except Exception:
         return None
 
@@ -368,18 +369,18 @@ def xf_advisory(budget):
         msg = None
         for prov, (n, ok) in sorted(by_prov.items(), key=lambda x: -x[1][0]):
             if n >= 10 and ok / n >= 0.9:
-                msg = (f"FD nota: il tipo '{btype}' è CONFERMATO su executor "
-                       f"esterno '{prov}' (ok {ok}/{n}, cella DENSA) — rotta "
-                       f"vantaggiosa per gli item non quality-sensitive: "
+                msg = (f"FD note: type '{btype}' is CONFIRMED on external "
+                       f"executor '{prov}' (ok {ok}/{n}, DENSE cell) — "
+                       f"advantageous route for non-quality-sensitive items: "
                        f"scripts/external-exec.py --provider {prov} --type "
-                       f"{btype}. Fuori quota Claude. Solo advisory.")
+                       f"{btype}. Off the Claude quota. Advisory only.")
                 break
         if msg is None and used_today == 0:
-            msg = ("FD nota (1×/giorno): executor esterni configurati ma oggi "
-                   "0 chiamate — i free tier si resettano ogni giorno. Se gli "
-                   "item di questa delega non sono quality-sensitive (asse 4, "
-                   "mai asse 2), valuta scripts/external-exec.py. Solo "
-                   "advisory.")
+            msg = ("FD note (1×/day): external executors are configured but "
+                   "0 calls today — free tiers reset daily. If this "
+                   "delegation's items are not quality-sensitive (axis 4, "
+                   "never axis 2), consider scripts/external-exec.py. "
+                   "Advisory only.")
         if msg is None:
             return None
         mark.write_text(json.dumps({"date": today}))
@@ -418,9 +419,9 @@ def main():
             # (file editato a mano o schema estraneo), non "più vecchio di 24h".
             log_gate_deny(data, "no_budget", budget)
             deny(
-                "FABLE-DIRECTOR gate pre-delega: il budget di questo cwd è "
-                "privo di declared_at valido (file corrotto o schema estraneo). "
-                f"Riapri il pre-budget del task corrente e ritenta:\n{open_cmd}"
+                "✕ FABLE-DIRECTOR delegation DENIED — this cwd's budget has "
+                "no valid declared_at (corrupted file or foreign schema).\n"
+                f"Reopen the current task's pre-budget and retry:\n{open_cmd}"
             )
             return
         now = datetime.now(timezone.utc)
@@ -446,33 +447,34 @@ def main():
             return  # budget valido: allow
         log_gate_deny(data, "stale_budget", budget)
         deny(
-            "FABLE-DIRECTOR gate pre-delega: il budget aperto per questo cwd "
-            f"è più vecchio di 24h (task abbandonato: '{budget.get('task')}'). "
-            "Chiudilo (`fd-telemetry.py budget-close --outcome abandoned`) e "
-            f"apri il pre-budget del task corrente, poi ritenta:\n{open_cmd}"
+            "✕ FABLE-DIRECTOR delegation DENIED — this cwd's open budget is "
+            f"older than 24h (abandoned task: '{budget.get('task')}').\n"
+            "Close it (`fd-telemetry.py budget-close --outcome abandoned`), "
+            f"open the current task's pre-budget, then retry:\n{open_cmd}"
         )
         return
 
     if isinstance(budget, dict) and budget.get("status") == "flagged":
         log_gate_deny(data, "flagged", budget)
         deny(
-            "FABLE-DIRECTOR gate pre-delega: il budget di questo cwd è FLAGGED "
-            f"(sforamento ≥3× sul task '{budget.get('task')}'). Nuove deleghe "
-            "negate finché il post-mortem non è chiuso: (1) diagnosi assunzione "
-            "saltata → entry [candidata] nel playbook; (2) `fd-telemetry.py "
-            "budget-close --outcome flagged`; (3) apri il nuovo pre-budget e "
-            "ritenta."
+            "✕ FABLE-DIRECTOR delegation DENIED — this cwd's budget is "
+            f"FLAGGED (≥3× bust on task '{budget.get('task')}').\n"
+            "New delegations stay denied until the post-mortem is closed:\n"
+            "(1) diagnose the broken assumption → [candidate] playbook entry\n"
+            "(2) fd-telemetry.py budget-close --outcome flagged\n"
+            "(3) open the new pre-budget and retry."
         )
         return
 
     log_gate_deny(data, "no_budget")
     deny(
-        "FABLE-DIRECTOR gate pre-delega: nessun pre-budget aperto per questo "
-        "cwd. Ogni delega/orchestrazione richiede il pre-budget machine-"
-        "readable PRIMA della chiamata (skill fable-director:delega-efficiente, "
-        "sezione 'Falsifiable pre-budget'). Ancora la stima (input ≈ byte da "
-        "leggere ÷ 4 × passaggi; output ≈ solo deliverable), poi esegui e "
-        f"ritenta la chiamata:\n{open_cmd}"
+        "✕ FABLE-DIRECTOR delegation DENIED — no open pre-budget for this "
+        "cwd.\n"
+        "Every delegation/orchestration requires the machine-readable "
+        "pre-budget BEFORE the call (skill fable-director:delega-efficiente, "
+        "'Falsifiable pre-budget').\n"
+        "Anchor the estimate (input ≈ bytes to read ÷ 4 × passes; output ≈ "
+        f"deliverable only), then run and retry the call:\n{open_cmd}"
     )
 
 
