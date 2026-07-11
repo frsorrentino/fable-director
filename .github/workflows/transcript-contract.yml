@@ -23,3 +23,5 @@ jobs:
           python3 -m py_compile fable-director/scripts/*.py \
             fable-director/skills/delega-efficiente/tools/session-cost-report.py
           bash -n fable-director/scripts/statusline-ctx.sh benchmarks/run.sh
+      - name: Stress concorrenza (invarianti stato condiviso)
+        run: python3 tests/concurrency-stress.py

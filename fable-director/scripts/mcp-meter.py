@@ -28,22 +28,32 @@ def main():
         size = len(str(resp))
     parts = tool.split("__")
     server = parts[1] if len(parts) > 1 else "?"
+    import random
     import sqlite3
+    import time
     from datetime import datetime, timezone
     base = Path.home() / ".claude" / "fable-director"
     base.mkdir(parents=True, exist_ok=True)  # install fresca: dir assente
-    con = sqlite3.connect(base / "telemetry.db", timeout=0.5)
-    con.execute("PRAGMA busy_timeout=500")
-    con.execute("CREATE TABLE IF NOT EXISTS events("
-                "id INTEGER PRIMARY KEY, ts TEXT NOT NULL, session_id TEXT, "
-                "cwd TEXT, event TEXT NOT NULL, payload TEXT)")
-    con.execute(
-        "INSERT INTO events(ts, event, payload) VALUES(?,?,?)",
-        (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-         "mcp_meter",
-         json.dumps({"server": server, "tool": tool, "bytes": size})))
-    con.commit()
-    con.close()
+    row = (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+           "mcp_meter",
+           json.dumps({"server": server, "tool": tool, "bytes": size}))
+    # retry+backoff: le chiamate MCP arrivano a raffica (browser automation)
+    # e un busy_timeout scaduto perderebbe l'evento in silenzio
+    for attempt in range(4):
+        try:
+            con = sqlite3.connect(base / "telemetry.db", timeout=1.0)
+            con.execute("PRAGMA busy_timeout=1000")
+            con.execute("CREATE TABLE IF NOT EXISTS events("
+                        "id INTEGER PRIMARY KEY, ts TEXT NOT NULL, "
+                        "session_id TEXT, cwd TEXT, event TEXT NOT NULL, "
+                        "payload TEXT)")
+            con.execute("INSERT INTO events(ts, event, payload) "
+                        "VALUES(?,?,?)", row)
+            con.commit()
+            con.close()
+            return
+        except sqlite3.OperationalError:
+            time.sleep(0.05 * (2 ** attempt) + random.random() * 0.05)
 
 
 if __name__ == "__main__":

@@ -153,12 +153,34 @@ def open_db():
 
 
 def log_event(event, payload, session_id=None, cwd=None):
-    con = open_db()
-    con.execute("INSERT INTO events(ts, session_id, cwd, event, payload) VALUES(?,?,?,?,?)",
-                (now_iso(), session_id, str(cwd or os.getcwd()),
-                 event, json.dumps(payload, ensure_ascii=False)))
-    con.commit()
-    con.close()
+    """INSERT con retry+backoff: sotto contesa vera (molti hook concorrenti)
+    un singolo busy_timeout scade e l'evento sparirebbe in silenzio —
+    trovato dallo stress test 2026-07-11: 113/800 eventi persi con 8 writer.
+    Dopo i retry l'errore viene ALZATO: il chiamante best-effort lo ingoia
+    dove è giusto ingoiarlo, la CLI lo mostra."""
+    import random
+    import time
+    row = (now_iso(), session_id, str(cwd or os.getcwd()),
+           event, json.dumps(payload, ensure_ascii=False))
+    last = None
+    for attempt in range(6):
+        con = None
+        try:
+            con = open_db()
+            con.execute("INSERT INTO events(ts, session_id, cwd, event, "
+                        "payload) VALUES(?,?,?,?,?)", row)
+            con.commit()
+            con.close()
+            return
+        except sqlite3.OperationalError as e:
+            last = e
+            try:
+                if con is not None:
+                    con.close()
+            except Exception:
+                pass
+            time.sleep(0.05 * (2 ** attempt) + random.random() * 0.05)
+    raise last
 
 
 def find_usage(obj, in_subagent=False):
