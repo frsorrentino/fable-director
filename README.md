@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.13.1-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.13.2-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -56,6 +56,7 @@ Honest boundary, same as the table above: the *writing* of lessons is hook-enfor
 
 ## 🆕 What's new
 
+- **1.13.2** — `/fable-director:status`: statusline as text for smartphone/remote clients
 - **1.13.1** — Dual-account: shared learning memory, per-account quota bridge
 - **1.13.0** — Budget lease, transcript-contract suite, benchmark validators, versioned cache
 - **1.12.6** — Concurrency and hot-path hardening from the dual cross-family review
@@ -174,7 +175,7 @@ The read-heavy result measures **disciplined delegation vs naive delegation**, n
 
 ## 📟 The statusline
 
-One glance at model, context and plan quotas — so you see the rate limit coming **before** it hits:
+One glance at model, context and plan quotas — so you see the rate limit coming **before** it hits. On clients with no terminal statusline (smartphone remote control, web) use **`/fable-director:status`**: same data as conversation text, with honest freshness labels.
 
 ![fable-director statusline](assets/statusline.svg)
 
