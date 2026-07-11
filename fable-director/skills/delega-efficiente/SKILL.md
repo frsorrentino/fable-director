@@ -40,7 +40,7 @@ Axes compose rather than exclude: a batch (4) of quality-sensitive items (2) →
 - Every delegation prompt is a 5-part spec contract — Objective / Files (exact paths in scope) / Interfaces (output format + status token) / Constraints (tools, sources, boundaries, hard caps) / Verification (the command or check the subagent must run and report actual output of). Vague delegation ("occupati di X") duplicates work — forbidden; a spec the subagent can execute without shared context is the test that the route is delegable at all.
 - The subagent ends with a status token: `DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED / ABSTAIN`. Grant explicit permission to ABSTAIN when unsure — an honest abstention triggers immediate escalation and skips a whole verify-fail-diagnose cycle; plausible-but-wrong is the worst outcome. Status feeds the rule-of-3 diagnosis.
 - Interfaces in practice: hard cap (default ~1-2k tokens), forced schema (strict JSON or grep-able `path:line — finding` lines), full-content dumps forbidden — paths, counts, anomalies only. The subagent's output is the next turn's input: a token the orchestrator won't consume is waste.
-- Scaling bands: simple fact-finding → 1 agent; direct comparisons → 2-4; broad research → 10+. Never exceed the band. Multi-agent ≈ 15× chat cost: if task value doesn't justify 15×, don't orchestrate.
+- Scaling bands: simple fact-finding → 1 agent; direct comparisons → 2-4; broad research → 10+. Never exceed the band. Multi-agent costs an order of magnitude more than a single chat (measure YOUR ratio: `report` delegation_overhead — asserted multipliers from old research decay): if task value doesn't justify that multiple, don't orchestrate.
 
 ## Harness mechanics (learned from real waste)
 
@@ -115,7 +115,7 @@ SQLite DB `~/.claude/fable-director/telemetry.db`; CLI `<plugin>/scripts/fd-tele
 
 ## Idempotency cache (opt-in)
 
-Recurring deterministic transform → promote to a script instead (zero cost, first choice). Only when that's impossible (semi-deterministic transform on unchanged input — periodic import, SEO re-run): `cache-get KEY` before delegating, on miss run + verify rung-1 + `cache-put KEY --file F --verified` (unverified writes refused). `KEY = sha256(schema_version + prompt_template + input)` — schema version INSIDE the key or schema changes serve stale hits. TTL 90d, cap 500.
+Recurring deterministic transform → promote to a script instead (zero cost, first choice). Only when that's impossible (semi-deterministic transform on unchanged input — periodic import, SEO re-run): `cache-get KEY [--model M]` before delegating, on miss run + verify rung-1 + `cache-put KEY --file F --verified [--model M]` (unverified writes refused). `KEY = sha256(schema_version + prompt_template + input)`; the CLI then mixes plugin version and `--model` into the effective key — a plugin upgrade or executor change invalidates stale hits by construction. TTL 90d, cap 500.
 
 ## Session boundaries
 

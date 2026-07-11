@@ -14,7 +14,7 @@ Before delegating: pin a VERIFIABLE done (a command that passes / an observable 
 
 Cost checkpoint: a task that genuinely needs the top model (axis 2) AND is expensive — high token estimate, or the weekly rate limit is running low — is the user's call, not yours to spend silently. Before starting it, present: the estimate, the % of remaining limit, why the top model is required, and the alternatives (split the task / cheap executor + verify / defer to reset), then wait. The gate enforces this for delegated work (it asks); inline work you cannot gate — you must surface the choice yourself.
 
-Any delegation/orchestration requires a machine-readable pre-budget (`fd-telemetry.py budget-open`, exact flags in the skill), enforced deterministically end-to-end: a PreToolUse gate denies any Agent/Task/Workflow call with no open budget; a Stop hook warns once at 2× (reassess route, log a reversal on change) and blocks at 3× until the post-mortem is written. Close with `budget-close`.
+Any delegation/orchestration requires a machine-readable pre-budget (`fd-telemetry.py budget-open`, exact flags in the skill), enforced deterministically end-to-end: a PreToolUse gate denies any Agent/Task/Workflow call with no open budget; `external-exec.py` refuses to run without one; a Stop hook warns once at 2× (reassess route, log a reversal on change) and blocks at 3× until the post-mortem is written. Close with `budget-close`.
 
 BEFORE any delegation/orchestration (Agent/Task/Workflow call), and when closing a task that overran its declared budget or escalated through repeated failures: invoke `fable-director:delega-efficiente` for the full policy (delegation contract, falsifiable pre-budget, rule-of-3, playbook rules, script promotion, telemetry).
 
