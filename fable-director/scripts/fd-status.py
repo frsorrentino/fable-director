@@ -19,7 +19,7 @@ import os
 import re
 import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 try:
@@ -72,6 +72,42 @@ def main():
         lines.append(f"quote [{acct_name}]: n/d — nessun render statusline "
                      f"da questo account")
 
+    # Burn-rate 7D: proiezione dall'ultima coda MONOTONA della storia quota
+    # (il reset settimanale fa scendere la % — si estrapola solo il tratto
+    # dopo l'ultimo reset). Serve segnale vero: ≥3 campioni, ≥3h di span,
+    # crescita >0.5% — altrimenti silenzio, mai una proiezione inventata.
+    try:
+        hf = BASE / f"quota-history-{acct}.jsonl"
+        if hf.is_file():
+            pts = []
+            for ln in hf.read_text().splitlines()[-300:]:
+                try:
+                    r = json.loads(ln)
+                except json.JSONDecodeError:
+                    continue
+                if r.get("w") is not None:
+                    pts.append((datetime.fromisoformat(
+                        str(r["ts"]).replace("Z", "+00:00")), float(r["w"])))
+            tail = []
+            for t, w in reversed(pts):
+                if tail and w > tail[-1][1] + 1e-9:
+                    break  # quota più alta andando indietro = reset: stop
+                tail.append((t, w))
+            tail.reverse()
+            if len(tail) >= 3:
+                span_h = (tail[-1][0] - tail[0][0]).total_seconds() / 3600
+                dw = tail[-1][1] - tail[0][1]
+                if span_h >= 3 and dw > 0.5:
+                    rate = dw / span_h
+                    eta = tail[-1][0] + timedelta(
+                        hours=(100 - tail[-1][1]) / rate)
+                    lines.append(
+                        f"burn-rate 7D: ~{rate:.1f}%/h (ultime "
+                        f"{span_h:.0f}h) — a questo ritmo 100% "
+                        f"~{eta.astimezone().strftime('%a %d/%m %H:%M')}")
+    except Exception:
+        pass
+
     # Budget (sempre fresco: scritto dagli hook)
     bfile = BASE / "budgets" / f"{cwd_slug(os.getcwd())}.json"
     if bfile.is_file():
@@ -93,6 +129,10 @@ def main():
                     seg += f", effort {eff}"
                 if b.get("warned"):
                     seg += "  ⚠ checkpoint 2× già scattato"
+                if b.get("schema_warned"):
+                    seg += ("  ⚠ ENFORCEMENT SOSPESO: transcript illeggibile "
+                            "(schema_anomaly) — contabilità inaffidabile, "
+                            "aggiorna il plugin")
                 lines.append(seg)
             elif st == "flagged":
                 lines.append(f"budget: FLAGGED 3× — post-mortem dovuto "

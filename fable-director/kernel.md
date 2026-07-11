@@ -10,7 +10,7 @@ Route by six axes, earlier overrides later:
 
 Fast path: a task that fits in a single turn with no delegation → just execute. Zero budget, zero ritual (the pre-budget exists ONLY for delegation/orchestration): the policy must never cost more than the task it governs.
 
-Before delegating: pin a VERIFIABLE done (a command that passes / an observable behavior / an enumerable checklist) and the stop condition (incl. a failure cap). Not verifiable → don't delegate until it is; the top model owns "done", executors never self-assess it.
+Before delegating: pin a VERIFIABLE done (a command that passes / an observable behavior / an enumerable checklist) and the stop condition (incl. a failure cap) — declare it machine-readably (`budget-open --verify "..."`; the gate warns once if absent). Not verifiable → don't delegate until it is; the top model owns "done", executors never self-assess it. Inputs that must not leave the machine → `--data-class restricted` (blocks external routes deterministically).
 
 Cost checkpoint: a task that genuinely needs the top model (axis 2) AND is expensive — high token estimate, or the weekly rate limit is running low — is the user's call, not yours to spend silently. Before starting it, present: the estimate, the % of remaining limit, why the top model is required, and the alternatives (split the task / cheap executor + verify / defer to reset), then wait. The gate enforces this for delegated work (it asks); inline work you cannot gate — you must surface the choice yourself.
 

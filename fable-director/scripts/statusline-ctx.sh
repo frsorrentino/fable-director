@@ -86,6 +86,18 @@ try:
             if new!=old_q:
                 tmpq=qf.with_name(f"{qf.name}.{os.getpid()}.tmp")
                 tmpq.write_text(new); os.replace(tmpq,qf)
+                # storia quota per il burn-rate di fd-status: append solo a
+                # quota cambiata, cap dimensione con rewrite della coda
+                try:
+                    from datetime import datetime as _dth, timezone as _tzh
+                    hf=qd/f"quota-history-{acct}.jsonl"
+                    rowh=json.dumps({"ts":_dth.now(_tzh.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),"w":q.get("weekly_used_pct"),"r":q.get("five_hour_used_pct")})
+                    with open(hf,"a") as _fh: _fh.write(rowh+"\n")
+                    if hf.stat().st_size>60000:
+                        _tl=hf.read_text().splitlines()[-300:]
+                        tmph=hf.with_name(f"{hf.name}.{os.getpid()}.tmp")
+                        tmph.write_text("\n".join(_tl)+"\n"); os.replace(tmph,hf)
+                except Exception: pass
     except Exception:
         pass
     cwd=d.get("cwd") or os.getcwd()
@@ -95,10 +107,11 @@ try:
     slug=(_re.sub(r"[^A-Za-z0-9]+","-",_s).strip("-")
           +"-"+_hl.sha256(_s.encode()).hexdigest()[:8])
     bf=Path.home()/".claude"/"fable-director"/"budgets"/f"{slug}.json"
-    b_open=None; b_status=None; b_warned=False; b_eff=None; b_exp=0
+    b_open=None; b_status=None; b_warned=False; b_eff=None; b_exp=0; b_sch=False
     if bf.is_file():
         b=json.loads(bf.read_text())
         b_status=b.get("status")
+        b_sch=bool(b.get("schema_warned"))
         if b_status=="open":
             b_open=b; b_warned=bool(b.get("warned"))
             b_eff=b.get("effort")
@@ -211,6 +224,10 @@ try:
             bdg=f"{cls}:{ratio:.1f}×{eff}"
         else:
             bdg=("y:2×" if b_warned else "g:ok")+eff
+    # schema_anomaly sul budget aperto = contabilita transcript inaffidabile:
+    # enforcement di fatto sospeso — va urlato, non contato zero in silenzio
+    if b_sch and b_status=="open":
+        bdg="r:ENF⚠"
     # [XF] verifier cross-family (Gemini/DeepSeek/Codex): niente quota real-time
     # dai provider → ▶ = chiamata IN CORSO (marker di cross-verify.py, ignorato
     # se >15 min: processo morto); ×N = chiamate di oggi dalla telemetria locale.

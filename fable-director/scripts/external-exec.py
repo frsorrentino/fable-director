@@ -125,6 +125,14 @@ def require_open_budget():
             "budget-open --task \"...\" --expected-output N --route script "
             "[--effort low] [--type slug]"))
         sys.exit(1)
+    # data-class restricted: il confine privacy del README (la rotta esterna
+    # è disclosure verso terzi) reso enforceable, non solo dichiarato.
+    if budget.get("data_class") == "restricted":
+        out("error", detail=(
+            "rotta esterna BLOCCATA: il budget dichiara --data-class "
+            "restricted (input che non possono uscire dalla macchina). "
+            "Esegui sulla rotta Claude normale."))
+        sys.exit(1)
 
 
 def log_exec(payload):

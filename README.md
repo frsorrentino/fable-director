@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.13.4-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.13.5-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -56,6 +56,7 @@ Honest boundary, same as the table above: the *writing* of lessons is hook-enfor
 
 ## 🆕 What's new
 
+- **1.13.5** — Estimate calibration, 7D burn-rate forecast, script-promotion queue, `--verify` contract, enforceable `--data-class restricted`, enforcement-suspended banner
 - **1.13.4** — Free-tier onboarding: doctor + first-run notice, per-task gate suggestions, Claude/external ledgers separated
 - **1.13.3** — Self-audit of the instruction files: stale multipliers, drifted specs, review command caught up
 - **1.13.2** — `/fable-director:status`: statusline as text for smartphone/remote clients
@@ -267,7 +268,9 @@ external volume is tracked in its own telemetry events and shown separately (`re
 `[XF]` statusline segment, `/fable-director:status`). Declare `--route external` at
 `budget-open` to keep the decision record clean. The two roles:
 
-**Privacy.** External models are optional. `cross-verify.py` sends the claim, rubric, and any `--context-file` artifact you provide; experimental `external-exec.py` sends the task spec and submitted `--input` content to the selected Gemini API or Codex CLI provider. Treat those materials as third-party disclosures: do not submit secrets, personal data, or proprietary content you are not permitted to share. Local telemetry records call metadata such as provider, model, task type, outcome, and validation status — not the submitted artifact or executor output.
+**Privacy.** The boundary is enforceable, not just declared: open the budget with
+`--data-class restricted` and both `external-exec.py` and `cross-verify.py` refuse to run
+for that task — deterministically, script-side. External models are optional. `cross-verify.py` sends the claim, rubric, and any `--context-file` artifact you provide; experimental `external-exec.py` sends the task spec and submitted `--input` content to the selected Gemini API or Codex CLI provider. Treat those materials as third-party disclosures: do not submit secrets, personal data, or proprietary content you are not permitted to share. Local telemetry records call metadata such as provider, model, task type, outcome, and validation status — not the submitted artifact or executor output.
 
 **Role 1 — independent verifier** (`scripts/cross-verify.py`). An all-Claude ensemble shares correlated blind spots by construction; a different model family (Gemini, GPT) catches what same-family verification can't — and it's **out of your Claude quota**. A third OpenRouter-based lane (DeepSeek) existed until 2026-07: dropped when the last free DeepSeek variant left OpenRouter — two uncorrelated families are enough, and a lane that can silently die isn't worth its maintenance.
 

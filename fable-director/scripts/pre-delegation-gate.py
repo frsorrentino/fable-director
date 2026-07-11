@@ -288,6 +288,30 @@ def effort_coherence(data, budget):
         return None
 
 
+def verify_contract(budget, bfile):
+    """Contratto qualità: il kernel chiede un done VERIFICABILE prima di
+    delegare — --verify lo rende machine-readable. Assente → UNA avvertenza
+    per budget (flag verify_warned nel file, scrittura atomica), mai deny:
+    il lavoro esplorativo non merita attrito, ma la delega senza evidenza
+    di accettazione dichiarata deve almeno costare una riga di coscienza.
+    Best-effort: qualunque errore → None."""
+    try:
+        if not isinstance(budget, dict):
+            return None
+        if budget.get("verify") or budget.get("verify_warned"):
+            return None
+        budget["verify_warned"] = True
+        tmp = bfile.with_name(f"{bfile.name}.{os.getpid()}.tmp")
+        tmp.write_text(json.dumps(budget, ensure_ascii=False))
+        os.replace(tmp, bfile)
+        return ("FD ⚠ delega senza evidenza di accettazione dichiarata: il "
+                "budget non ha --verify (comando che passa / checklist "
+                "enumerabile). Delega consentita — ma pin il done verificabile "
+                "ORA e dichiaralo al prossimo budget-open.")
+    except Exception:
+        return None
+
+
 def xf_advisory(budget):
     """Advisory rotta esterna, mai deny/ask, max UNA nota al giorno. Due
     trigger in ordine di forza:
@@ -414,6 +438,7 @@ def main():
             # parsing dell'output hook.
             msgs = [m for m in (announce_model(data),
                                 effort_coherence(data, budget),
+                                verify_contract(budget, bfile),
                                 xf_advisory(budget)) if m]
             if msgs:
                 print(json.dumps({"systemMessage": "\n".join(msgs)},

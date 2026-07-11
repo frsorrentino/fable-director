@@ -27,9 +27,15 @@ Sottocomandi:
                --effort = tier di reasoning dichiarato per la delega (applicabile solo
                via agent con effort pinnato in frontmatter: fd-executor=low,
                fd-verifier=high — il tool Agent non ha parametro effort per-call);
-               il gate verifica la coerenza dichiarato/pinnato (warn, mai deny)
+               il gate verifica la coerenza dichiarato/pinnato (warn, mai deny);
+               --verify "cmd/checklist" = evidenza di accettazione dichiarata
+               (il gate avvisa una volta se assente, mai nega);
+               --data-class public|internal|restricted = classificazione input:
+               restricted BLOCCA external-exec.py e cross-verify.py per il cwd
   budget-close [--outcome ok|flagged|abandoned]
-               marca il budget file closed e logga task_close
+               marca il budget file closed e logga task_close; il consuntivo
+               (actual in/out) viene catturato dallo state file dello Stop
+               hook → alimenta la sezione calibrazione del report
   log EVENT [--json '{...}']
                logga un evento puntuale (retry, escalation, verification, script_promotion, budget_flag)
   session-summary [--transcript P --session-id S --cwd P]
@@ -283,7 +289,12 @@ def cmd_budget_open(args):
                              "--expected-input": None, "--type": None,
                              "--approach": None, "--fallback": None, "--cwd": None,
                              "--route": None, "--reason": None, "--alternative": None,
-                             "--effort": None})
+                             "--effort": None, "--verify": None,
+                             "--data-class": None})
+    if opts["--data-class"] and opts["--data-class"] not in (
+            "public", "internal", "restricted"):
+        sys.exit("--data-class non valido (ammessi: public, internal, "
+                 "restricted)")
     if not opts["--task"] or not opts["--expected-output"]:
         sys.exit("budget-open richiede --task e --expected-output")
     if opts["--effort"] and opts["--effort"] not in EFFORT_LEVELS:
@@ -337,6 +348,12 @@ def cmd_budget_open(args):
         # effort dichiarato: leva reale solo se la delega usa un agent con
         # effort pinnato (fd-executor/fd-verifier); il gate confronta i due.
         "effort": opts["--effort"],
+        # verify: evidenza di accettazione dichiarata (comando/checklist) —
+        # il "done verificabile" del kernel reso machine-readable; il gate
+        # avvisa (mai nega) se assente. data_class: restricted BLOCCA le
+        # rotte esterne (external-exec/cross-verify) deterministicamente.
+        "verify": opts["--verify"],
+        "data_class": opts["--data-class"],
         "expected_output_tokens": exp_out,
         "expected_input_tokens": exp_in,
         # cost_ack: l'utente ha già approvato un task sopra la soglia di costo
@@ -369,11 +386,23 @@ def cmd_budget_close(args):
     budget["closed_at"] = now_iso()
     if opts["--actual-output"]:
         budget["actual_output_tokens"] = int(opts["--actual-output"])
+    # Consuntivo dallo state file dello Stop hook (stessa contabilità
+    # dell'enforcement): senza questo, ogni chiusura butta via l'actual e la
+    # calibrazione delle stime resta impossibile. Esplicito vince su misurato.
+    sfile = bfile.with_name(bfile.stem + ".state.json")
+    if sfile.is_file():
+        try:
+            st = json.loads(sfile.read_text())
+            if st.get("declared") == budget.get("declared_at"):
+                budget.setdefault("actual_output_tokens", int(st.get("out") or 0))
+                budget.setdefault("actual_input_tokens", int(st.get("inp") or 0))
+        except (json.JSONDecodeError, OSError, ValueError):
+            pass
     write_json_atomic(bfile, budget)
     # Lo state file dello Stop incrementale è chiavato su declared_at: a
     # budget chiuso è morto — rimuoverlo evita accumulo, non serve migrarlo.
     try:
-        bfile.with_name(bfile.stem + ".state.json").unlink()
+        sfile.unlink()
     except OSError:
         pass
     log_event("task_close", budget, cwd=cwd)
@@ -734,6 +763,48 @@ def cmd_report(args):
         print(f"  volume esterno stimato: ~{fmt(tin)} token in, ~{fmt(tout)} "
               f"token out — LEDGER SEPARATO, fuori quota Claude (il budget "
               f"2×/3× conta solo token del transcript Claude)")
+
+    # Calibrazione stime: rapporto actual/expected per tipo — l'errore di
+    # stima è un dato, non una colpa. N<5 = indicativo, non direttivo.
+    closes = [p for e, p in events if e == "task_close"]
+    cal = [p for p in closes
+           if (p.get("expected_output_tokens") or 0) > 0
+           and p.get("actual_output_tokens") is not None]
+    if cal:
+        by_t = {}
+        for p in cal:
+            k = (p.get("type") or "(senza tipo)", p.get("route") or "?")
+            by_t.setdefault(k, []).append(
+                p["actual_output_tokens"] / p["expected_output_tokens"])
+        print("\nCalibrazione stime (actual/expected output, mediana — "
+              "sopra 1 = sottostimi, sotto 1 = sovrastimi):")
+        for (t, r), ratios in sorted(by_t.items(), key=lambda x: -len(x[1])):
+            ratios.sort()
+            med = ratios[len(ratios) // 2]
+            tag = "" if len(ratios) >= 5 else " (N piccolo, indicativo)"
+            print(f"  {t} [{r}]: mediana {med:.1f}× su {len(ratios)} task"
+                  f"{tag}")
+
+    # Coda script-promotion: tipi ricorrenti (≥2 chiusure ok) su rotte
+    # modello — candidati alla cristallizzazione in script (asse 3). La
+    # decisione resta umana: qui solo l'evidenza e i token in gioco.
+    rec = {}
+    for p in closes:
+        t = p.get("type")
+        if (t and p.get("outcome") == "ok"
+                and (p.get("route") or "") != "script"):
+            rec.setdefault(t, [0, 0])
+            rec[t][0] += 1
+            rec[t][1] += p.get("actual_output_tokens") \
+                or p.get("expected_output_tokens") or 0
+    queue = {t: v for t, v in rec.items() if v[0] >= 2}
+    if queue:
+        print("\nCandidati script-promotion (tipo ricorrente su rotta "
+              "modello — valuta la cristallizzazione, skip se già script "
+              "o interfaccia instabile):")
+        for t, (n, tok) in sorted(queue.items(), key=lambda x: -x[1][1]):
+            print(f"  {t}: {n} task chiusi ok, ~{fmt(tok)} token output "
+                  f"spesi su rotte modello")
 
     promos = [p for e, p in events if e == "script_promotion"]
     if promos:

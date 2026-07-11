@@ -273,6 +273,26 @@ def main():
     if not opts["--claim"]:
         sys.exit(__doc__)
 
+    # data-class restricted sul budget del cwd → anche la VERIFICA esterna è
+    # disclosure (claim+rubrica+artifact vanno al provider): bloccata.
+    # Nessun budget aperto = nessun vincolo (rung 4 non richiede budget).
+    try:
+        import hashlib as _h
+        import re as _r
+        _s = str(os.getcwd()).replace("\\", "/")
+        _slug = (_r.sub(r"[^A-Za-z0-9]+", "-", _s).strip("-")
+                 + "-" + _h.sha256(_s.encode()).hexdigest()[:8])
+        _bf = (Path.home() / ".claude" / "fable-director" / "budgets"
+               / f"{_slug}.json")
+        if _bf.is_file():
+            _b = json.loads(_bf.read_text())
+            if (_b.get("status") == "open"
+                    and _b.get("data_class") == "restricted"):
+                unavailable("budget del cwd dichiara --data-class restricted: "
+                            "verifica esterna bloccata, usa rung 3 (fd-verifier)")
+    except (json.JSONDecodeError, OSError):
+        pass
+
     # Preflight — ogni mancanza è rumorosa, mai fallback silenzioso.
     if not CONFIG_PATH.is_file():
         unavailable(f"config assente ({CONFIG_PATH}): esegui cross-verify.py --init")
