@@ -562,6 +562,11 @@ def cmd_session_summary(args):
         "subagent_output": sub_tot["output_tokens"],
         "cache_resets": cache_resets,
         "duration_s": (last_ts - first_ts).total_seconds() if first_ts and last_ts else None,
+        # account = basename del config dir (".claude" personale,
+        # ".claude-pixel" aziendale, …): la memoria di apprendimento è UNICA
+        # e condivisa per design, ma il report può distinguere le esperienze.
+        "account": Path(os.environ.get("CLAUDE_CONFIG_DIR")
+                        or Path.home() / ".claude").name,
     }
     yld = git_yield(cwd, first_ts)
     if yld is not None:

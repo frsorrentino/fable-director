@@ -95,10 +95,17 @@ def cost_checkpoint(budget):
         ceiling = int(env_ceil) if env_ceil else int(cfg.get("output_ceiling", DEFAULT_CEILING))
         floor = float(cfg.get("weekly_pct_floor", 25))
 
-        # Quota residua weekly da quota.json (scritto dallo statusline). Assente
-        # → checkpoint solo su soglia assoluta (degrada senza, come da Known limits).
+        # Quota residua weekly dal file PER-ACCOUNT scritto dallo statusline
+        # (le quote sono del piano attivo: con 2 account un file unico farebbe
+        # leggere le soglie dell'account sbagliato). Fallback al legacy
+        # quota.json per statusline non ancora aggiornate. Assente →
+        # checkpoint solo su soglia assoluta (degrada, come da Known limits).
         weekly_remaining = None
-        qfile = base / "quota.json"
+        acct = hashlib.sha256((os.environ.get("CLAUDE_CONFIG_DIR")
+                               or str(Path.home() / ".claude")).encode()).hexdigest()[:8]
+        qfile = base / f"quota-{acct}.json"
+        if not qfile.is_file():
+            qfile = base / "quota.json"
         if qfile.is_file():
             try:
                 used = json.loads(qfile.read_text()).get("weekly_used_pct")

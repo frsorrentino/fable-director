@@ -73,12 +73,18 @@ try:
         if q:
             qd=Path.home()/".claude"/"fable-director"
             qd.mkdir(parents=True,exist_ok=True)
-            qf=qd/"quota.json"
+            # quota PER-ACCOUNT: le quote sono del piano attivo, non della
+            # macchina — con 2 account (CLAUDE_CONFIG_DIR diversi) un file
+            # unico fa leggere al gate le soglie di un altro account.
+            # NB niente apostrofi qui: stringa shell single-quoted.
+            import hashlib as _hq
+            acct=_hq.sha256((os.environ.get("CLAUDE_CONFIG_DIR") or str(Path.home()/".claude")).encode()).hexdigest()[:8]
+            qf=qd/f"quota-{acct}.json"
             new=json.dumps(q)
             # write-if-changed + atomica: render frequente, lettori concorrenti
             old_q=qf.read_text() if qf.is_file() else None
             if new!=old_q:
-                tmpq=qf.with_name(f"quota.json.{os.getpid()}.tmp")
+                tmpq=qf.with_name(f"{qf.name}.{os.getpid()}.tmp")
                 tmpq.write_text(new); os.replace(tmpq,qf)
     except Exception:
         pass
