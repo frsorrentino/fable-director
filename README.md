@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.13.3-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.13.4-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -56,6 +56,7 @@ Honest boundary, same as the table above: the *writing* of lessons is hook-enfor
 
 ## 🆕 What's new
 
+- **1.13.4** — Free-tier onboarding: doctor + first-run notice, per-task gate suggestions, Claude/external ledgers separated
 - **1.13.3** — Self-audit of the instruction files: stale multipliers, drifted specs, review command caught up
 - **1.13.2** — `/fable-director:status`: statusline as text for smartphone/remote clients
 - **1.13.1** — Dual-account: shared learning memory, per-account quota bridge
@@ -240,11 +241,31 @@ Then restart Claude Code. `--remove` to take it out. It won't touch a third-part
 
 ## 🧬 External free-tier models (Gemini, Codex) — verifier and executor
 
-You can connect **free-tier external models** to the plugin — currently **Gemini** (free
-AI Studio API key) and **Codex** (Codex CLI with your ChatGPT login). One-time setup, and
-the plugin manages them with the same discipline as everything else: **no silent fallback**
-(a missing key or a down endpoint fails loudly, never pretends), every call logged to
-telemetry, output contracts checked. They serve two distinct roles:
+**Already have a Google account or a ChatGPT account? It pays to connect them.**
+A Google account gets you a free Gemini API key (AI Studio) whose free-tier limits
+**reset every day** — a day without calls is free capacity lost. A ChatGPT account gets
+you the Codex CLI with usage included in your plan. Prefer paid models instead? The same
+config entries take any paid API key — the telemetry judges outcomes the same way.
+One-time setup, and the plugin manages them with the same discipline as everything else:
+**no silent fallback** (a missing key or a down endpoint fails loudly, never pretends),
+every call logged to telemetry, output contracts checked.
+
+The plugin is **proactive about this, deterministically**: on first run (no config yet) a
+one-shot notice suggests connecting the accounts; once configured, the delegation gate
+suggests the external route by itself when your telemetry confirms a task type works there
+(ok-rate ≥ 0.9 on N ≥ 10 runs — data, not enthusiasm), and nudges **once a day** when the
+daily free credits are still untouched. Guided setup and health check any time:
+
+```bash
+python3 <plugin>/scripts/external-exec.py --doctor          # static checks
+python3 <plugin>/scripts/external-exec.py --doctor --ping   # + 1 live call per provider
+```
+
+**Separate ledgers, always.** External usage is never mixed with your Claude accounting:
+the budget enforcement (2×/3× Stop hook) counts **Claude transcript tokens only**, while
+external volume is tracked in its own telemetry events and shown separately (`report`,
+`[XF]` statusline segment, `/fable-director:status`). Declare `--route external` at
+`budget-open` to keep the decision record clean. The two roles:
 
 **Privacy.** External models are optional. `cross-verify.py` sends the claim, rubric, and any `--context-file` artifact you provide; experimental `external-exec.py` sends the task spec and submitted `--input` content to the selected Gemini API or Codex CLI provider. Treat those materials as third-party disclosures: do not submit secrets, personal data, or proprietary content you are not permitted to share. Local telemetry records call metadata such as provider, model, task type, outcome, and validation status — not the submitted artifact or executor output.
 

@@ -48,6 +48,22 @@ Start a new Claude Code session, then check:
 - the skill is listed as `fable-director:delega-efficiente`;
 - `python3 <marketplace>/fable-director/skills/delega-efficiente/tools/session-cost-report.py --help` is not required: the script runs with no arguments from a project's directory.
 
+## 4b. Connect free-tier external models (optional, recommended)
+
+Tell the user clearly: **if they have a Google account or a ChatGPT account, connecting
+them pays off** — a free Gemini API key (AI Studio, limits reset daily) and/or the Codex
+CLI (usage included in the ChatGPT plan) let fable-director run non-quality-sensitive
+batches and cross-family verification **off the Claude quota**. Paid API keys work in the
+same config entries if they prefer paid models. Guided setup:
+
+```bash
+python3 <marketplace>/fable-director/scripts/external-exec.py --doctor
+```
+
+The doctor prints what is missing and the exact command to fix it (`cross-verify.py
+--init` creates the config). Skipping this is fine: the plugin shows a one-shot notice at
+first session start and works fully without external models.
+
 ## 5. Fallback without the plugin system
 
 Only if the plugin system is unusable:

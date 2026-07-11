@@ -29,6 +29,15 @@ Uso:
                    [--input FILE]... [--out FILE] [--schema-json]
                    [--provider gemini|gemini-stable|codex] [--type SLUG]
                    [--items N] [--timeout 120] [--allow-truncate]
+  external-exec.py --doctor [--ping]   # setup guidato / diagnosi provider
+
+--doctor: nessun budget richiesto (zero chiamate modello senza --ping).
+Config assente → istruzioni onboarding: account Google → chiave Gemini free
+tier (reset giornaliero); account ChatGPT → Codex CLI login (uso incluso nel
+piano); oppure chiavi API a pagamento nelle stesse voci di config. Config
+presente → checklist per provider (binario/chiave/auth_check) + uso odierno
+vs limits.rpd dal config. --ping aggiunge una chiamata reale minima per
+provider (consuma 1 richiesta di quota ciascuna: opt-in).
 
 Pre-budget OBBLIGATORIO e verificato qui (il gate PreToolUse non vede le
 chiamate Bash): senza budget open per il cwd lo script esce con errore.
@@ -131,12 +140,162 @@ def log_exec(payload):
         pass
 
 
+def today_usage():
+    """Chiamate esterne di oggi per provider, dalla telemetria (external_exec
+    + verification cross-family). Best-effort: errore → dict vuoto."""
+    counts = {}
+    try:
+        import sqlite3
+        db = Path.home() / ".claude" / "fable-director" / "telemetry.db"
+        con = sqlite3.connect(db, timeout=0.5)
+        con.execute("PRAGMA busy_timeout=500")
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        for ev, pl in con.execute(
+                "SELECT event, payload FROM events WHERE event IN "
+                "('external_exec','verification') AND ts >= ?", (today,)):
+            try:
+                p = json.loads(pl or "{}")
+            except json.JSONDecodeError:
+                continue
+            if ev == "verification" and p.get("kind") != "cross-family":
+                continue
+            if p.get("provider"):
+                counts[p["provider"]] = counts.get(p["provider"], 0) + 1
+        con.close()
+    except Exception:
+        pass
+    return counts
+
+
+def doctor(ping=False):
+    """Setup guidato + diagnosi: mai chiamate modello senza --ping."""
+    here = Path(__file__).parent
+    print("FABLE-DIRECTOR — doctor executor esterni")
+    if not CONFIG_PATH.is_file():
+        print(f"""
+Config assente: {CONFIG_PATH}
+
+Gli executor esterni spostano batch NON quality-sensitive fuori dalla tua
+quota Claude (Claude continua a pianificare e verificare). Due strade GRATUITE:
+
+  1. Hai un account Google?  Chiave API Gemini gratuita:
+     https://aistudio.google.com/apikey
+     Free tier con limiti che si RESETTANO OGNI GIORNO: un giorno senza
+     chiamate = capacita gratuita persa.
+  2. Hai un account ChatGPT? Codex CLI, uso incluso nel piano:
+     npm install -g @openai/codex   poi   codex login
+
+Preferisci modelli a pagamento? Stesse voci di config con la tua chiave API
+a pagamento — la telemetria confronta gli esiti allo stesso modo.
+
+Setup:
+  python3 "{here / 'cross-verify.py'}" --init
+  (poi inserisci la chiave nel config o via env var indicata)
+Ricontrolla:
+  python3 "{here / 'external-exec.py'}" --doctor [--ping]""")
+        sys.exit(1)
+    try:
+        cfg = json.loads(CONFIG_PATH.read_text())
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"config illeggibile: {e}")
+        sys.exit(1)
+    usage = today_usage()
+    problems = 0
+    for name, prov in (cfg.get("providers") or {}).items():
+        checks = []
+        ok = True
+        if prov.get("type") == "cli":
+            cmd = prov.get("command") or []
+            binary = cmd[0] if cmd else None
+            if binary and shutil.which(binary):
+                checks.append(f"binario '{binary}' presente")
+                auth = prov.get("auth_check")
+                if auth:
+                    try:
+                        rc = subprocess.run(auth, capture_output=True,
+                                            timeout=20).returncode
+                        if rc == 0:
+                            checks.append("login OK")
+                        else:
+                            ok = False
+                            checks.append(f"login MANCANTE (exit {rc}) — "
+                                          f"esegui: {' '.join(auth[:1])} login")
+                    except Exception as e:
+                        checks.append(f"auth_check non eseguibile ({e})")
+                else:
+                    checks.append("auth_check non configurato nel provider "
+                                  "(opzionale: es. [\"codex\",\"login\","
+                                  "\"status\"])")
+            else:
+                ok = False
+                checks.append(f"binario '{binary}' NON installato "
+                              f"({prov.get('note', '')})")
+        else:
+            key = prov.get("api_key") or os.environ.get(
+                prov.get("api_key_env", ""), "")
+            if key:
+                checks.append("chiave API presente")
+            else:
+                ok = False
+                checks.append(f"chiave API ASSENTE — export "
+                              f"{prov.get('api_key_env')}=... o api_key nel config")
+        if ping and ok:
+            probe = "Reply with exactly: OK"
+            try:
+                if prov.get("type") == "cli":
+                    fd, tmp = tempfile.mkstemp(prefix="xf-ping-", suffix=".txt")
+                    os.close(fd)
+                    cmd = [a.replace("{output_file}", tmp)
+                           for a in prov["command"]]
+                    p = subprocess.run(cmd, input=probe.encode(), timeout=90,
+                                       capture_output=True)
+                    resp = (Path(tmp).read_text(errors="replace").strip()
+                            or p.stdout.decode(errors="replace").strip())
+                    os.unlink(tmp)
+                    if p.returncode != 0:
+                        raise RuntimeError(
+                            f"exit {p.returncode}: "
+                            f"{p.stderr.decode(errors='replace')[:120]}")
+                else:
+                    body = json.dumps({"model": prov["model"], "messages": [
+                        {"role": "user", "content": probe}]}).encode()
+                    key = prov.get("api_key") or os.environ.get(
+                        prov.get("api_key_env", ""), "")
+                    req = urllib.request.Request(
+                        prov["base_url"].rstrip("/") + "/chat/completions",
+                        data=body, headers={
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {key}"})
+                    with urllib.request.urlopen(req, timeout=30) as r:
+                        resp = json.loads(r.read().decode(errors="replace")
+                                          )["choices"][0]["message"]["content"]
+                checks.append(f"ping OK ({str(resp).strip()[:40]!r})")
+            except Exception as e:
+                ok = False
+                checks.append(f"ping FALLITO: {str(e)[:160]}")
+        rpd = (prov.get("limits") or {}).get("rpd")
+        used = usage.get(name, 0)
+        checks.append(f"oggi {used} chiamate"
+                      + (f" / {rpd} rpd dichiarati" if rpd else ""))
+        if used == 0 and ok:
+            checks.append("free tier del giorno INUTILIZZATO (reset "
+                          "giornaliero: capacita persa se non usata)")
+        mark = "OK " if ok else "FAIL"
+        problems += 0 if ok else 1
+        print(f"[{mark}] {name} ({prov.get('model', '?')}): "
+              + " · ".join(checks))
+    print(f"\nesito: {'tutto configurato' if not problems else str(problems) + ' provider da sistemare'}"
+          + ("" if ping else " (statico — aggiungi --ping per una verifica live, 1 richiesta per provider)"))
+    sys.exit(0 if not problems else 1)
+
+
 def parse_args(argv):
     opts = {"--spec": None, "--spec-file": None, "--out": None,
             "--provider": None, "--type": None, "--items": None,
             "--timeout": "120"}
     inputs = []
-    flags = {"--schema-json": False, "--allow-truncate": False}
+    flags = {"--schema-json": False, "--allow-truncate": False,
+             "--doctor": False, "--ping": False}
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -208,6 +367,8 @@ def call_cli(prov, name, user_msg, timeout):
 
 def main():
     opts, inputs, flags = parse_args(sys.argv[1:])
+    if flags["--doctor"]:
+        doctor(ping=flags["--ping"])
     spec_text = opts["--spec"]
     if opts["--spec-file"]:
         try:
@@ -280,7 +441,8 @@ def main():
     if content is None or not str(content).strip():
         out("error", name, prov["model"], detail="risposta vuota dal provider")
         log_exec({"provider": name, "model": prov["model"],
-                  "type": opts.get("--type"), "ok": False, "check": "empty"})
+                  "type": opts.get("--type"), "ok": False, "check": "empty",
+                  "chars_in": len(user_msg)})
         sys.exit(1)
     content = str(content).strip()
 
@@ -289,7 +451,7 @@ def main():
             detail=content[:300])
         log_exec({"provider": name, "model": prov["model"],
                   "type": opts.get("--type"), "ok": False,
-                  "check": "needs_context"})
+                  "check": "needs_context", "chars_in": len(user_msg)})
         sys.exit(2)
 
     check = "raw"
@@ -307,7 +469,7 @@ def main():
                 f"retry o rotta Claude")
             log_exec({"provider": name, "model": prov["model"],
                       "type": opts.get("--type"), "ok": False,
-                      "check": "json-invalid"})
+                      "check": "json-invalid", "chars_in": len(user_msg)})
             sys.exit(1)
 
     dest = "-"
@@ -327,7 +489,8 @@ def main():
     log_exec({"provider": name, "model": prov["model"],
               "type": opts.get("--type"),
               "items": int(opts["--items"]) if opts["--items"] else None,
-              "ok": True, "check": check, "chars_out": len(content)})
+              "ok": True, "check": check, "chars_out": len(content),
+              "chars_in": len(user_msg)})
     sys.exit(0)
 
 

@@ -288,6 +288,82 @@ def effort_coherence(data, budget):
         return None
 
 
+def xf_advisory(budget):
+    """Advisory rotta esterna, mai deny/ask, max UNA nota al giorno. Due
+    trigger in ordine di forza:
+    1. tipo CONFERMATO dai dati: il --type del budget ha ok-rate ≥0.9 con
+       N≥10 su un provider esterno (stessa soglia DENSE del report) →
+       suggerisci quella rotta con i numeri. Proattivo per-task, data-driven,
+       zero hardcode.
+    2. crediti dormienti: esterni configurati ma zero chiamate oggi (i free
+       tier si resettano ogni giorno — il credito non usato è capacita persa).
+    Solo su deleghe dove la rotta esterna è plausibile: effort non-high
+    (asse 2 e verify restano su Claude), route workflow/agent/external.
+    Anti-Goodhart: propone dove la qualità non paga pedaggio, non spinge a
+    bruciare crediti. Best-effort: qualunque errore → None."""
+    try:
+        base = Path.home() / ".claude" / "fable-director"
+        if not (base / "cross-family.json").is_file():
+            return None
+        if (budget or {}).get("effort") in ("high", "xhigh", "max"):
+            return None
+        route = (budget or {}).get("route")
+        if route not in (None, "", "workflow", "agent", "external"):
+            return None
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        mark = base / "xf-nudge.json"
+        try:
+            if json.loads(mark.read_text()).get("date") == today:
+                return None
+        except (OSError, json.JSONDecodeError, ValueError):
+            pass
+        used_today = 0
+        by_prov = {}  # provider → [n, ok] per il --type del budget
+        btype = (budget or {}).get("type")
+        con = sqlite3.connect(base / "telemetry.db", timeout=0.5)
+        con.execute("PRAGMA busy_timeout=500")
+        for ev, ts, pl in con.execute(
+                "SELECT event, ts, payload FROM events WHERE event IN "
+                "('external_exec','verification')"):
+            try:
+                p = json.loads(pl or "{}")
+            except json.JSONDecodeError:
+                continue
+            if ev == "verification" and p.get("kind") != "cross-family":
+                continue
+            if not p.get("provider"):
+                continue
+            if str(ts) >= today:
+                used_today += 1
+            if ev == "external_exec" and btype and p.get("type") == btype:
+                by_prov.setdefault(p["provider"], [0, 0])
+                by_prov[p["provider"]][0] += 1
+                if p.get("ok"):
+                    by_prov[p["provider"]][1] += 1
+        con.close()
+        msg = None
+        for prov, (n, ok) in sorted(by_prov.items(), key=lambda x: -x[1][0]):
+            if n >= 10 and ok / n >= 0.9:
+                msg = (f"FD nota: il tipo '{btype}' è CONFERMATO su executor "
+                       f"esterno '{prov}' (ok {ok}/{n}, cella DENSA) — rotta "
+                       f"vantaggiosa per gli item non quality-sensitive: "
+                       f"scripts/external-exec.py --provider {prov} --type "
+                       f"{btype}. Fuori quota Claude. Solo advisory.")
+                break
+        if msg is None and used_today == 0:
+            msg = ("FD nota (1×/giorno): executor esterni configurati ma oggi "
+                   "0 chiamate — i free tier si resettano ogni giorno. Se gli "
+                   "item di questa delega non sono quality-sensitive (asse 4, "
+                   "mai asse 2), valuta scripts/external-exec.py. Solo "
+                   "advisory.")
+        if msg is None:
+            return None
+        mark.write_text(json.dumps({"date": today}))
+        return msg
+    except Exception:
+        return None
+
+
 def main():
     try:
         data = json.load(sys.stdin)
@@ -337,7 +413,8 @@ def main():
             # UN solo systemMessage: due print JSON separati romperebbero il
             # parsing dell'output hook.
             msgs = [m for m in (announce_model(data),
-                                effort_coherence(data, budget)) if m]
+                                effort_coherence(data, budget),
+                                xf_advisory(budget)) if m]
             if msgs:
                 print(json.dumps({"systemMessage": "\n".join(msgs)},
                                  ensure_ascii=False))

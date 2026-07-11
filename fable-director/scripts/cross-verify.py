@@ -92,6 +92,7 @@ DEFAULT_CONFIG = {
                         "--sandbox", "read-only", "--skip-git-repo-check",
                         "--output-last-message", "{output_file}"],
             "model": "gpt-5.6-terra",
+            "auth_check": ["codex", "login", "status"],
             "note": "richiede Codex CLI >=0.144 (npm i -g @openai/codex@latest) + login "
                     "ChatGPT (quota finestra 5h; nessuna API di lettura quota). Alternative "
                     "built-in: gpt-5.6-sol (detail), gpt-5.6-luna (repeatable)"

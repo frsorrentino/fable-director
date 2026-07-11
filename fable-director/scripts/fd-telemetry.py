@@ -15,7 +15,7 @@ solo da indicatori oggettivi (test pass/fail, rollback, fix successivo).
 Sottocomandi:
   budget-open  --task S --expected-output N [--expected-input N] [--type SLUG]
                [--approach S] [--fallback S]
-               [--route inline|workflow|script|agent] [--reason S] [--alternative S]
+               [--route inline|workflow|script|agent|external] [--reason S] [--alternative S]
                [--effort low|medium|high|xhigh|max] [--cost-ack]
                scrive il budget file (status=open) e logga task_open;
                --cost-ack = l'utente ha già approvato il costo di questo task (il
@@ -729,6 +729,11 @@ def cmd_report(args):
             dense = "DENSO" if n >= 10 else "sparso"
             print(f"  {key}: {n} run, {ok} ok, {bad} scarti "
                   f"(ok-rate {ok / n:.2f}) — {dense}")
+        tin = sum(x.get("chars_in") or 0 for x in ext) // 4
+        tout = sum(x.get("chars_out") or 0 for x in ext) // 4
+        print(f"  volume esterno stimato: ~{fmt(tin)} token in, ~{fmt(tout)} "
+              f"token out — LEDGER SEPARATO, fuori quota Claude (il budget "
+              f"2×/3× conta solo token del transcript Claude)")
 
     promos = [p for e, p in events if e == "script_promotion"]
     if promos:

@@ -123,25 +123,43 @@ def main():
         except Exception:
             pass
 
-    # XF — cross-family oggi
+    # XF — executor/verifier esterni oggi (verification cross-family +
+    # external_exec). Config presente ma zero chiamate → credito free tier
+    # del giorno dormiente (si resetta ogni giorno): segnale, non colpa.
+    xf_cfg = None
+    try:
+        cf = BASE / "cross-family.json"
+        if cf.is_file():
+            xf_cfg = json.loads(cf.read_text())
+    except Exception:
+        pass
     try:
         con = sqlite3.connect(BASE / "telemetry.db", timeout=0.5)
         con.execute("PRAGMA busy_timeout=500")
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         counts = {}
-        for (pl,) in con.execute(
-                "SELECT payload FROM events WHERE event='verification' AND ts >= ?",
-                (today,)):
+        for ev, pl in con.execute(
+                "SELECT event, payload FROM events WHERE event IN "
+                "('verification','external_exec') AND ts >= ?", (today,)):
             try:
                 p = json.loads(pl or "{}")
             except json.JSONDecodeError:
                 continue
-            if p.get("kind") == "cross-family" and p.get("provider"):
+            if ev == "verification" and p.get("kind") != "cross-family":
+                continue
+            if p.get("provider"):
                 counts[p["provider"]] = counts.get(p["provider"], 0) + 1
         con.close()
         if counts:
-            lines.append("cross-family oggi: " + ", ".join(
-                f"{k}×{v}" for k, v in sorted(counts.items())))
+            provs = (xf_cfg or {}).get("providers") or {}
+            parts = []
+            for k, v in sorted(counts.items()):
+                rpd = ((provs.get(k) or {}).get("limits") or {}).get("rpd")
+                parts.append(f"{k}×{v}" + (f"/{rpd} rpd" if rpd else ""))
+            lines.append("esterni oggi: " + ", ".join(parts))
+        elif xf_cfg:
+            lines.append("esterni oggi: 0 chiamate — free tier del giorno "
+                         "inutilizzato (reset giornaliero)")
     except Exception:
         pass
 
