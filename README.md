@@ -58,22 +58,22 @@ Honest boundary, same as the table above: the *writing* of lessons is hook-enfor
 
 ## 🆕 What's new
 
-- **1.15.2** — Concurrency stress suite in CI — first run caught 113/800 telemetry events silently lost; now retried with backoff
-- **1.15.1** — Eight fixes from the final three-track bug hunt: symlink perimeter bypass, Windows cross-drive fail-open, amend race, stale-budget external calls, `--out` perimeter, statusline token loss
-- **1.15.0** — Interface round: alarms in plain words, `/help` legend, `/status --detail` with "now:" line, all messages in English
-- **1.14.0** — Write perimeter (budget bounds what a task may touch, `never_write` walls), task receipts, MCP context metering
-- **1.13.5** — Estimate calibration, 7D burn-rate forecast, script-promotion queue, `--verify` contract, enforceable `--data-class restricted`, enforcement-suspended banner
-- **1.13.4** — Free-tier onboarding: doctor + first-run notice, per-task gate suggestions, Claude/external ledgers separated
-- **1.13.3** — Self-audit of the instruction files: stale multipliers, drifted specs, review command caught up
-- **1.13.2** — `/fable-director:status`: statusline as text for smartphone/remote clients
-- **1.13.1** — Dual-account: shared learning memory, per-account quota bridge
-- **1.13.0** — Budget lease, transcript-contract suite, benchmark validators, versioned cache
-- **1.12.6** — Concurrency and hot-path hardening from the dual cross-family review
-- **1.12.5** — Windows enforcement fixes (issue #1)
-- **1.12.4** — Five hardening fixes from the Codex adversarial review
-- **1.12.3** — Cross-family goes two-lane, models upgraded
-- **1.12.x** — Kernel fast path · external executor (experimental)
-- **1.11.x** — Effort as a routing lever · live budget ratio in the statusline
+- **1.15.2** — Concurrency stress tests in CI (caught a real bug on day one)
+- **1.15.1** — Eight bug fixes from an adversarial multi-model review
+- **1.15.0** — Clearer interface: plain-word alarms, `/help` legend, richer `/status`
+- **1.14.0** — Write perimeter, task receipts, MCP usage metering
+- **1.13.5** — Estimate calibration, quota burn-rate forecast, quality and privacy flags
+- **1.13.4** — Easier setup for free external models, smarter route suggestions
+- **1.13.3** — Self-audit: outdated instructions found and fixed
+- **1.13.2** — `/status` command for smartphone and remote clients
+- **1.13.1** — Two-account support
+- **1.13.0** — Sturdier budgets, tests for the token accounting, versioned cache
+- **1.12.6** — Hardening for concurrent sessions
+- **1.12.5** — Windows fixes
+- **1.12.4** — Five hardening fixes from external review
+- **1.12.3** — External models updated, stable Gemini lane added
+- **1.12.x** — Fast path for small tasks · external executor (experimental)
+- **1.11.x** — Reasoning-effort routing · live budget in the statusline
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 
