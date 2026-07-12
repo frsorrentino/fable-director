@@ -63,17 +63,6 @@ Honest boundary, same as the table above: the *writing* of lessons is hook-enfor
 - **1.15.0** — Clearer interface: plain-word alarms, `/help` legend, richer `/status`
 - **1.14.0** — Write perimeter, task receipts, MCP usage metering
 - **1.13.5** — Estimate calibration, quota burn-rate forecast, quality and privacy flags
-- **1.13.4** — Easier setup for free external models, smarter route suggestions
-- **1.13.3** — Self-audit: outdated instructions found and fixed
-- **1.13.2** — `/status` command for smartphone and remote clients
-- **1.13.1** — Two-account support
-- **1.13.0** — Sturdier budgets, tests for the token accounting, versioned cache
-- **1.12.6** — Hardening for concurrent sessions
-- **1.12.5** — Windows fixes
-- **1.12.4** — Five hardening fixes from external review
-- **1.12.3** — External models updated, stable Gemini lane added
-- **1.12.x** — Fast path for small tasks · external executor (experimental)
-- **1.11.x** — Reasoning-effort routing · live budget in the statusline
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 
