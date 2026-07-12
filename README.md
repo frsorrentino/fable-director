@@ -184,7 +184,9 @@ The read-heavy result measures **disciplined delegation vs naive delegation**, n
 
 ## 📟 The statusline
 
-One glance at model, context and plan quotas — so you see the rate limit coming **before** it hits. On clients with no terminal statusline (smartphone remote control, web) use **`/fable-director:status`**: same data as conversation text, with honest freshness labels.
+One glance at model, context and plan quotas — so you see the rate limit coming **before** it hits. **Quiet when healthy, loud in plain words when broken**: compact tags like `[BDG 0.7×·high]` while everything is fine, full-word alarms when it isn't — `⚠ BUDGET 2.3× OF ESTIMATE`, `✕ BUDGET 3× — POST-MORTEM DUE`, `✕ ENFORCEMENT OFF` — with text markers that survive terminals without color. On narrow screens the line degrades deterministically (`[DLG]` drops first, then `[XF]`, never an alarm).
+
+In-session legend any time: **`/fable-director:help`**. On clients with no terminal statusline (smartphone remote control, web) use **`/fable-director:status`**: leads with a *now:* line (open budget, live spend ratio, effort), plus quotas with honest freshness labels and a 7-day burn-rate projection; `--detail` adds session delegations and the last task receipt.
 
 ![fable-director statusline](assets/statusline.svg)
 
