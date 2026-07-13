@@ -29,7 +29,8 @@ Uso:
   cross-verify.py --usage        # contatore locale vs limiti dichiarati (i
                                  # free tier non espongono la quota via API)
   cross-verify.py --claim "..." --rubric "..." [--context-file F]
-                  [--provider gemini|gemini-stable|codex|grok] [--timeout 60] [--type SLUG]
+                  [--provider gemini|gemini-stable|codex|grok] [--type SLUG]
+                  [--timeout N]   (default: campo "timeout" del provider, poi 60)
 
 --type = tipo di task (es. cross-lingua, security-review, spec-compliance):
 loggato nella telemetria così `fd-telemetry.py report` può dire EMPIRICAMENTE
@@ -88,15 +89,28 @@ DEFAULT_CONFIG = {
         },
         "codex": {
             "type": "cli",
-            "command": ["codex", "exec", "--model", "gpt-5.6-terra",
-                        "-c", "model_reasoning_effort=high",
+            "command": ["codex", "exec", "--model", "{model}",
+                        "-c", "model_reasoning_effort={effort}",
                         "--sandbox", "read-only", "--skip-git-repo-check",
                         "--output-last-message", "{output_file}"],
+            "resume_command": ["codex", "exec", "resume", "--last",
+                               "-c", "model_reasoning_effort={effort}",
+                               "-c", "sandbox_mode=\"read-only\"",
+                               "--skip-git-repo-check",
+                               "--output-last-message", "{output_file}"],
+            "schema_args": ["--output-schema", "{schema_file}"],
             "model": "gpt-5.6-terra",
+            "effort": "high",
+            "timeout": 600,
             "auth_check": ["codex", "login", "status"],
             "note": "richiede Codex CLI >=0.144 (npm i -g @openai/codex@latest) + login "
                     "ChatGPT (quota finestra 5h; nessuna API di lettura quota). Alternative "
-                    "built-in: gpt-5.6-sol (detail), gpt-5.6-luna (repeatable)"
+                    "built-in: gpt-5.6-sol (detail), gpt-5.6-luna (repeatable). "
+                    "{model}/{effort} default dai campi omonimi; external-exec.py li "
+                    "sovrascrive con --model/--effort (batch massivi → low, verify resta "
+                    "high). resume_command/schema_args: --resume-last / --schema-file di "
+                    "external-exec.py (codex exec resume non accetta --sandbox: read-only "
+                    "via -c sandbox_mode)"
         },
         "grok": {
             "base_url": "https://api.x.ai/v1",
@@ -110,13 +124,29 @@ DEFAULT_CONFIG = {
     }
 }
 
+# Contratto a blocchi XML (tiene meglio della prosa sulla famiglia GPT/Codex)
+# + finding-bar e calibrazione distillate dal prompt adversarial-review di
+# openai/codex-plugin-cc (review 2026-07-13): stessa sostanza, più le regole
+# "un refuted forte batte tre dubbi deboli" e "inferenza dichiarata".
 VERIFIER_SYSTEM = (
-    "You are an independent adversarial verifier from a different model family. "
-    "You see ONLY the artifact and the rubric below — you have no access to the "
-    "maker's reasoning and no stake in its conclusions. Try to REFUTE the claim. "
-    "If the evidence provided is insufficient to support it, verdict is 'refuted' "
-    "or 'uncertain', never 'supported'. Reply with STRICT JSON only: "
-    '{"verdict": "refuted|supported|uncertain", "reasoning": "<max 120 words>"}'
+    "<role>You are an independent adversarial verifier from a different "
+    "model family. You see ONLY the artifact and the rubric below — you have "
+    "no access to the maker's reasoning and no stake in its conclusions."
+    "</role>\n"
+    "<operating_stance>Try to REFUTE the claim. If the evidence provided is "
+    "insufficient to support it, the verdict is 'refuted' or 'uncertain', "
+    "never 'supported'.</operating_stance>\n"
+    "<finding_bar>A refutation must say what is wrong, why that spot is "
+    "vulnerable, and the likely impact. One strong, defensible refutation "
+    "beats several weak doubts — do not dilute a serious flaw with filler "
+    "reservations.</finding_bar>\n"
+    "<grounding_rules>Ground every statement in the artifact provided. Do "
+    "not invent content, files, or behavior that is not in it. If your "
+    "conclusion depends on an inference rather than direct evidence, say so "
+    "in the reasoning and keep the verdict honest.</grounding_rules>\n"
+    "<structured_output_contract>Reply with STRICT JSON only: "
+    '{"verdict": "refuted|supported|uncertain", "reasoning": "<max 120 '
+    'words>"}</structured_output_contract>'
 )
 
 
@@ -204,7 +234,7 @@ def cmd_init():
 
 def parse_args(argv):
     opts = {"--claim": None, "--rubric": None, "--context-file": None,
-            "--provider": None, "--timeout": "60", "--type": None,
+            "--provider": None, "--timeout": None, "--type": None,
             "--allow-truncate": False}
     i = 0
     while i < len(argv):
@@ -257,9 +287,19 @@ def call_cli(prov, name, user_msg, timeout):
     if not cmd_template or not shutil.which(cmd_template[0]):
         unavailable(f"CLI '{cmd_template[0] if cmd_template else '?'}' non "
                     f"installata per '{name}' ({prov.get('note', '')})")
+    # {model}/{effort}: default dai campi del provider (il verify resta effort
+    # high — qui nessun override runtime, la verifica pigra è il fallimento
+    # peggiore). No-op sui config legacy senza placeholder.
+    model = prov.get("model", "")
+    effort = prov.get("effort", "high")
+    if "{model}" in " ".join(cmd_template) and not model:
+        unavailable(f"il template di '{name}' usa {{model}} ma il provider "
+                    f"non ha il campo 'model' nel config")
     fd, out_file = tempfile.mkstemp(prefix="cross-verify-", suffix=".txt")
     os.close(fd)
-    cmd = [a.replace("{output_file}", out_file) for a in cmd_template]
+    cmd = [a.replace("{output_file}", out_file)
+            .replace("{model}", model)
+            .replace("{effort}", effort) for a in cmd_template]
     spec = f"{VERIFIER_SYSTEM}\n\n{user_msg}"
     try:
         proc = subprocess.run(cmd, input=spec.encode(), timeout=timeout,
@@ -341,7 +381,10 @@ def main():
     if context:
         user_msg += f"\nARTIFACT:\n{context[:100_000]}\n"
 
-    timeout = int(opts["--timeout"])
+    # Risoluzione timeout: flag esplicita > campo del provider > default 60
+    # (codex effort high nel config di default dichiara 600: 60s troncava
+    # verifiche legittime ancora in reasoning).
+    timeout = int(opts["--timeout"] or prov.get("timeout") or 60)
     # Marker per lo statusline: [XF <provider>▶] finché la chiamata è viva.
     # finally garantisce la rimozione anche su unavailable (SystemExit).
     try:

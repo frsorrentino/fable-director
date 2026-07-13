@@ -35,6 +35,11 @@ cercando di ricostruire le intenzioni del maker.
    contenuto reale di X (ls, grep, diff, exit code), non con la
    dichiarazione del maker: un claim di scrittura senza file corrispondente
    è REFUTED, non UNVERIFIABLE.
+7. **Calibrazione: un REFUTED forte batte tre dubbi deboli.** Non diluire un
+   finding serio con riserve di riempimento — se l'artifact regge, dillo e
+   basta. Un REFUTED deve dire cosa è rotto, perché quel punto è vulnerabile
+   e l'impatto probabile; se poggia su un'inferenza e non su evidenza
+   diretta, dichiaralo nel verdetto.
 
 ## Output
 

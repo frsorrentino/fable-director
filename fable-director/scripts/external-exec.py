@@ -16,19 +16,34 @@ Principi (stessi di cross-verify.py):
   condiviso (exit 2 — la delega non era pronta, non è un errore del modello).
 - Rung-1 minimo integrato: con --schema-json l'output DEVE essere JSON valido,
   altrimenti STATUS: error (mai consegnare output fuori schema a valle).
+  Con --schema-file lo schema è enforced anche lato provider (schema_args nel
+  config, es. --output-schema di Codex) + ricontrollo locale delle chiavi
+  required top-level: CHECK schema-valid|schema-invalid.
 - Il wrapper persiste il deliverable (--out); il provider CLI resta read-only
   (config cross-family: codex gira --sandbox read-only — l'esterno non scrive
   MAI nel repo, scrive solo questo wrapper dove gli dici tu).
 
 Config: riusa ~/.claude/fable-director/cross-family.json (cross-verify.py
---init per crearla). Il template codex nel config è tarato per verify
-(effort high): per exec massivi valuta una voce dedicata nel config.
+--init per crearla). Il template CLI usa placeholder {model}/{effort} con
+default dai campi omonimi del provider: --model/--effort li sovrascrivono
+a runtime (batch massivi → --effort low; il verify resta high) senza voci
+duplicate. Un override senza placeholder nel template è errore rumoroso,
+mai ignorato. Timeout: --timeout, poi campo "timeout" del provider, poi 120.
+
+--resume-last (solo provider CLI con "resume_command" nel config): continua
+l'ultimo thread Codex di QUESTA directory (--last filtra per cwd) inviando
+solo l'istruzione delta — retry dopo needs_context/json-invalid a frazione
+del costo della spec intera. SOLO retry sequenziale immediato: in batch
+paralleli riprenderebbe il thread sbagliato. Pattern distillato da
+openai/codex-plugin-cc (review 2026-07-13).
 
 Uso:
   external-exec.py --spec-file F | --spec "..."
                    [--input FILE]... [--out FILE] [--schema-json]
+                   [--schema-file SCHEMA.json] [--resume-last]
                    [--provider gemini|gemini-stable|codex] [--type SLUG]
-                   [--items N] [--timeout 120] [--allow-truncate]
+                   [--model M] [--effort low|medium|high|...]
+                   [--items N] [--timeout N] [--allow-truncate]
   external-exec.py --doctor [--ping]   # setup guidato / diagnosi provider
 
 --doctor: nessun budget richiesto (zero chiamate modello senza --ping).
@@ -76,15 +91,22 @@ CONFIG_PATH = Path.home() / ".claude" / "fable-director" / "cross-family.json"
 ACTIVE_PATH = Path.home() / ".claude" / "fable-director" / "xfam-active.json"
 INPUT_CAP = 100_000  # char per file di input (stesso cap di cross-verify)
 
+# Contratto a blocchi XML: sulla famiglia GPT/Codex i blocchi con tag stabili
+# tengono meglio della prosa (pattern distillato da openai/codex-plugin-cc,
+# skill gpt-5-4-prompting). Il contenuto è lo stesso contratto di prima.
 EXEC_SYSTEM = (
-    "You are a batch executor. You receive a complete task spec (Objective / "
-    "Files / Interfaces / Constraints / Verification). Execute it VERBATIM. "
-    "Reply with ONLY the deliverable in the exact format the spec requires — "
-    "no preamble, no commentary, no code fences unless the spec asks for them. "
-    "If the spec cannot be executed without context you do not have, reply "
-    "with exactly 'NEEDS_CONTEXT: <what is missing>' and nothing else. "
-    "Never invent data to fill gaps: an honest NEEDS_CONTEXT beats a "
-    "plausible-but-wrong deliverable."
+    "<role>You are a batch executor. You receive a complete task spec "
+    "(Objective / Files / Interfaces / Constraints / Verification) and you "
+    "execute it VERBATIM.</role>\n"
+    "<output_contract>Reply with ONLY the deliverable in the exact format "
+    "the spec requires — no preamble, no commentary, no code fences unless "
+    "the spec asks for them.</output_contract>\n"
+    "<missing_context_gating>If the spec cannot be executed without context "
+    "you do not have, reply with exactly 'NEEDS_CONTEXT: <what is missing>' "
+    "and nothing else.</missing_context_gating>\n"
+    "<grounding_rules>Never invent data to fill gaps: an honest "
+    "NEEDS_CONTEXT beats a plausible-but-wrong deliverable."
+    "</grounding_rules>"
 )
 
 
@@ -312,6 +334,8 @@ Re-check:
                     fd, tmp = tempfile.mkstemp(prefix="xf-ping-", suffix=".txt")
                     os.close(fd)
                     cmd = [a.replace("{output_file}", tmp)
+                            .replace("{model}", prov.get("model", ""))
+                            .replace("{effort}", prov.get("effort", "high"))
                            for a in prov["command"]]
                     p = subprocess.run(cmd, input=probe.encode(), timeout=90,
                                        capture_output=True)
@@ -358,10 +382,11 @@ Re-check:
 def parse_args(argv):
     opts = {"--spec": None, "--spec-file": None, "--out": None,
             "--provider": None, "--type": None, "--items": None,
-            "--timeout": "120"}
+            "--timeout": None, "--schema-file": None, "--model": None,
+            "--effort": None}
     inputs = []
     flags = {"--schema-json": False, "--allow-truncate": False,
-             "--doctor": False, "--ping": False}
+             "--doctor": False, "--ping": False, "--resume-last": False}
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -403,18 +428,92 @@ def call_http(prov, name, api_key, user_msg, timeout):
         return None
 
 
-def call_cli(prov, name, user_msg, timeout):
+def load_schema(path):
+    """--schema-file: schema illeggibile o non-JSON è errore rumoroso — uno
+    schema rotto non deve mai degradare a nessun-controllo."""
+    try:
+        text = Path(path).read_text(errors="replace")
+        return json.loads(text), text
+    except (OSError, json.JSONDecodeError) as e:
+        sys.exit(f"unreadable/invalid --schema-file {path}: {e}")
+
+
+def schema_required_gaps(schema, parsed):
+    """Ricontrollo locale minimo (stdlib, niente jsonschema): tipo top-level
+    e chiavi 'required'. L'enforcement pieno è lato provider (schema_args,
+    es. --output-schema di Codex); questo è la cintura che l'output non sia
+    palesemente fuori struttura prima di andare a valle."""
+    gaps = []
+    t = schema.get("type")
+    if t == "object" and not isinstance(parsed, dict):
+        gaps.append(f"top-level is {type(parsed).__name__}, schema wants object")
+    elif t == "array" and not isinstance(parsed, list):
+        gaps.append(f"top-level is {type(parsed).__name__}, schema wants array")
+    if isinstance(parsed, dict):
+        for key in schema.get("required") or []:
+            if key not in parsed:
+                gaps.append(f"missing required key '{key}'")
+    return gaps
+
+
+def render_cli_command(prov, name, opts, out_file, schema_path):
+    """Rende il template CLI del provider. {model}/{effort} hanno default dai
+    campi omonimi del config; --model/--effort li sovrascrivono SOLO se il
+    template ha il placeholder (override mai ignorato in silenzio).
+    --resume-last usa il template dedicato 'resume_command' (`codex exec
+    resume` non accetta le stesse flag di exec: niente --sandbox, read-only
+    via -c sandbox_mode). Con --schema-file accoda 'schema_args' rese
+    (es. ["--output-schema", "{schema_file}"])."""
+    template = (prov.get("resume_command") if opts["--resume-last"]
+                else prov.get("command")) or []
+    if opts["--resume-last"] and not template:
+        out("error", name, prov.get("model", "?"), detail=(
+            "--resume-last: provider has no 'resume_command' template in the "
+            "config — add it (see cross-verify.py DEFAULT_CONFIG) or run fresh"))
+        sys.exit(1)
+    if not template or not shutil.which(template[0]):
+        unavailable(f"CLI '{template[0] if template else '?'}' not "
+                    f"installed for '{name}' ({prov.get('note', '')})")
+    joined = " ".join(template)
+    model = opts["--model"] or prov.get("model", "")
+    effort = opts["--effort"] or prov.get("effort", "")
+    for flag, placeholder in (("--model", "{model}"), ("--effort", "{effort}")):
+        if opts[flag] and placeholder not in joined:
+            out("error", name, prov.get("model", "?"), detail=(
+                f"{flag} requested but the template in use for '{name}' has "
+                f"no {placeholder} placeholder — update the config entry, an "
+                f"override is never silently ignored"))
+            sys.exit(1)
+    for placeholder, value, field in (("{model}", model, "model"),
+                                      ("{effort}", effort, "effort")):
+        if placeholder in joined and not value:
+            out("error", name, prov.get("model", "?"), detail=(
+                f"template uses {placeholder} but the provider has no "
+                f"'{field}' field and no CLI override was given"))
+            sys.exit(1)
+    cmd = [a.replace("{output_file}", out_file)
+            .replace("{model}", model)
+            .replace("{effort}", effort) for a in template]
+    if schema_path:
+        schema_args = prov.get("schema_args")
+        if not schema_args:
+            out("error", name, prov.get("model", "?"), detail=(
+                "--schema-file: provider has no 'schema_args' in the config "
+                "(e.g. [\"--output-schema\", \"{schema_file}\"]) — add it or "
+                "fall back to --schema-json (JSON validity only)"))
+            sys.exit(1)
+        cmd += [a.replace("{schema_file}", schema_path) for a in schema_args]
+    return cmd
+
+
+def call_cli(prov, name, user_msg, timeout, opts, schema_path):
     """Sottoprocesso (es. Codex CLI): preflight, spec via stdin, output su
     mktemp unico, timeout — stessa disciplina di cross-verify.py."""
-    cmd_template = prov.get("command") or []
-    if not cmd_template or not shutil.which(cmd_template[0]):
-        unavailable(f"CLI '{cmd_template[0] if cmd_template else '?'}' not "
-                    f"installed for '{name}' ({prov.get('note', '')})")
     fd, out_file = tempfile.mkstemp(prefix="external-exec-", suffix=".txt")
     os.close(fd)
-    cmd = [a.replace("{output_file}", out_file) for a in cmd_template]
     spec = f"{EXEC_SYSTEM}\n\n{user_msg}"
     try:
+        cmd = render_cli_command(prov, name, opts, out_file, schema_path)
         proc = subprocess.run(cmd, input=spec.encode(), timeout=timeout,
                               capture_output=True)
         if proc.returncode != 0:
@@ -433,6 +532,8 @@ def call_cli(prov, name, user_msg, timeout):
 
 def main():
     opts, inputs, flags = parse_args(sys.argv[1:])
+    # render_cli_command legge tutto da opts: allinea il flag booleano.
+    opts["--resume-last"] = flags["--resume-last"]
     if flags["--doctor"]:
         doctor(ping=flags["--ping"])
     spec_text = opts["--spec"]
@@ -459,12 +560,34 @@ def main():
     if not prov:
         unavailable(f"provider '{name}' not defined in config")
     is_cli = prov.get("type") == "cli"
+    # --model override: vale per entrambe le rotte (HTTP: modello nel body;
+    # CLI: placeholder {model}) e la riga PROVIDER riporta il modello
+    # EFFETTIVO, non il default del config — telemetria inclusa.
+    if opts["--model"]:
+        prov = {**prov, "model": opts["--model"]}
     api_key = ""
     if not is_cli:
+        # --effort/--resume-last sono semantiche CLI-only → errore, mai
+        # ignorati in silenzio.
+        if opts["--effort"]:
+            out("error", name, prov.get("model", "?"), detail=(
+                "--effort is only supported for CLI providers with an "
+                "{effort} placeholder in the command template"))
+            sys.exit(1)
+        if flags["--resume-last"]:
+            out("error", name, prov.get("model", "?"), detail=(
+                "--resume-last is only supported for CLI providers with a "
+                "'resume_command' template in the config"))
+            sys.exit(1)
         api_key = prov.get("api_key") or os.environ.get(prov.get("api_key_env", ""), "")
         if not api_key:
             unavailable(f"API key missing for '{name}' "
                         f"(export {prov.get('api_key_env')}=... or api_key in config)")
+
+    schema_obj, schema_text, schema_path = None, None, None
+    if opts["--schema-file"]:
+        schema_path = str(Path(opts["--schema-file"]).resolve())
+        schema_obj, schema_text = load_schema(schema_path)
 
     user_msg = f"TASK SPEC:\n{spec_text}\n"
     for fpath in inputs:
@@ -484,11 +607,16 @@ def main():
             content = content[:INPUT_CAP]
             user_msg += f"\n[NOTE: {fpath} TRUNCATED to {INPUT_CAP} chars on request]\n"
         user_msg += f"\nINPUT FILE {fpath}:\n{content}\n"
-    if flags["--schema-json"]:
+    if schema_text:
+        user_msg += ("\nOUTPUT FORMAT: strict JSON only — a single valid JSON "
+                     "document matching this JSON Schema, no code fences, no "
+                     f"trailing text:\n{schema_text}\n")
+    elif flags["--schema-json"]:
         user_msg += ("\nOUTPUT FORMAT: strict JSON only — a single valid JSON "
                      "document, no code fences, no trailing text.\n")
 
-    timeout = int(opts["--timeout"])
+    # Risoluzione timeout: flag esplicita > campo del provider > default 120.
+    timeout = int(opts["--timeout"] or prov.get("timeout") or 120)
     try:
         ACTIVE_PATH.write_text(json.dumps(
             {"provider": name, "pid": os.getpid(),
@@ -497,7 +625,7 @@ def main():
         pass
     try:
         if is_cli:
-            content = call_cli(prov, name, user_msg, timeout)
+            content = call_cli(prov, name, user_msg, timeout, opts, schema_path)
         else:
             content = call_http(prov, name, api_key, user_msg, timeout)
     finally:
@@ -506,39 +634,47 @@ def main():
         except OSError:
             pass
 
+    base_log = {"provider": name, "model": prov["model"],
+                "type": opts.get("--type"), "resume": flags["--resume-last"],
+                "chars_in": len(user_msg)}
     if content is None or not str(content).strip():
         out("error", name, prov["model"], detail="empty response from provider")
-        log_exec({"provider": name, "model": prov["model"],
-                  "type": opts.get("--type"), "ok": False, "check": "empty",
-                  "chars_in": len(user_msg)})
+        log_exec({**base_log, "ok": False, "check": "empty"})
         sys.exit(1)
     content = str(content).strip()
 
     if content.startswith("NEEDS_CONTEXT"):
         out("needs_context", name, prov["model"],
             detail=content[:300])
-        log_exec({"provider": name, "model": prov["model"],
-                  "type": opts.get("--type"), "ok": False,
-                  "check": "needs_context", "chars_in": len(user_msg)})
+        log_exec({**base_log, "ok": False, "check": "needs_context"})
         sys.exit(2)
 
     check = "raw"
-    if flags["--schema-json"]:
+    if schema_obj is not None or flags["--schema-json"]:
         candidate = content.strip().strip("`").strip()
         if candidate[:4].lower() == "json":
             candidate = candidate[4:].strip()
         try:
-            json.loads(candidate)
+            parsed = json.loads(candidate)
             content = candidate
             check = "json-valid"
         except json.JSONDecodeError as e:
             out("error", name, prov["model"], "json-invalid", "-",
                 f"output violates JSON schema ({e}) — do NOT hand downstream, "
-                f"retry or Claude route")
-            log_exec({"provider": name, "model": prov["model"],
-                      "type": opts.get("--type"), "ok": False,
-                      "check": "json-invalid", "chars_in": len(user_msg)})
+                f"retry (--resume-last on CLI providers sends only the delta) "
+                f"or Claude route")
+            log_exec({**base_log, "ok": False, "check": "json-invalid"})
             sys.exit(1)
+        if schema_obj is not None:
+            gaps = schema_required_gaps(schema_obj, parsed)
+            if gaps:
+                out("error", name, prov["model"], "schema-invalid", "-",
+                    f"output violates --schema-file ({'; '.join(gaps[:5])}) — "
+                    f"do NOT hand downstream, retry (--resume-last sends only "
+                    f"the delta) or Claude route")
+                log_exec({**base_log, "ok": False, "check": "schema-invalid"})
+                sys.exit(1)
+            check = "schema-valid"
 
     dest = "-"
     if opts["--out"]:
@@ -554,11 +690,9 @@ def main():
     if dest == "-":
         print("---")
         print(content)
-    log_exec({"provider": name, "model": prov["model"],
-              "type": opts.get("--type"),
+    log_exec({**base_log,
               "items": int(opts["--items"]) if opts["--items"] else None,
-              "ok": True, "check": check, "chars_out": len(content),
-              "chars_in": len(user_msg)})
+              "ok": True, "check": check, "chars_out": len(content)})
     sys.exit(0)
 
 

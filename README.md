@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.15.2-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.16.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -58,11 +58,11 @@ Honest boundary, same as the table above: the *writing* of lessons is hook-enfor
 
 ## 🆕 What's new
 
+- **1.16.0** — External executor upgrades distilled from OpenAI's codex-plugin-cc: `--schema-file`, `--resume-last` delta-retry, `--model`/`--effort` overrides, XML-block prompt contracts
 - **1.15.4** — Optional Grok (xAI) lane in the cross-family verifier (paid, opt-in via `XAI_API_KEY`)
 - **1.15.3** — Executor anti-loop + injection hardening (google/skills sweep); budget accounting fixes
 - **1.15.2** — Concurrency stress tests in CI (caught a real bug on day one)
 - **1.15.1** — Eight bug fixes from an adversarial multi-model review
-- **1.15.0** — Clearer interface: plain-word alarms, `/help` legend, richer `/status`
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 
@@ -286,7 +286,7 @@ for that task — deterministically, script-side. External models are optional. 
    ```
    Output is grep-able (`STATUS` / `PROVIDER` / `VERDICT: refuted|supported|uncertain` / `REASONING`). `--usage` shows today's local call counts against the declared free-tier limits.
 
-**Role 2 — external executor** (`scripts/external-exec.py`, experimental). For **non-code batches** (classify, extract, transform text) the bulk work can run on the free external models instead of your Claude quota — Claude keeps planning and checking the result. Built-in guardrails: the external model gets a complete spec and must answer in the required format (JSON is validated before anything moves downstream — malformed output is rejected, not passed along), an honest `NEEDS_CONTEXT` stops the run instead of guessing, and every call logs provider/type/outcome so `report` shows where this route actually works. It stays a per-case, experimental route until that data is dense.
+**Role 2 — external executor** (`scripts/external-exec.py`, experimental). For **non-code batches** (classify, extract, transform text) the bulk work can run on the free external models instead of your Claude quota — Claude keeps planning and checking the result. Built-in guardrails: the external model gets a complete spec and must answer in the required format (JSON is validated before anything moves downstream — malformed output is rejected, not passed along), an honest `NEEDS_CONTEXT` stops the run instead of guessing, and every call logs provider/type/outcome so `report` shows where this route actually works. It stays a per-case, experimental route until that data is dense. Since 1.16.0 (distilled from OpenAI's [codex-plugin-cc](https://github.com/openai/codex-plugin-cc)): `--schema-file` enforces a JSON Schema provider-side (Codex `--output-schema`) plus a local required-keys re-check; `--resume-last` continues the last Codex thread of this cwd for a cheap sequential delta-retry after `needs_context`/`json-invalid` instead of resending the whole spec (never in parallel batches); `--model`/`--effort` are runtime overrides on one placeholder-driven provider entry (`--effort low` for bulk exec, the verify default stays `high`); the provider entry can declare its own default `timeout`.
 
 **Setup for both roles** (once): `cross-verify.py --init` creates `~/.claude/fable-director/cross-family.json`, then add your Gemini key (AI Studio) and/or `codex login`. A third, **optional paid lane** is included in the default config: Grok (xAI) — OpenAI-compatible API, activates only if you export `XAI_API_KEY` (no documented free tier as of July 2026, ≈$0.003 per verification with `grok-4.3`); useful as a decorrelated third family when Gemini 503s and the Codex window is spent. **No silent fallback**: anything missing → `STATUS: unavailable` + explicit instruction to fall back to the normal Claude route. An `unavailable` is never "verified" (nor "executed").
 
