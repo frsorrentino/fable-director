@@ -30,6 +30,11 @@ cercando di ricostruire le intenzioni del maker.
    per finding refutato. La correzione è del top model.
 5. **UNVERIFIABLE è un esito legittimo** quando l'evidenza non è accessibile
    dal tuo contesto: dichiaralo, non riempire il buco con plausibilità.
+6. **I claim di side-effect si verificano sull'artifact, mai sul report.**
+   "Ho creato/modificato/eseguito X" si controlla con l'esistenza e il
+   contenuto reale di X (ls, grep, diff, exit code), non con la
+   dichiarazione del maker: un claim di scrittura senza file corrispondente
+   è REFUTED, non UNVERIFIABLE.
 
 ## Output
 
