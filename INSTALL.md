@@ -4,8 +4,8 @@
 > you to install the plugin, follow these steps in order. Don't skip step 4.
 
 > **Shortcut — auto-updating install.** If the user has network access to GitHub, prefer
-> the settings-based route in **[ONBOARDING.md](ONBOARDING.md)**: one settings.json edit,
-> one restart, updates then arrive automatically. The steps below are for zip/local-directory
+> the GitHub route in **[ONBOARDING.md](ONBOARDING.md)**: two commands, and from 1.17.0
+> auto-update self-enables at the first session. The steps below are for zip/local-directory
 > installs (air-gapped or development), which do NOT self-update.
 
 ## 1. Permanent location

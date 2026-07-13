@@ -32,9 +32,8 @@ git rev-parse "v$VER" >/dev/null 2>&1 \
 
 echo "== 2/6 test suites (must be green BEFORE the commit) =="
 python3 tests/transcript-contract/run.py
-for t in tests/external-exec-verify.py tests/budget-reopen-verify.py \
-         tests/concurrency-stress.py tests/windows-verify.py; do
-  [ -f "$t" ] && python3 "$t"
+for t in tests/*.py; do
+  python3 "$t"
 done
 
 echo "== 3/6 zip =="

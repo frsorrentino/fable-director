@@ -58,11 +58,11 @@ Honest boundary, same as the table above: the *writing* of lessons is hook-enfor
 
 ## 🆕 What's new
 
+- **1.17.0** — Auto-update self-enables on GitHub-marketplace installs (announced, reversible, opt-out always respected)
 - **1.16.1** — Hook scripts run through their interpreter, not the `+x` bit — durable across installs
 - **1.16.0** — External executor upgrades distilled from OpenAI's codex-plugin-cc: `--schema-file`, `--resume-last` delta-retry, `--model`/`--effort` overrides, XML-block prompt contracts
 - **1.15.4** — Optional Grok (xAI) lane in the cross-family verifier (paid, opt-in via `XAI_API_KEY`)
 - **1.15.3** — Executor anti-loop + injection hardening (google/skills sweep); budget accounting fixes
-- **1.15.2** — Concurrency stress tests in CI (caught a real bug on day one)
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 
@@ -331,19 +331,16 @@ Routing cuts **cost per token** (cheap executor does the heavy work). A separate
 
 ## 🚀 Installation
 
-**Auto-updating (recommended — one paste, zero maintenance):** paste the prompt in
-**[ONBOARDING.md](ONBOARDING.md)** into any Claude Code session and restart once.
-Updates then arrive automatically at each session start.
-
-**Manual, from this repo:**
-
 ```bash
 claude plugin marketplace add frsorrentino/fable-director
 claude plugin install fable-director@pixelfarm --scope user
 ```
 
-(Manual installs don't self-update: enable auto-update in `/plugin` → Marketplaces →
-`pixelfarm`, or use the ONBOARDING prompt.)
+That's all: from the first session the plugin **enables its own auto-update** (announced
+in-session, reversible — set `"autoUpdate": false` under `extraKnownMarketplaces.pixelfarm`
+in `settings.json` to opt out, and that choice is respected forever). Updates download in
+the background; each new session starts on the latest version. No-CLI alternative and
+zip-migration notes: **[ONBOARDING.md](ONBOARDING.md)**.
 
 Then:
 
