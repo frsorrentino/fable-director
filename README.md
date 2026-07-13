@@ -58,11 +58,11 @@ Honest boundary, same as the table above: the *writing* of lessons is hook-enfor
 
 ## 🆕 What's new
 
+- **1.15.4** — Optional Grok (xAI) lane in the cross-family verifier (paid, opt-in via `XAI_API_KEY`)
 - **1.15.3** — Executor anti-loop + injection hardening (google/skills sweep); budget accounting fixes
 - **1.15.2** — Concurrency stress tests in CI (caught a real bug on day one)
 - **1.15.1** — Eight bug fixes from an adversarial multi-model review
 - **1.15.0** — Clearer interface: plain-word alarms, `/help` legend, richer `/status`
-- **1.14.0** — Write perimeter, task receipts, MCP usage metering
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 
@@ -288,7 +288,7 @@ for that task — deterministically, script-side. External models are optional. 
 
 **Role 2 — external executor** (`scripts/external-exec.py`, experimental). For **non-code batches** (classify, extract, transform text) the bulk work can run on the free external models instead of your Claude quota — Claude keeps planning and checking the result. Built-in guardrails: the external model gets a complete spec and must answer in the required format (JSON is validated before anything moves downstream — malformed output is rejected, not passed along), an honest `NEEDS_CONTEXT` stops the run instead of guessing, and every call logs provider/type/outcome so `report` shows where this route actually works. It stays a per-case, experimental route until that data is dense.
 
-**Setup for both roles** (once): `cross-verify.py --init` creates `~/.claude/fable-director/cross-family.json`, then add your Gemini key (AI Studio) and/or `codex login`. **No silent fallback**: anything missing → `STATUS: unavailable` + explicit instruction to fall back to the normal Claude route. An `unavailable` is never "verified" (nor "executed").
+**Setup for both roles** (once): `cross-verify.py --init` creates `~/.claude/fable-director/cross-family.json`, then add your Gemini key (AI Studio) and/or `codex login`. A third, **optional paid lane** is included in the default config: Grok (xAI) — OpenAI-compatible API, activates only if you export `XAI_API_KEY` (no documented free tier as of July 2026, ≈$0.003 per verification with `grok-4.3`); useful as a decorrelated third family when Gemini 503s and the Codex window is spent. **No silent fallback**: anything missing → `STATUS: unavailable` + explicit instruction to fall back to the normal Claude route. An `unavailable` is never "verified" (nor "executed").
 
 ---
 

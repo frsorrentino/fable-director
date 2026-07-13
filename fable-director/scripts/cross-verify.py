@@ -19,16 +19,17 @@ URL e modelli vivono nel config, non nel codice: i free tier cambiano senza
 preavviso — il punto di verità deve essere modificabile senza toccare lo script.
 Chiavi API: via env var (campo api_key_env) o campo api_key nel config.
 
-Provider: HTTP OpenAI-compatibile (gemini) o "type": "cli"
+Provider: HTTP OpenAI-compatibile (gemini, grok) o "type": "cli"
 (codex: sottoprocesso Codex CLI, login ChatGPT — spec via stdin, output su
-file mktemp unico, preflight `command -v`).
+file mktemp unico, preflight `command -v`). Grok (xAI) è FACOLTATIVO e a
+pagamento (nessun free tier documentato): si attiva solo con XAI_API_KEY.
 
 Uso:
   cross-verify.py --init
   cross-verify.py --usage        # contatore locale vs limiti dichiarati (i
                                  # free tier non espongono la quota via API)
   cross-verify.py --claim "..." --rubric "..." [--context-file F]
-                  [--provider gemini|gemini-stable|codex] [--timeout 60] [--type SLUG]
+                  [--provider gemini|gemini-stable|codex|grok] [--timeout 60] [--type SLUG]
 
 --type = tipo di task (es. cross-lingua, security-review, spec-compliance):
 loggato nella telemetria così `fd-telemetry.py report` può dire EMPIRICAMENTE
@@ -96,6 +97,15 @@ DEFAULT_CONFIG = {
             "note": "richiede Codex CLI >=0.144 (npm i -g @openai/codex@latest) + login "
                     "ChatGPT (quota finestra 5h; nessuna API di lettura quota). Alternative "
                     "built-in: gpt-5.6-sol (detail), gpt-5.6-luna (repeatable)"
+        },
+        "grok": {
+            "base_url": "https://api.x.ai/v1",
+            "model": "grok-4.3",
+            "api_key_env": "XAI_API_KEY",
+            "note": "xAI, terza famiglia (facoltativa). A PAGAMENTO — nessun free tier "
+                    "documentato (verificato 2026-07-13): ~$1.25/$2.50 per M token, "
+                    "~$0.003/verifica. Chiave da console.x.ai; senza XAI_API_KEY resta "
+                    "unavailable (mai fallback silenzioso)"
         }
     }
 }
