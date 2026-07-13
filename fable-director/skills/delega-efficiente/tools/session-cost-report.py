@@ -23,6 +23,7 @@ import json
 import os
 import sys
 from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 
 USAGE_KEYS = ("input_tokens", "output_tokens",
@@ -106,12 +107,24 @@ def main():
         else:
             dirs.append(Path(a))
     budget_task = None
+    declared = None
     if budget is None:
         bf = load_budget_file()
         if bf:
             budget = bf.get("expected_output_tokens") or None
             budget_input = budget_input or bf.get("expected_input_tokens") or None
             budget_task = bf.get("task")
+            # Scope del confronto pre-budget: dal declared_at in poi, come lo
+            # Stop hook. Confrontare la stima di UN task coi totali di
+            # sessione/progetto intera produce ratio spuri (visto 32× con
+            # subagenti a 1.08× della stima).
+            try:
+                declared = datetime.fromisoformat(
+                    str(bf.get("declared_at")).replace("Z", "+00:00"))
+                if declared.tzinfo is None:
+                    declared = declared.replace(tzinfo=timezone.utc)
+            except (ValueError, TypeError):
+                declared = None
     if not dirs:
         dirs = project_dirs_for_cwd()
     if not dirs:
@@ -128,6 +141,8 @@ def main():
     if not files:
         sys.exit(f"Nessun transcript .jsonl in: {', '.join(map(str, dirs))}")
 
+    scoped = defaultdict(int)   # solo record >= declared_at (per il pre-budget)
+    scoped_no_ts = 0
     for f in files:
         kind = "subagent" if "agent" in f.name else "main"
         with open(f, errors="replace") as fh:
@@ -140,11 +155,26 @@ def main():
                 except json.JSONDecodeError:
                     bad_lines += 1
                     continue
+                in_scope = True
+                if declared is not None:
+                    try:
+                        ts = datetime.fromisoformat(
+                            str(rec.get("timestamp")).replace("Z", "+00:00"))
+                        if ts.tzinfo is None:
+                            ts = ts.replace(tzinfo=timezone.utc)
+                        in_scope = ts >= declared
+                    except (ValueError, TypeError):
+                        # record senza timestamp: escluso dallo scope budget
+                        # (stessa scelta dello Stop hook), contato a parte
+                        in_scope = False
+                        scoped_no_ts += 1
                 for model, usage in find_usage(rec):
                     for k in USAGE_KEYS:
                         v = usage.get(k) or 0
                         per_model[model][k] += v
                         per_file[(kind, f.name)][k] += v
+                        if in_scope:
+                            scoped[k] += v
 
     def fmt(n):
         return f"{n:,}".replace(",", ".")
@@ -190,19 +220,25 @@ def main():
     for a in alarms:
         print(f"⚠ {a}")
 
+    # Pre-budget: coi dati del budget file il confronto è scoped a
+    # declared_at (come lo Stop hook); con --budget manuale resta sui totali.
+    src = scoped if declared is not None else tot
+    scope_s = " [scope: da declared_at]" if declared is not None else ""
+    if declared is not None and scoped_no_ts:
+        scope_s += f" ({scoped_no_ts} record senza timestamp esclusi)"
     if budget:
-        actual = tot["output_tokens"]
+        actual = src["output_tokens"]
         ratio = actual / budget
         flag = "≥3× → POST-MORTEM DOVUTO" if ratio >= 3 else "sotto soglia 3×, ok"
         task_s = f" (task: {budget_task})" if budget_task else ""
-        print(f"\npre-budget output{task_s}: {fmt(budget)}  actual: {fmt(actual)}  "
-              f"ratio: {ratio:.1f}× — {flag}")
+        print(f"\npre-budget output{task_s}{scope_s}: {fmt(budget)}  "
+              f"actual: {fmt(actual)}  ratio: {ratio:.1f}× — {flag}")
     if budget_input:
-        actual_in = tot["input_tokens"] + tot["cache_creation_input_tokens"]
+        actual_in = src["input_tokens"] + src["cache_creation_input_tokens"]
         ratio = actual_in / budget_input
         flag = "≥3× → POST-MORTEM DOVUTO" if ratio >= 3 else "sotto soglia 3×, ok"
-        print(f"pre-budget input (fresh=input+cache_creation): {fmt(budget_input)}  "
-              f"actual: {fmt(actual_in)}  ratio: {ratio:.1f}× — {flag}")
+        print(f"pre-budget input (fresh=input+cache_creation){scope_s}: "
+              f"{fmt(budget_input)}  actual: {fmt(actual_in)}  ratio: {ratio:.1f}× — {flag}")
 
 
 if __name__ == "__main__":

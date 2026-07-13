@@ -353,14 +353,26 @@ def cmd_budget_open(args):
             declared_prev = parse_ts(prev.get("declared_at"))
             fresh = (declared_prev is not None and
                      (datetime.now(timezone.utc) - declared_prev).total_seconds() < 86400)
-            if (prev.get("status") == "open" and fresh and prev_owner
-                    and owner and prev_owner != owner):
-                sys.exit(f"budget-open refused: another session ({prev_owner[:8]}…, "
-                         f"task '{prev.get('task')}') has an OPEN budget for "
-                         f"this cwd. Overwriting it would destroy its "
-                         f"enforcement. Use --force only if you know that "
-                         f"session is dead, or work from a separate "
-                         f"cwd/worktree.")
+            if prev.get("status") == "open" and fresh:
+                if prev_owner and owner and prev_owner != owner:
+                    sys.exit(f"budget-open refused: another session ({prev_owner[:8]}…, "
+                             f"task '{prev.get('task')}') has an OPEN budget for "
+                             f"this cwd. Overwriting it would destroy its "
+                             f"enforcement. Use --force only if you know that "
+                             f"session is dead, or work from a separate "
+                             f"cwd/worktree.")
+                # Stessa sessione (o owner assente): sovrascrivere in silenzio
+                # azzera declared_at (la baseline dell'enforcement riparte) e
+                # perde warned/decision record del budget precedente. La
+                # correzione di stima è legittima ma passa da un close
+                # esplicito, che resta nel decision record.
+                sys.exit(f"budget-open refused: a budget is already OPEN for "
+                         f"this cwd (task '{prev.get('task')}'). Re-opening "
+                         f"would reset the enforcement baseline and drop the "
+                         f"previous decision record. Close it first "
+                         f"(budget-close --outcome abandoned), then re-open "
+                         f"with the revised estimate — or use --force "
+                         f"deliberately.")
         except (json.JSONDecodeError, OSError):
             pass  # file corrotto: la nuova open lo rimpiazza (atomicamente)
     budget = {
