@@ -331,12 +331,19 @@ Routing cuts **cost per token** (cheap executor does the heavy work). A separate
 
 ## 🚀 Installation
 
-**From this repo:**
+**Auto-updating (recommended — one paste, zero maintenance):** paste the prompt in
+**[ONBOARDING.md](ONBOARDING.md)** into any Claude Code session and restart once.
+Updates then arrive automatically at each session start.
+
+**Manual, from this repo:**
 
 ```bash
 claude plugin marketplace add frsorrentino/fable-director
 claude plugin install fable-director@pixelfarm --scope user
 ```
+
+(Manual installs don't self-update: enable auto-update in `/plugin` → Marketplaces →
+`pixelfarm`, or use the ONBOARDING prompt.)
 
 Then:
 

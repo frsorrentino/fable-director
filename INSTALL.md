@@ -3,6 +3,11 @@
 > Operating instructions for Claude Code. If a user points you at this zip or folder and asks
 > you to install the plugin, follow these steps in order. Don't skip step 4.
 
+> **Shortcut — auto-updating install.** If the user has network access to GitHub, prefer
+> the settings-based route in **[ONBOARDING.md](ONBOARDING.md)**: one settings.json edit,
+> one restart, updates then arrive automatically. The steps below are for zip/local-directory
+> installs (air-gapped or development), which do NOT self-update.
+
 ## 1. Permanent location
 
 The `fable-director-marketplace/` folder must live at a STABLE path: after installation the
