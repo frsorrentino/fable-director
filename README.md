@@ -58,11 +58,11 @@ Honest boundary, same as the table above: the *writing* of lessons is hook-enfor
 
 ## 🆕 What's new
 
+- **1.17.1** — External-executor onboarding as a multiple-choice question (answered, not just announced)
 - **1.17.0** — Auto-update self-enables on GitHub-marketplace installs (announced, reversible, opt-out always respected)
 - **1.16.1** — Hook scripts run through their interpreter, not the `+x` bit — durable across installs
 - **1.16.0** — External executor upgrades distilled from OpenAI's codex-plugin-cc: `--schema-file`, `--resume-last` delta-retry, `--model`/`--effort` overrides, XML-block prompt contracts
 - **1.15.4** — Optional Grok (xAI) lane in the cross-family verifier (paid, opt-in via `XAI_API_KEY`)
-- **1.15.3** — Executor anti-loop + injection hardening (google/skills sweep); budget accounting fixes
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 
