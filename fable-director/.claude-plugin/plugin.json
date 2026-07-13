@@ -1,10 +1,10 @@
 {
   "name": "fable-director",
   "description": "Delega efficiente: il top model pianifica, giudica e verifica; l'esecuzione va al mezzo più economico adeguato. Kernel always-on a SessionStart, policy completa on-demand, playbook di apprendimento, enforcement pre-budget via gate PreToolUse + hook Stop, telemetria token.",
-  "version": "1.16.0",
+  "version": "1.16.1",
   "author": {
-    "name": "Pixelfarm",
-    "email": "info@pixelfarm.it"
+    "name": "Francesco Sorrentino",
+    "email": "info@francescosorrentino.com"
   },
   "license": "MIT"
 }

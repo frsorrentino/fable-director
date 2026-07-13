@@ -1,6 +1,6 @@
 {
   "name": "pixelfarm",
-  "owner": { "name": "Pixelfarm", "email": "info@pixelfarm.it" },
+  "owner": { "name": "Francesco Sorrentino", "email": "info@francescosorrentino.com" },
   "plugins": [
     {
       "name": "fable-director",

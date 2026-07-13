@@ -58,11 +58,11 @@ Honest boundary, same as the table above: the *writing* of lessons is hook-enfor
 
 ## 🆕 What's new
 
+- **1.16.1** — Hook scripts run through their interpreter, not the `+x` bit — durable across installs
 - **1.16.0** — External executor upgrades distilled from OpenAI's codex-plugin-cc: `--schema-file`, `--resume-last` delta-retry, `--model`/`--effort` overrides, XML-block prompt contracts
 - **1.15.4** — Optional Grok (xAI) lane in the cross-family verifier (paid, opt-in via `XAI_API_KEY`)
 - **1.15.3** — Executor anti-loop + injection hardening (google/skills sweep); budget accounting fixes
 - **1.15.2** — Concurrency stress tests in CI (caught a real bug on day one)
-- **1.15.1** — Eight bug fixes from an adversarial multi-model review
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 
@@ -391,4 +391,4 @@ Works on its own. With the [`caveman`](https://github.com/JuliusBrussee/caveman)
 
 ## License
 
-[MIT](LICENSE) © 2026 Pixelfarm
+[MIT](LICENSE) © 2026 Francesco Sorrentino
