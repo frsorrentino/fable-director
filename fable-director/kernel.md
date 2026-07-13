@@ -18,4 +18,6 @@ Any delegation/orchestration requires a machine-readable pre-budget (`fd-telemet
 
 BEFORE any delegation/orchestration (Agent/Task/Workflow call), and when closing a task that overran its declared budget or escalated through repeated failures: invoke `fable-director:delega-efficiente` for the full policy (delegation contract, falsifiable pre-budget, rule-of-3, playbook rules, script promotion, telemetry).
 
+Soft dependencies: preferred tools per task class live in `~/.claude/fable-director/soft-deps.json` — when a task matches a declared class, use the declared tool (its CLI route is often zero-token); if it's unavailable, tell the user and stop — never silently fall back to an undeclared alternative.
+
 Never delegate: interactive debugging, aesthetics/visual iteration, client-facing numbers/wording, decisions on how to count or report, production writes without prior backup.
