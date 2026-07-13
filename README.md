@@ -58,11 +58,11 @@ Honest boundary, same as the table above: the *writing* of lessons is hook-enfor
 
 ## 🆕 What's new
 
+- **1.15.3** — Executor anti-loop + injection hardening (google/skills sweep); budget accounting fixes
 - **1.15.2** — Concurrency stress tests in CI (caught a real bug on day one)
 - **1.15.1** — Eight bug fixes from an adversarial multi-model review
 - **1.15.0** — Clearer interface: plain-word alarms, `/help` legend, richer `/status`
 - **1.14.0** — Write perimeter, task receipts, MCP usage metering
-- **1.13.5** — Estimate calibration, quota burn-rate forecast, quality and privacy flags
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 
