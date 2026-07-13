@@ -386,11 +386,11 @@ Architecture: a **lightweight always-on kernel** (little context each session) +
 
 ## 🤝 Soft dependencies
 
-Works on its own — but the whole point of fable-director is spending fewer tokens for the same results, and these companions push that further. Each degrades gracefully when absent.
+Works on its own. These optional companions save further tokens, degrading gracefully when absent.
 
-- **[`chrome-bridge`](https://github.com/frsorrentino/chrome-bridge)** — browser automation from the same author, built on the same philosophy. An MCP server that drives your real, logged-in Chrome with 59 web-dev tools and a **zero-token CLI lane**: repeatable browser batches run as `session_record` → `replay` → `assert` scripts, no model calls at all — exactly what axis 3 (determinism) asks for. On live sessions its benchmark shows **2.3–2.8× fewer turns, tokens and dollars** than the official Claude in Chrome extension. The kernel's soft-dependencies registry (`~/.claude/fable-director/soft-deps.json`, since 1.15.5) routes browser-automation task classes to it out of the box.
-- **[`caveman`](https://github.com/JuliusBrussee/caveman)** — compressed output style (~65% fewer output tokens, measured), `/caveman-stats` for real usage numbers. Pairs naturally with the budget telemetry.
-- **[`superpowers`](https://github.com/obra/superpowers-marketplace)** — process discipline (systematic-debugging, brainstorming) upstream of the routing axes: a well-framed task delegates better.
+- **[`chrome-bridge`](https://github.com/frsorrentino/chrome-bridge)** — browser automation (same author): zero-token CLI lane, **2.3–2.8× fewer tokens** than the official Chrome extension. Routed by the kernel out of the box.
+- **[`caveman`](https://github.com/JuliusBrussee/caveman)** — compressed output style, **~65% fewer output tokens** (measured).
+- **[`superpowers`](https://github.com/obra/superpowers-marketplace)** — process discipline (systematic-debugging, brainstorming): a well-framed task delegates better.
 
 ## Requirements
 
