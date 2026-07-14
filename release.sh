@@ -27,6 +27,8 @@ grep -q "\*\*$VER" CHANGELOG.md \
   || { echo "FAIL: CHANGELOG.md has no $VER entry"; exit 1; }
 grep -q "\*\*$VER\*\*" README.md \
   || { echo "FAIL: README What's new has no $VER line (plain simple title!)"; exit 1; }
+grep -q "version-$VER-blue" README.md \
+  || { echo "FAIL: README version badge is not at $VER (line 5: shields.io version-<v>-blue)"; exit 1; }
 git rev-parse "v$VER" >/dev/null 2>&1 \
   && { echo "FAIL: tag v$VER already exists"; exit 1; }
 
