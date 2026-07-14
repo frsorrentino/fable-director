@@ -58,11 +58,11 @@ Honest boundary, same as the table above: the *writing* of lessons is hook-enfor
 
 ## 🆕 What's new
 
+- **1.18.0** — read-dedup retired after measuring its real target (0.1% of Read bytes); statusline gains a prompt-cache countdown and a compaction counter; usage interop with claude-hud
 - **1.17.1** — External-executor onboarding as a multiple-choice question (answered, not just announced)
 - **1.17.0** — Auto-update self-enables on GitHub-marketplace installs (announced, reversible, opt-out always respected)
 - **1.16.1** — Hook scripts run through their interpreter, not the `+x` bit — durable across installs
 - **1.16.0** — External executor upgrades distilled from OpenAI's codex-plugin-cc: `--schema-file`, `--resume-last` delta-retry, `--model`/`--effort` overrides, XML-block prompt contracts
-- **1.15.4** — Optional Grok (xAI) lane in the cross-family verifier (paid, opt-in via `XAI_API_KEY`)
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 
@@ -292,29 +292,13 @@ for that task — deterministically, script-side. External models are optional. 
 
 ---
 
-## ♻️ Token reduction (lossless-only)
+## ♻️ Token reduction (lossless-only) — and why the plugin ships none
 
-Routing cuts **cost per token** (cheap executor does the heavy work). A separate lever cuts the **token count** itself — but only where it's **provably lossless**, because trading correctness for tokens is the Goodhart failure the kernel exists to prevent.
+Routing cuts **cost per token** (cheap executor does the heavy work). A separate lever cuts the **token count** itself — but only where it's **provably lossless**, because trading correctness for tokens is the Goodhart failure the kernel exists to prevent. Never lossy retrieval: replacing a file read with top-k RAG chunks (−90% tokens) drops dependent code and is a **documented anti-pattern** in the playbook. Semantic caching (approximate match) falls under the same ban.
 
-**The rule.** Reduce tokens by *not re-sending* what's already in context (dedup/diff), by *not re-doing* verified work (idempotent exact-hash cache), or by *reversible* compression. Never by lossy retrieval: replacing a file read with top-k RAG chunks (−90% tokens) drops dependent code and is a **documented anti-pattern** in the playbook. Semantic caching (approximate match) falls under the same ban.
+**read-dedup, retired on measurement (1.18.0).** Versions 1.10.5–1.17.1 shipped an opt-in `PostToolUse` hook that replaced identical re-reads with a diff. Before promoting it to a default we measured the target on real traffic — 1,278 sessions across two accounts, using the audit methodology from [headroom](https://github.com/headroomlabs-ai/headroom) (`audit-reads`): **identical re-reads are 0.0–0.1% of Read bytes**. Headroom measured the same 0.1% on their traffic and removed their equivalent mechanism too. A lever aimed at 0.1% is maintenance without payoff, so it's gone; the `SessionEnd` reaper still cleans up legacy `read-cache/` dirs for anyone who had it enabled. The same audit shows where re-read bytes actually are — stale reads after edits (26–41%) and `cat -n` line-number scaffolding (4–7.5%) — both outside what a simple lossless hook can fix without touching content.
 
-**`read-dedup.py` (opt-in).** A `PostToolUse` hook on `Read`. On a re-read of a file already seen this session it returns only the diff since the previous read (or a short "unchanged" marker), instead of the full content.
-
-- **Lossless & recoverable.** Large files only (> ~2 KB); partial reads (offset/limit) always pass through untouched; a diff is emitted only when it's meaningfully smaller than the file. After any dedup, the *next* read of that file passes through in full — so even if the earlier read was compacted away, the model recovers full content in one more read.
-- **Off by default, zero cost when off.** Not in the shipped hooks, so it never runs (no subprocess, no risk) until you opt in.
-- **Enable it:**
-  ```bash
-  export FD_READ_DEDUP=1            # or: touch ~/.claude/fable-director/read-dedup.on
-  ```
-  then add to your `~/.claude/settings.json` hooks (or the plugin's `hooks/hooks.json`):
-  ```json
-  "PostToolUse": [
-    { "matcher": "Read",
-      "hooks": [ { "type": "command",
-        "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/read-dedup.py\"" } ] }
-  ]
-  ```
-  Per-session caches live under `~/.claude/fable-director/read-cache/` and are reaped at `SessionEnd`. Validate it in one real session before relying on it.
+**If you want serious context compression**, use a dedicated tool alongside fable-director — the jobs compose (they compress, director governs): [headroom](https://github.com/headroomlabs-ai/headroom) (Apache-2.0, local proxy/library; content-aware and *reversible via retrieval*, but it does modify what the model sees — weigh that against axis 2 for quality-sensitive work; its `wrap claude` forwards your OAuth login, so subscription billing is preserved, and it disables Claude Code's `/remote-control` on ≥2.1.196) or [Token Optimizer](https://github.com/alexgreensh/token-optimizer) (local hooks, noncommercial license). fable-director stays governance-only: measure first, then decide — the lesson this section now records.
 
 ---
 
@@ -375,7 +359,6 @@ The kernel decides where each task goes, top-down (a higher axis wins):
 | **Skill `delega-efficiente`** | Full policy on-demand: delegation contract, falsifiable pre-budget, rule-of-3 best-of-3, script promotion, playbook rules |
 | **`Stop` hook (budget-check)** | Deterministic 3× enforcement: compares actual tokens against the open budget, blocks the turn from closing and imposes the post-mortem |
 | **`SessionEnd` hook (telemetry)** | Logs tokens and cache/delegation metrics to SQLite, zero model tokens; reaps per-session registries |
-| **`read-dedup.py` (opt-in PostToolUse)** | Lossless re-read dedup: returns diffs instead of re-sending file content already in context — cuts token count, off by default |
 | **Playbook** | Learned heuristics that survive updates |
 | **`session-cost-report.py`** | Token report from the real JSONL transcripts |
 | **Statusline + installer** | `/fable-director:statusline` writes the statusLine to settings.json, idempotent and merge-safe |

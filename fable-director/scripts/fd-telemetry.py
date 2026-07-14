@@ -632,8 +632,10 @@ def git_yield(cwd, first_ts):
 
 
 def reap_read_cache(session_id):
-    """SessionEnd: la read-cache (hook read-dedup) è per-sessione — rimuovi la
-    dir della sessione + orfane >48h (sessioni crashate). Best-effort."""
+    """SessionEnd: pulizia LEGACY — read-dedup è stato ritirato in 1.18.0
+    (misurato 0,0–0,1% dei Read bytes su 1278 sessioni reali; stessa misura
+    di headroom, che ha rimosso il proprio equivalente). Il reaper resta per
+    ripulire le read-cache/ di chi lo aveva abilitato. Best-effort."""
     try:
         d = BASE / "read-cache"
         if not d.is_dir():
@@ -943,17 +945,6 @@ def cmd_report(args):
         print(f"\n⚠ SCHEMA ALARM: {len(anomalies)} transcript format anomalies "
               f"(zero recognized usage/timestamps) — token accounting "
               f"unreliable in those sessions, update the plugin")
-
-    dedups = [p for e, p in events if e == "read_dedup"]
-    if dedups:
-        tok = sum(d.get("tokens_est") or 0 for d in dedups)
-        by_kind = {}
-        for d in dedups:
-            by_kind[d.get("kind", "?")] = by_kind.get(d.get("kind", "?"), 0) + 1
-        kinds_s = ", ".join(f"{k}×{v}" for k, v in
-                            sorted(by_kind.items(), key=lambda x: -x[1]))
-        print(f"\nRead-dedup: {len(dedups)} deduplicated re-reads ({kinds_s}), "
-              f"~{fmt(tok)} tokens saved (lossless, ≈chars/4)")
 
     denies = [p for e, p in events if e == "gate_deny"]
     if denies:

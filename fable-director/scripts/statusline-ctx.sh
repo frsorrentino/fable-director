@@ -28,11 +28,11 @@ badge=""
 # Tutte le metriche in UNA passata python (statusline gira spesso: un solo processo).
 # Campi assenti → "-" → il segmento si omette. Il budget file è di fable-director
 # (fd-telemetry.py budget-open / stop-budget-check.py): qui SOLO lettura.
-read -r model pct rl rlt wk wkt bdg xf dlg <<EOF
+read -r model pct rl rlt wk wkt bdg xf dlg cache cmp <<EOF
 $(printf '%s' "$input" | python3 -c '
 import json,sys,os,time
 from pathlib import Path
-model=pct=rl=rlt=wk=wkt=bdg=xf=dlg="-"
+model=pct=rl=rlt=wk=wkt=bdg=xf=dlg=cache=cmp="-"
 def fmt_reset(ts):
     # entro 24h: orario; oltre: "6 Jul"/"6 lug" (giorno + mese secondo il locale)
     try:
@@ -86,6 +86,29 @@ try:
             if new!=old_q:
                 tmpq=qf.with_name(f"{qf.name}.{os.getpid()}.tmp")
                 tmpq.write_text(new); os.replace(tmpq,qf)
+                # Snapshot gemello nello schema esterno di claude-hud
+                # (five_hour/seven_day + used_percentage/resets_at ISO):
+                # un utente claude-hud lo consuma via display.externalUsagePath.
+                try:
+                    from datetime import datetime as _dts, timezone as _tzs
+                    def _iso(ts):
+                        try: return _dts.fromtimestamp(int(ts),_tzs.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+                        except Exception: return None
+                    snap={"updated_at":_dts.now(_tzs.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")}
+                    if r is not None:
+                        e={"used_percentage":round(float(r))}
+                        i=_iso(fh.get("resets_at"))
+                        if i: e["resets_at"]=i
+                        snap["five_hour"]=e
+                    if w is not None:
+                        e={"used_percentage":round(float(w))}
+                        i=_iso(w_reset)
+                        if i: e["resets_at"]=i
+                        snap["seven_day"]=e
+                    us=qd/f"usage-snapshot-{acct}.json"
+                    tmpu=us.with_name(f"{us.name}.{os.getpid()}.tmp")
+                    tmpu.write_text(json.dumps(snap)); os.replace(tmpu,us)
+                except Exception: pass
                 # storia quota per il burn-rate di fd-status: append solo a
                 # quota cambiata, cap dimensione con rewrite della coda
                 try:
@@ -192,6 +215,8 @@ try:
                 if b_decl and ts and ts>=b_decl:
                     for u in usages(rec):
                         bst["out"]=bst.get("out",0)+(u.get("output_tokens") or 0)
+                if rec.get("subtype")=="compact_boundary":
+                    state["cmp"]=state.get("cmp",0)+1
                 if not rec.get("isSidechain"): continue
                 msg=rec.get("message") or {}
                 u=msg.get("usage") or {}
@@ -212,6 +237,25 @@ try:
         if mm:
             dlg=",".join(f"{k} {fmtk(v)}" for k,v in
                          sorted(mm.items(), key=lambda x:-x[1])[:4])
+        # [CMP] compattazioni di questa sessione (record compact_boundary):
+        # ogni compattazione = contesto perso, segnale visibile solo se >0
+        ncmp=int(state.get("cmp") or 0)
+        if ncmp: cmp=str(ncmp)
+        # [CACHE] countdown TTL prompt-cache dal timestamp più recente visto
+        # nel transcript (ultima attività API): scaduto = il prossimo turno
+        # ripaga il prefisso a freddo — utile per il timing delle deleghe
+        # (asse 6). TTL da FD_CACHE_TTL_S, default 3600 (Max; 300 = piani 5 min).
+        lts=pts(state.get("last_ts"))
+        if lts:
+            try:
+                from datetime import timezone as _tzk
+                ttl=int(os.environ.get("FD_CACHE_TTL_S") or 3600)
+                remc=ttl-(_dtb.now(_tzk.utc)-lts).total_seconds()
+                if remc<=0: cache="y:exp"
+                else:
+                    lblc=f"{int(remc//60)}m" if remc>=120 else f"{int(remc)}s"
+                    cache=("g:" if remc>600 else ("y:" if remc>=60 else "r:"))+lblc
+            except Exception: pass
     elif sid:
         df=Path.home()/".claude"/"fable-director"/"delegations"/f"{sid}.json"
         if df.is_file():
@@ -278,7 +322,10 @@ except Exception:
 # bdg puo contenere spazi (allarmi a parole intere) ma la shell fa read
 # word-split: gli spazi viaggiano come virgole, la shell li ripristina
 bdg=str(bdg).replace(" ",",")
-print(model,pct,rl,rlt,wk,wkt,bdg,xf,dlg)
+# dlg ha spazi interni ("SONNET-5 12k"): non è più ultimo campo del read
+# shell, quindi stessa disciplina di bdg (virgole, la shell le ripristina)
+dlg=str(dlg).replace(" ",",")
+print(model,pct,rl,rlt,wk,wkt,bdg,xf,dlg,cache,cmp)
 ' 2>/dev/null)
 EOF
 
@@ -292,6 +339,8 @@ color_for() {
 out="$badge"
 [ "$model" != "-" ] && out="$out $(printf '\033[38;5;75m[%s]\033[0m' "$model")"
 [ "$pct" != "-" ] && out="$out $(printf "$(color_for "$pct")[CTX %s%%]\033[0m" "$pct")"
+# [CMP n] solo se ≥1 compattazione: contesto perso, sempre giallo
+[ "$cmp" != "-" ] && [ -n "$cmp" ] && out="$out $(printf '\033[38;5;220m[CMP %s]\033[0m' "$cmp")"
 if [ "$rl" != "-" ]; then
   seg="[5H ${rl}%"
   [ "$rlt" != "-" ] && seg="${seg}→${rlt}"
@@ -309,21 +358,28 @@ case "$bdg" in
   y:*) out="$out $(printf '\033[38;5;220m[%s]\033[0m' "$(printf '%s' "${bdg#y:}" | tr ',' ' ')")" ;;
   r:*) out="$out $(printf '\033[38;5;196m[%s]\033[0m' "$(printf '%s' "${bdg#r:}" | tr ',' ' ')")" ;;
 esac
-seg_xf=""; seg_dlg=""
+seg_xf=""; seg_dlg=""; seg_cache=""
+case "$cache" in
+  g:*) seg_cache="$(printf '\033[38;5;114m[CACHE %s]\033[0m' "${cache#g:}")" ;;
+  y:*) seg_cache="$(printf '\033[38;5;220m[CACHE %s]\033[0m' "${cache#y:}")" ;;
+  r:*) seg_cache="$(printf '\033[38;5;196m[CACHE %s]\033[0m' "${cache#r:}")" ;;
+esac
 [ "$xf" != "-" ] && [ -n "$xf" ] && \
   seg_xf="$(printf '\033[38;5;216m[XF %s]\033[0m' "$(printf '%s' "$xf" | tr ',' ' ')")"
 [ "$dlg" != "-" ] && [ -n "$dlg" ] && \
   seg_dlg="$(printf '\033[38;5;183m[DLG %s]\033[0m' "$(printf '%s' "$dlg" | tr ',' ' ')")"
-# Degradazione deterministica su schermi stretti: cade prima DLG, poi XF —
-# MAI budget/quota/stati di errore. Lunghezza misurata senza codici ANSI.
+# Degradazione deterministica su schermi stretti: cade prima CACHE, poi DLG,
+# poi XF — MAI budget/quota/stati di errore. Lunghezza senza codici ANSI.
 plain_len() { printf '%s' "$1" | sed 's/\x1b\[[0-9;]*m//g' | wc -c; }
-full="$out"
-[ -n "$seg_xf" ] && full="$full $seg_xf"
-[ -n "$seg_dlg" ] && full="$full $seg_dlg"
-if [ "$(plain_len "$full")" -gt 120 ] && [ -n "$seg_dlg" ]; then
-  full="$out"; [ -n "$seg_xf" ] && full="$full $seg_xf"
-fi
-if [ "$(plain_len "$full")" -gt 120 ] && [ -n "$seg_xf" ]; then
-  full="$out"
-fi
+compose() {
+  c="$out"
+  [ "$1" -ge 3 ] && [ -n "$seg_cache" ] && c="$c $seg_cache"
+  [ "$1" -ge 1 ] && [ -n "$seg_xf" ] && c="$c $seg_xf"
+  [ "$1" -ge 2 ] && [ -n "$seg_dlg" ] && c="$c $seg_dlg"
+  printf '%s' "$c"
+}
+full="$(compose 3)"
+[ "$(plain_len "$full")" -gt 120 ] && full="$(compose 2)"   # cade CACHE
+[ "$(plain_len "$full")" -gt 120 ] && full="$(compose 1)"   # cade DLG
+[ "$(plain_len "$full")" -gt 120 ] && full="$(compose 0)"   # cade XF
 printf '%s' "${full# }"

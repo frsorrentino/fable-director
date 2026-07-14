@@ -113,6 +113,29 @@ def cost_checkpoint(budget):
                     weekly_remaining = 100.0 - float(used)
             except (json.JSONDecodeError, OSError, TypeError, ValueError):
                 weekly_remaining = None
+        if weekly_remaining is None:
+            # Interop claude-hud: chi usa claude-hud come statusline non fa mai
+            # girare la nostra (un solo slot statusLine) → il ponte quota resta
+            # vuoto. claude-hud però può scrivere lo stesso dato in uno snapshot
+            # locale (display.externalUsageWritePath): leggilo come fallback,
+            # solo se fresco (<10 min — dato stantio peggio di nessun dato).
+            try:
+                cfgdir = Path(os.environ.get("CLAUDE_CONFIG_DIR")
+                              or (Path.home() / ".claude"))
+                hcfg = cfgdir / "plugins" / "claude-hud" / "config.json"
+                hp = (json.loads(hcfg.read_text()).get("display", {})
+                      .get("externalUsageWritePath")) if hcfg.is_file() else None
+                if hp and Path(hp).is_file():
+                    snap = json.loads(Path(hp).read_text())
+                    from datetime import datetime, timezone
+                    t = datetime.fromisoformat(
+                        str(snap.get("updated_at", "")).replace("Z", "+00:00"))
+                    sd = (snap.get("seven_day") or {}).get("used_percentage")
+                    if sd is not None and \
+                            (datetime.now(timezone.utc) - t).total_seconds() < 600:
+                        weekly_remaining = 100.0 - float(sd)
+            except Exception:
+                weekly_remaining = None
 
         scarce = weekly_remaining is not None and weekly_remaining < floor
         # A quota scarsa la soglia scende al 30% del ceiling: anche un task medio
