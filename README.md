@@ -173,14 +173,14 @@ The read-heavy result measures **disciplined delegation vs naive delegation**, n
 
 ## 📟 The statusline
 
-One glance at model, context and plan quotas — so you see the rate limit coming **before** it hits. **Quiet when healthy, loud in plain words when broken**: compact tags like `[BDG 0.7×·high]` while everything is fine, full-word alarms when it isn't — `⚠ BUDGET 2.3× OF ESTIMATE`, `✕ BUDGET 3× — POST-MORTEM DUE`, `✕ ENFORCEMENT OFF` — with text markers that survive terminals without color. On narrow screens the line degrades deterministically (`[DLG]` drops first, then `[XF]`, never an alarm).
+One glance at model, context and plan quotas — so you see the rate limit coming **before** it hits. **Quiet when healthy, loud in plain words when broken**: compact tags like `[BDG 0.7×·high]` while everything is fine, full-word alarms when it isn't — `⚠ BUDGET 2.3× OF ESTIMATE`, `✕ BUDGET 3× — POST-MORTEM DUE`, `✕ ENFORCEMENT OFF` — with text markers that survive terminals without color. On narrow screens the line degrades deterministically (`[CACHE]` drops first, then `[DLG]`, then `[XF]`, never a budget/quota/alarm state).
 
 In-session legend any time: **`/fable-director:help`**. On clients with no terminal statusline (smartphone remote control, web) use **`/fable-director:status`**: leads with a *now:* line (open budget, live spend ratio, effort), plus quotas with honest freshness labels and a 7-day burn-rate projection; `--detail` adds session delegations and the last task receipt.
 
 ![fable-director statusline](assets/statusline.svg)
 
 ```
-[FABLE5] [CTX 26%] [5H 71%→17:30] [7D 46%→14 Jul] [BDG 0.7×·high] [XF GEMINI▲ CODEX×2] [DLG SONNET-5 41k ≡ 3k]
+[FABLE5] [CTX 26%] [CMP 1] [5H 71%→17:30] [7D 46%→14 Jul] [BDG 0.7×·high] [CACHE 47m] [XF GEMINI▲ CODEX×2] [DLG SONNET-5 41k ≡ 3k]
 ```
 
 ### Legend, segment by segment
@@ -189,13 +189,15 @@ In-session legend any time: **`/fable-director:help`**. On clients with no termi
 |---|---|---|
 | `[FABLE5]` | Model driving **this** conversation (the "director") | Claude Code session info |
 | `[CTX 26%]` | How full the conversation's context window is | session info |
+| `[CMP 1]` | **Context compactions** this session (auto or `/compact`) — each one dropped context; hidden until the first *(1.18.0)* | `compact_boundary` records in the transcript |
 | `[5H 71%→17:30]` | 5-hour plan-window quota used + local reset time (the "Current session" in `/usage`) | plan rate limits |
 | `[7D 46%→14 Jul]` | Weekly plan quota used + reset date | plan rate limits |
 | `[BDG …]` | fable-director **pre-budget**: live consumed/expected output ratio + declared effort tier | budget file + session transcript (incremental) |
+| `[CACHE 47m]` | **Prompt-cache countdown** since the last API activity — makes axis 6 (cache locality) visible right when you're timing a delegation *(1.18.0)* | last transcript timestamp |
 | `[XF …]` | **Cross-family verifier** (Gemini / Codex) activity | marker file + local telemetry |
 | `[DLG …]` | Work **delegated to subagents** this session, tokens per model | session transcript |
 
-Segments with nothing to say disappear (no budget open → no `[BDG]`; no delegation → no `[DLG]`; no cross-family use today → no `[XF]`). Quota colors: green < 60%, yellow ≥ 60%, red ≥ 80%. With the **caveman** plugin its badge stays in front.
+Segments with nothing to say disappear (no budget open → no `[BDG]`; no delegation → no `[DLG]`; no cross-family use today → no `[XF]`; no compaction yet → no `[CMP]`). Quota colors: green < 60%, yellow ≥ 60%, red ≥ 80%. With the **caveman** plugin its badge stays in front.
 
 ### `[BDG]` states
 
@@ -226,6 +228,27 @@ Limits check: `cross-verify.py --usage` compares today's counts against the free
 | `SONNET-5 41k` | Subagents running on Sonnet 5 produced **41k output tokens** so far (effective model, read from the transcript — immune to Claude Code's quiet model fallback) |
 | `≡ 3k` | Subagents running on the **same model as the main loop** (inherit) produced 3k tokens |
 | `≈SONNET-5×2` | Fallback mode (`≈` prefix): transcript not exposed by this Claude Code version → counts **declared** delegation calls from the gate instead of effective tokens |
+
+### `[CACHE]` states — prompt-cache countdown *(1.18.0)*
+
+The prompt cache is what makes axis 6 (cache locality) real: while it's warm, the whole prefix is cheap to re-send; once it expires, the next turn repays it cold. This segment counts down from the last API activity so you can **time a delegation before the cache goes cold**.
+
+| You see | Meaning |
+|---|---|
+| `[CACHE 47m]` (green) | >10 min of cache life left |
+| `[CACHE 6m]` (yellow) | ≤10 min — a delegation started now still rides the warm prefix |
+| `[CACHE 40s]` (red) | <1 min — expiring |
+| `[CACHE exp]` | Expired: the next turn repays the prefix cold |
+
+TTL default 3600 s (Max plans). On a 5-minute-cache plan set `FD_CACHE_TTL_S=300`.
+
+### `[CMP]` — compaction counter *(1.18.0)*
+
+`[CMP n]` counts context compactions this session (auto or `/compact`), from `compact_boundary` records in the transcript. Hidden until the first one. Each compaction dropped context — a visible reminder that anything said before it may no longer be in view.
+
+### Interop with claude-hud *(1.18.0)*
+
+Only one plugin can own the `statusLine` slot. If you run [claude-hud](https://github.com/jarrodwatts/claude-hud) instead, the two cooperate rather than clash: fable-director writes a `usage-snapshot-<account>.json` in claude-hud's external-usage schema (`five_hour`/`seven_day`, ISO `resets_at`) that claude-hud reads via `display.externalUsagePath`; and when fable-director's own quota bridge is absent (because claude-hud owns the line), the scarce-quota cost-checkpoint falls back to reading claude-hud's snapshot (fresh within 10 min). Both directions fail open — no new dependency either way.
 
 **Enable it with one command** (idempotent, merge-safe, path auto-resolved per machine):
 
