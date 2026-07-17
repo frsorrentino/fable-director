@@ -2,7 +2,7 @@
 
 **Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
 
-![version](https://img.shields.io/badge/version-1.18.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.19.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 > Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
 
@@ -28,9 +28,10 @@ fable-director cuts the problem at the root, with enforcement — not with a hin
 ## 🏗️ How it works — hooks in the Claude Code lifecycle
 
 - 🟢 **`SessionStart` (kernel):** injects the routing policy — the 6 axes — in ~500 tokens; the full policy body loads only on demand.
+- 🧠 **`SessionStart` (hindsight):** replays the budget busts this **cwd** has already paid for — auto-recorded by the Stop hook, never self-reported. Silent where there's no history (zero tokens), hard-capped at 5 lines where there is. Registering without retrieving is an archive, not a memory.
 - 🛑 **`PreToolUse` (gate):** intercepts every `Agent`/`Task`/`Workflow` call — no machine-readable budget opened first (`budget-open`) → **the call is denied**.
 - 🚧 **`PreToolUse` (perimeter):** the budget can declare *where* the task may write (`--paths`); `Write`/`Edit` outside it are **denied** until an explicit amendment. Your own `never_write` patterns (`.fd-perimeter.json` — e.g. `migrations/*`, `.env*`) are denied unconditionally, budget or not.
-- ⚖️ **`PostToolUse` (MCP meter):** measures how many bytes each MCP server's results push into context — the report shows who bloats; zero model tokens.
+- ⚖️ **`PostToolUse` (MCP meter):** measures context weight along **two** distinct axes — *flow* (bytes each MCP server's results push into context, paid once per call) and *stock* (schema bytes a `ToolSearch` load injects into the prefix, re-paid **every turn** of the session). The report keeps them separate and never sums them; zero model tokens.
 - ✋ **`Stop` (enforcement):** at each turn end, compares real token usage against the declared budget. Warns once at 2×; at 3× **blocks the turn** until the post-mortem lands in the playbook.
 - 📉 **`SessionEnd` (telemetry):** logs session totals to SQLite in the background — statistics without spending a model token. Every closed task also leaves a local **receipt** (estimate vs actual, verification contract, perimeter, amendments) under `~/.claude/fable-director/receipts/`.
 
@@ -58,6 +59,7 @@ Honest boundary, same as the table above: the *writing* of lessons is hook-enfor
 
 ## 🆕 What's new
 
+- **1.19.0** — Past budget busts resurface at session start; MCP weight split into flow and stock; grounding-guard adopted for dependency verification
 - **1.18.0** — read-dedup retired after measuring its real target (0.1% of Read bytes); statusline gains a prompt-cache countdown and a compaction counter; usage interop with claude-hud
 - **1.17.1** — External-executor onboarding as a multiple-choice question (answered, not just announced)
 - **1.17.0** — Auto-update self-enables on GitHub-marketplace installs (announced, reversible, opt-out always respected)
@@ -379,6 +381,7 @@ The kernel decides where each task goes, top-down (a higher axis wins):
 | Piece | Role |
 |---|---|
 | **Kernel** (SessionStart hook) | Injects the 6 axes + never-delegate each session, ~500 tokens |
+| **Hindsight** (SessionStart hook) | Replays this cwd's already-paid budget busts (auto-recorded, max 5 lines); silent where there's no history |
 | **Skill `delega-efficiente`** | Full policy on-demand: delegation contract, falsifiable pre-budget, rule-of-3 best-of-3, script promotion, playbook rules |
 | **`Stop` hook (budget-check)** | Deterministic 3× enforcement: compares actual tokens against the open budget, blocks the turn from closing and imposes the post-mortem |
 | **`SessionEnd` hook (telemetry)** | Logs tokens and cache/delegation metrics to SQLite, zero model tokens; reaps per-session registries |

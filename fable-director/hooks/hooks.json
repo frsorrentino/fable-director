@@ -32,7 +32,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "mcp__.*",
+        "matcher": "mcp__.*|ToolSearch",
         "hooks": [
           {
             "type": "command",

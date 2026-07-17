@@ -8,6 +8,10 @@ cat "${CLAUDE_PLUGIN_ROOT}/kernel.md" 2>/dev/null || true
 # sorgente marketplace locale (la cache non si auto-aggiorna mai).
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/version-sentinel.py" 2>/dev/null || true
 
+# Hindsight: ripesca gli sfondamenti già auto-registrati su QUESTO cwd. Muto
+# dove non c'è evidenza (zero token), tetto 5 righe dove c'è.
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/session-hindsight.py" 2>/dev/null || true
+
 # Onboarding executor esterni, come DOMANDA a scelta multipla (1.17.1).
 # Il vecchio "relay this notice" bruciava il one-shot anche se il modello non
 # riferiva nulla; ora l'hook istruisce il modello a PORRE la domanda con

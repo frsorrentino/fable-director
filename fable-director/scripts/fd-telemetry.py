@@ -930,10 +930,27 @@ def cmd_report(args):
             by_srv.setdefault(k, [0, 0])
             by_srv[k][0] += 1
             by_srv[k][1] += m.get("bytes") or 0
-        print("\nMCP context weight (tool results enter whole — here you "
-              "see who bloats):")
+        print("\nMCP context weight — FLOW (tool results enter whole, paid "
+              "once per call — here you see who bloats):")
         for k, (n, byt) in sorted(by_srv.items(), key=lambda x: -x[1][1]):
             print(f"  {k}: {n} calls, ~{fmt(byt // 4)} estimated tokens")
+
+    # Giacenza: gli schemi caricati da ToolSearch restano nel prefisso e si
+    # ripagano a ogni turno. Grandezza diversa dal flusso sopra: non sommarle.
+    loads = [p for e, p in events if e == "mcp_schema_load"]
+    if loads:
+        tot = sum(p.get("bytes") or 0 for p in loads)
+        print(f"\nMCP context weight — STOCK ({len(loads)} ToolSearch loads, "
+              f"~{fmt(tot // 4)} estimated tokens of schema injected into the "
+              f"prefix; unlike flow, this is re-paid EVERY turn of the session):")
+        by_q = {}
+        for p in loads:
+            k = (p.get("query") or "?")[:60]
+            by_q.setdefault(k, [0, 0])
+            by_q[k][0] += 1
+            by_q[k][1] += p.get("bytes") or 0
+        for k, (n, byt) in sorted(by_q.items(), key=lambda x: -x[1][1])[:8]:
+            print(f"  {n}× \"{k}\" — ~{fmt(byt // 4)} tokens")
 
     promos = [p for e, p in events if e == "script_promotion"]
     if promos:
