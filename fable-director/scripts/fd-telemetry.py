@@ -952,6 +952,25 @@ def cmd_report(args):
         for k, (n, byt) in sorted(by_q.items(), key=lambda x: -x[1][1])[:8]:
             print(f"  {n}× \"{k}\" — ~{fmt(byt // 4)} tokens")
 
+    # Grinding: streak auto-rilevati dall'hook PostToolUse su Bash. Da leggere
+    # INSIEME a escalation: molti fail_streak e zero escalation = il modello
+    # macina e non diagnostica, cioe' la rule-of-3 resta lettera morta.
+    streaks = [p for e, p in events if e == "fail_streak"]
+    if streaks:
+        by_bin = {}
+        for s in streaks:
+            k = s.get("binary") or "?"
+            by_bin[k] = by_bin.get(k, 0) + 1
+        worst = max((s.get("streak") or 0) for s in streaks)
+        tops = ", ".join(f"{k}×{v}" for k, v in
+                         sorted(by_bin.items(), key=lambda x: -x[1])[:5])
+        n_esc = len([p for e, p in events if e == "escalation"])
+        print(f"\nGrinding: {len(streaks)} fail-streak auto-detected "
+              f"(worst {worst} consecutive) — {tops}")
+        if not n_esc:
+            print("  ⚠ zero `escalation` logged against them: the streaks were "
+                  "detected but never diagnosed — rule-of-3 is not being applied")
+
     promos = [p for e, p in events if e == "script_promotion"]
     if promos:
         tok = sum(p.get("tokens_pre_promotion") or 0 for p in promos)

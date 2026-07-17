@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.19.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.20.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need to do.**
 
@@ -25,6 +25,7 @@ What you get:
 - 🛑 **`PreToolUse` (gate):** intercepts every `Agent`/`Task`/`Workflow` call — no machine-readable budget opened first (`budget-open`) → **the call is denied**.
 - 🚧 **`PreToolUse` (perimeter):** the budget can declare *where* the task may write (`--paths`); `Write`/`Edit` outside it are **denied** until an explicit amendment. Your own `never_write` patterns (`.fd-perimeter.json` — e.g. `migrations/*`, `.env*`) are denied unconditionally, budget or not.
 - ⚖️ **`PostToolUse` (MCP meter):** measures context weight along **two** distinct axes — *flow* (bytes each MCP server's results push into context, paid once per call) and *stock* (schema bytes a `ToolSearch` load injects into the prefix, re-paid **every turn** of the session). The report keeps them separate and never sums them; zero model tokens.
+- 🔁 **`PostToolUse` (fail-streak):** counts *consecutive* failing Bash commands from the transcript (stateless, resets on the first success; your own denials never count). At every 3rd it injects the rule-of-3 — diagnose the failure **type** before retrying, blind escalation is itself waste — and logs the streak. Advisory: it never blocks.
 - ✋ **`Stop` (enforcement):** at each turn end, compares real token usage against the declared budget. Warns once at 2×; at 3× **blocks the turn** until the post-mortem lands in the playbook.
 - 📉 **`SessionEnd` (telemetry):** logs session totals to SQLite in the background — statistics without spending a model token. Every closed task also leaves a local **receipt** (estimate vs actual, verification contract, perimeter, amendments) under `~/.claude/fable-director/receipts/`.
 
@@ -52,6 +53,7 @@ Honest boundary, same as the table above: the *writing* of lessons is hook-enfor
 
 ## 🆕 What's new
 
+- **1.20.0** — Grinding is caught by a hook: 3 failing commands in a row and the rule-of-3 comes back, with the streak on the record
 - **1.19.0** — Past budget busts resurface at session start; MCP weight split into flow and stock; grounding-guard adopted for dependency verification
 - **1.18.0** — read-dedup retired after measuring its real target (0.1% of Read bytes); statusline gains a prompt-cache countdown and a compaction counter; usage interop with claude-hud
 - **1.17.1** — External-executor onboarding as a multiple-choice question (answered, not just announced)

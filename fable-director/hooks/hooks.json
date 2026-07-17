@@ -39,6 +39,15 @@
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/mcp-meter.py\""
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/fail-streak.py\""
+          }
+        ]
       }
     ],
     "Stop": [
