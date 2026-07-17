@@ -70,12 +70,81 @@ rm -f "$NOTES"
 echo "== 6/6 install into local accounts =="
 SHA=$(git rev-parse HEAD)
 python3 - "$VER" "$SHA" <<'PY'
-import json, shutil, os, sys
+import json, re, shutil, os, sys
 from datetime import datetime, timezone
 VER, SHA = sys.argv[1], sys.argv[2]
 SRC = os.path.abspath("fable-director")
 NOW = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.") \
       + f"{datetime.now(timezone.utc).microsecond//1000:03d}Z"
+
+# Quante versioni tenere in cache per account. NON 1: una sessione VIVA gira
+# ancora dalla cartella della sua versione (il passaggio alla nuova avviene solo
+# al riavvio) — potare troppo stretto le spaccherebbe gli hook a meta' volo.
+# 5 = margine per le sessioni aperte, senza accumulare all'infinito (osservate
+# 26 versioni su ~/.claude e 20 su ~/.claude-pixel prima di questa potatura).
+KEEP = 5
+VERSION_DIR = re.compile(r"^\d+\.\d+\.\d+$")
+
+
+def vkey(name):
+    """Ordinamento NUMERICO: lessicograficamente 1.9.0 batterebbe 1.10.10."""
+    return tuple(int(x) for x in name.split("."))
+
+
+def prune(root, keep_ver):
+    """Tiene le KEEP versioni piu' recenti + quella appena installata.
+    Tocca solo nomi X.Y.Z sotto la cache del plugin: qualunque altro nome
+    (backup, file, refusi) resta dov'e'. Ritorna (rimossi, falliti).
+
+    Due lezioni pagate il 2026-07-17, entrambe da non ripetere:
+
+    1. SYMLINK. La cache conteneva 21 "versioni" che erano symlink, tutti verso
+       la stessa dir (un dedup del 07-13). `os.path.isdir()` dice True su un
+       link->dir, quindi finivano tra i condannati, e `shutil.rmtree()` su un
+       symlink SOLLEVA — errore che `ignore_errors=True` inghiottiva. Risultato:
+       cancellato il bersaglio condiviso e lasciati 28 link penzolanti.
+       Qui i link si trattano per quel che sono: alias, non versioni (un link
+       chiamato 1.12.0 verso 1.15.4 non conserva la 1.12.0). Si rimuovono con
+       unlink, e solo se penzolano o se il loro bersaglio sta per morire.
+
+    2. NIENTE ignore_errors. Riportava le INTENZIONI come consuntivo: diceva
+       "rimosse 21" avendone rimosse 4. Qui ogni rimozione e' verificata con
+       os.path.lexists() dopo il fatto, e i fallimenti si dichiarano."""
+    if not os.path.isdir(root):
+        return [], []
+    entries = [d for d in os.listdir(root) if VERSION_DIR.match(d)]
+    links = [d for d in entries if os.path.islink(f"{root}/{d}")]
+    dirs = sorted((d for d in entries
+                   if not os.path.islink(f"{root}/{d}")
+                   and os.path.isdir(f"{root}/{d}")), key=vkey)
+
+    keep = set(dirs[-KEEP:]) | {keep_ver}
+    doomed = [v for v in dirs if v not in keep]
+
+    # Un link il cui bersaglio muore (o gia' morto) va via con lui: lasciarlo
+    # significherebbe fabbricare esattamente i penzolanti dell'incidente.
+    for l in links:
+        p = f"{root}/{l}"
+        tgt = os.path.basename(os.readlink(p).rstrip("/"))
+        if not os.path.exists(p) or tgt in doomed:
+            doomed.append(l)
+
+    removed, failed = [], []
+    for v in doomed:
+        p = f"{root}/{v}"
+        try:
+            if os.path.islink(p):
+                os.unlink(p)          # MAI rmtree su un link
+            else:
+                shutil.rmtree(p)
+        except OSError as e:
+            failed.append(f"{v} ({e.__class__.__name__})")
+            continue
+        # verifica: lexists vede anche i link rotti, exists no
+        (removed if not os.path.lexists(p) else failed).append(v)
+    return removed, failed
+
+
 for base in [os.path.expanduser("~/.claude"), os.path.expanduser("~/.claude-pixel")]:
     ipj = f"{base}/plugins/installed_plugins.json"
     if not os.path.exists(ipj):
@@ -89,6 +158,15 @@ for base in [os.path.expanduser("~/.claude"), os.path.expanduser("~/.claude-pixe
     e.update(installPath=cache, version=VER, gitCommitSha=SHA, lastUpdated=NOW)
     json.dump(d, open(ipj, "w"), indent=2)
     print(f"[installed] {base} -> {VER} ({SHA[:7]})")
+    dropped, failed = prune(f"{base}/plugins/cache/pixelfarm/fable-director", VER)
+    if dropped:
+        print(f"[pruned]    {base} -> rimosse {len(dropped)} voci vecchie, "
+              f"tenute le ultime {KEEP} versioni")
+    if failed:
+        # Rumoroso di proposito: una potatura che fallisce in silenzio e' come
+        # non averla (l'incidente del 07-17 e' nato esattamente cosi').
+        print(f"[WARN]      {base} -> {len(failed)} voci NON rimosse: "
+              f"{', '.join(failed)}")
 PY
 
 echo ""
