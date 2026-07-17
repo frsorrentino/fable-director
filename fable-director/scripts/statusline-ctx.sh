@@ -28,7 +28,7 @@ badge=""
 # Tutte le metriche in UNA passata python (statusline gira spesso: un solo processo).
 # Campi assenti → "-" → il segmento si omette. Il budget file è di fable-director
 # (fd-telemetry.py budget-open / stop-budget-check.py): qui SOLO lettura.
-read -r model pct rl rlt wk wkt bdg xf dlg cache cmp <<EOF
+read -r model pct rl rlt wk wkt bdg xf dlg cache cmp grind <<EOF
 $(printf '%s' "$input" | python3 -c '
 import json,sys,os,time
 from pathlib import Path
@@ -325,7 +325,19 @@ bdg=str(bdg).replace(" ",",")
 # dlg ha spazi interni ("SONNET-5 12k"): non è più ultimo campo del read
 # shell, quindi stessa disciplina di bdg (virgole, la shell le ripristina)
 dlg=str(dlg).replace(" ",",")
-print(model,pct,rl,rlt,wk,wkt,bdg,xf,dlg,cache,cmp)
+# [FAIL xN] grinding: lo streak di Bash falliti lo calcola l hook fail-streak
+# (autorita), qui si LEGGE soltanto il suo file di stato per il sid corrente.
+# Quieto sotto 2; mostrato da 2 in su (il nudge del hook scatta a 3).
+grind="-"
+try:
+    if sid:
+        gf=Path.home()/".claude"/"fable-director"/"grinding"/f"{sid}.json"
+        if gf.is_file():
+            gs=int(json.loads(gf.read_text()).get("streak") or 0)
+            if gs>=2: grind=str(gs)
+except Exception:
+    pass
+print(model,pct,rl,rlt,wk,wkt,bdg,xf,dlg,cache,cmp,grind)
 ' 2>/dev/null)
 EOF
 
@@ -358,6 +370,15 @@ case "$bdg" in
   y:*) out="$out $(printf '\033[38;5;220m[%s]\033[0m' "$(printf '%s' "${bdg#y:}" | tr ',' ' ')")" ;;
   r:*) out="$out $(printf '\033[38;5;196m[%s]\033[0m' "$(printf '%s' "${bdg#r:}" | tr ',' ' ')")" ;;
 esac
+# [FAIL ×N] grinding: stato PROTETTO come budget/quota — mai eroso su schermi
+# stretti. Giallo a 2 (early warning), rosso da 3 (il nudge del hook e scattato).
+if [ "$grind" != "-" ] && [ -n "$grind" ]; then
+  if [ "$grind" -ge 3 ] 2>/dev/null; then
+    out="$out $(printf '\033[38;5;196m[FAIL \303\227%s]\033[0m' "$grind")"
+  else
+    out="$out $(printf '\033[38;5;220m[FAIL \303\227%s]\033[0m' "$grind")"
+  fi
+fi
 seg_xf=""; seg_dlg=""; seg_cache=""
 case "$cache" in
   g:*) seg_cache="$(printf '\033[38;5;114m[CACHE %s]\033[0m' "${cache#g:}")" ;;

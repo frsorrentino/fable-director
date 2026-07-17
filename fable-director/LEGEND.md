@@ -3,7 +3,7 @@
 One line, rendered every turn. Quiet when healthy, full words when something breaks.
 
 ```
-[FABLE5] [CTX 42%] [CMP 1] [5H 35%→14:00] [7D 36%→Thu] [BDG 0.7×·high] [CACHE 47m] [XF CODEX×2] [DLG SONNET-5 41k]
+[FABLE5] [CTX 42%] [CMP 1] [5H 35%→14:00] [7D 36%→Thu] [BDG 0.7×·high] [FAIL ×3] [CACHE 47m] [XF CODEX×2] [DLG SONNET-5 41k]
 ```
 
 | Segment | Meaning |
@@ -14,6 +14,7 @@ One line, rendered every turn. Quiet when healthy, full words when something bre
 | `[5H 35%→14:00]` | 5-hour plan quota used, → local reset time |
 | `[7D 36%→Thu]` | Weekly plan quota used, → reset day |
 | `[BDG 0.7×·high]` | Open task budget: **actual spend ÷ declared estimate** (0.7× = under estimate), `·high` = declared effort tier. Absent = no open budget |
+| `[FAIL ×3]` | **Consecutive failing Bash commands** since the last success (your own denials don't count). Hidden below 2; yellow at 2, red at ≥3 — where the fail-streak hook injects the rule-of-3. Cleared by the next successful Bash |
 | `[CACHE 47m]` | Prompt-cache countdown from the last API activity: green >10 min, yellow ≤10 min, red <1 min, `exp` = expired (next turn repays the prefix cold). TTL default 3600 s (Max plans); set `FD_CACHE_TTL_S=300` for 5-minute plans |
 | `[XF CODEX×2]` | External cross-family calls today (×N); `GEMINI▲` = call in flight |
 | `[DLG SONNET-5 41k]` | Output tokens delegated per model this session; `≡` = same model as the main loop; `≈` prefix = declared-only fallback (no transcript) |

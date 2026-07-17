@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.20.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.21.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need to do.**
 
@@ -46,7 +46,7 @@ Full details, manual hook merge and edge cases in **[INSTALL.md](INSTALL.md)**.
 - 🛑 **`PreToolUse` (gate):** intercepts every `Agent`/`Task`/`Workflow` call — no machine-readable budget opened first (`budget-open`) → **the call is denied**.
 - 🚧 **`PreToolUse` (perimeter):** the budget can declare *where* the task may write (`--paths`); `Write`/`Edit` outside it are **denied** until an explicit amendment. Your own `never_write` patterns (`.fd-perimeter.json` — e.g. `migrations/*`, `.env*`) are denied unconditionally, budget or not.
 - ⚖️ **`PostToolUse` (MCP meter):** measures context weight along **two** distinct axes — *flow* (bytes each MCP server's results push into context, paid once per call) and *stock* (schema bytes a `ToolSearch` load injects into the prefix, re-paid **every turn** of the session). The report keeps them separate and never sums them; zero model tokens.
-- 🔁 **`PostToolUse` (fail-streak):** counts *consecutive* failing Bash commands from the transcript (stateless, resets on the first success; your own denials never count). At every 3rd it injects the rule-of-3 — diagnose the failure **type** before retrying, blind escalation is itself waste — and logs the streak. Advisory: it never blocks.
+- 🔁 **`PostToolUse` (fail-streak):** counts *consecutive* failing Bash commands, recomputed from the transcript each time so there's no counter to drift (resets on the first success; your own denials never count). At every 3rd it injects the rule-of-3 — diagnose the failure **type** before retrying, blind escalation is itself waste — surfaces the streak on the statusline as `[FAIL ×N]`, and logs it. Advisory: it never blocks.
 - ✋ **`Stop` (enforcement):** at each turn end, compares real token usage against the declared budget. Warns once at 2×; at 3× **blocks the turn** until the post-mortem lands in the playbook.
 - 📉 **`SessionEnd` (telemetry):** logs session totals to SQLite in the background — statistics without spending a model token. Every closed task also leaves a local **receipt** (estimate vs actual, verification contract, perimeter, amendments) under `~/.claude/fable-director/receipts/`.
 
@@ -148,12 +148,29 @@ One glance at model, context and plan quotas — so you see the rate limit comin
 ![fable-director statusline](assets/statusline.svg)
 
 ```
-[FABLE5] [CTX 26%] [CMP 1] [5H 71%→17:30] [7D 46%→14 Jul] [BDG 0.7×·high] [CACHE 47m] [XF GEMINI▲ CODEX×2] [DLG SONNET-5 41k ≡ 3k]
+[FABLE5] [CTX 26%] [CMP 1] [5H 71%→17:30] [7D 46%→14 Jul] [BDG 0.7×·high] [FAIL ×3] [CACHE 47m] [XF GEMINI×2] [DLG SONNET-5 41k]
 ```
+
+Read left to right — each tag answers one question, and colour goes green → yellow → red as it needs attention:
+
+| Tag | What it tells you |
+|---|---|
+| `[FABLE5]` | Which model is driving this session |
+| `[CTX 26%]` | How full the context window is — red near the top means a compaction is coming |
+| `[CMP 1]` | How many times context was compacted this session (each one dropped history); hidden until the first |
+| `[5H 71%→17:30]` | Your 5-hour plan quota used, and when it resets |
+| `[7D 46%→14 Jul]` | Your weekly plan quota used, and when it resets |
+| `[BDG 0.7×·high]` | Current task spend vs the estimate it declared (0.7× = under budget); turns to a full-word alarm at 2× and 3× |
+| `[FAIL ×3]` | Bash commands failing in a row — a sign you're grinding; shows from 2, red at 3 where the plugin nudges you to step back |
+| `[CACHE 47m]` | How long the prompt cache stays warm — cheap to keep working now, a fresh start costs more |
+| `[XF GEMINI×2]` | Calls sent to a free external model today (verification or bulk work, off your Claude quota) |
+| `[DLG SONNET-5 41k]` | Work handed to cheaper models this session, and how much |
+
+Healthy tags stay compact and quiet; when something breaks they turn into full words that survive terminals without colour (`⚠ BUDGET 2.3× OF ESTIMATE`, `✕ BUDGET 3× — POST-MORTEM DUE`). On narrow screens the line trims the least urgent tags first (`[CACHE]`, then `[DLG]`, then `[XF]`) and never drops a budget, quota or alarm.
 
 **Turn it on:** `/fable-director:statusline`, then restart Claude Code. Idempotent, backs up `settings.json`, won't touch a third-party statusLine already there; `--remove` takes it out.
 
-**What each segment means:** `/fable-director:help` prints the full legend in-session. It ships with the plugin, so it can't drift from the code the way a second copy here would.
+**Deeper reference** — every alarm state, the colour thresholds, the `[BDG]`/`[XF]` sub-states — is one command away in-session: `/fable-director:help`. (This table is the friendly intro; that one is the full spec, shipped with the plugin so it never drifts from the code.)
 
 **No terminal statusline** (phone, web client): `/fable-director:status` prints the same state as text — open budget, live spend ratio, quotas with honest freshness labels, 7-day burn-rate projection. `--detail` adds session delegations and the last task receipt.
 
@@ -190,6 +207,7 @@ Works on its own. These optional companions save further tokens, degrading grace
 
 ## 🆕 What's new
 
+- **1.21.0** — The grinding streak shows on the statusline (`[FAIL ×N]`); the statusline legend is back in the README, simplified
 - **1.20.0** — Grinding is caught by a hook: 3 failing commands in a row and the rule-of-3 comes back, with the streak on the record
 - **1.19.0** — Past budget busts resurface at session start; MCP weight split into flow and stock; grounding-guard adopted for dependency verification
 - **1.18.0** — read-dedup retired after measuring its real target (0.1% of Read bytes); statusline gains a prompt-cache countdown and a compaction counter; usage interop with claude-hud

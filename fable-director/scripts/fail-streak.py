@@ -133,11 +133,38 @@ def log_event(event, payload, session_id, cwd):
             time.sleep(0.05 * (2 ** attempt) + random.random() * 0.05)
 
 
+def write_grind_state(sid, streak):
+    """Stato per la statusline: lo streak CORRENTE, scritto a OGNI chiamata Bash
+    (0 compreso, cosi' un successo azzera il segmento). L'hook e' l'autorita' del
+    calcolo; la statusline si limita a leggere questo file, senza ri-parsare il
+    transcript a ogni render. Chiave = session_id (allowlist stretta: il sid entra
+    in un path). Reap best-effort dei file piu' vecchi di 2 giorni: un file per
+    sessione e' minuscolo, ma non deve accumularsi in eterno."""
+    import re
+    import time
+    if not sid or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", str(sid)):
+        return
+    d = Path.home() / ".claude" / "fable-director" / "grinding"
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{sid}.json").write_text(json.dumps({"streak": streak}))
+        cutoff = time.time() - 2 * 86400
+        for p in d.glob("*.json"):
+            try:
+                if p.stat().st_mtime < cutoff:
+                    p.unlink()
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
 def main():
     data = json.load(sys.stdin)
     if data.get("tool_name") != "Bash":
         return
     streak = trailing_streak(bash_outcomes(data.get("transcript_path") or ""))
+    write_grind_state(data.get("session_id"), streak)
     if streak < REMIND_EVERY or streak % REMIND_EVERY:
         return
 

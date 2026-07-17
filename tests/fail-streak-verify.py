@@ -78,6 +78,14 @@ def events(home):
     return rows
 
 
+def grind_state(home, sid="sid-test"):
+    """Lo streak che la statusline leggera'. None = file assente."""
+    f = home / ".claude" / "fable-director" / "grinding" / f"{sid}.json"
+    if not f.is_file():
+        return None
+    return json.loads(f.read_text()).get("streak")
+
+
 def case(tag, seq, tool="Bash", cmd="rg --json 'x' /repo | head"):
     home = Path(tempfile.mkdtemp(prefix=f"fd-fs-{tag}-"))
     t = home / "t.jsonl"
@@ -126,6 +134,19 @@ try:
 
     h, r, ev = case("f10", [E, E, E], tool="Read"); tmp.append(h)
     check("F10 tool != Bash -> esce subito", r.stdout.strip() == "" and ev == [])
+
+    # Stato per la statusline: scritto a OGNI Bash (l'hook e' l'autorita', la
+    # statusline legge e basta). La soglia di VISUALIZZAZIONE (>=2) sta nella
+    # statusline, non qui: qui si scrive sempre il valore vero, 0 compreso.
+    h, r, ev = case("g1", [E, E, E]); tmp.append(h)
+    check("G1 streak 3 scritto nello stato grinding", grind_state(h) == 3, grind_state(h))
+    h, r, ev = case("g2", [E, E]); tmp.append(h)
+    check("G2 streak 2 scritto anche se sotto la soglia del nudge",
+          grind_state(h) == 2, grind_state(h))
+    h, r, ev = case("g3", [E, E, O]); tmp.append(h)
+    check("G3 un successo scrive streak 0 (azzera il segmento)", grind_state(h) == 0, grind_state(h))
+    h, r, ev = case("g4", [E, E, E], tool="Read"); tmp.append(h)
+    check("G4 tool != Bash non tocca lo stato (nessun file)", grind_state(h) is None)
 
     home = Path(tempfile.mkdtemp(prefix="fd-fs-f11-")); tmp.append(home)
     r = run(home, home / "non-esiste.jsonl")
