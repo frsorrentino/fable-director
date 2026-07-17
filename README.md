@@ -1,29 +1,22 @@
 # 🎬 fable-director
 
-**Token governance for Claude Code.** The top model *directs* — plans, judges, verifies — and sends execution to the cheapest adequate means: a deterministic script first, then a mid-tier model, the top model only where it truly matters.
-
 ![version](https://img.shields.io/badge/version-1.19.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
-> Like a Renaissance workshop: the master sketches and refines, the apprentices execute, the workshop accrues craft. This plugin brings that discipline into Claude Code — in a way that is **measurable** and **enforced by hooks**, not left to good intentions.
+**Keeps Claude Code from spending your quota on work the top model didn't need to do.**
 
-**Positioning, in three clauses:**
-1. **Quality is a constraint, token minimization is the objective** — quality never enters the trade-off; tokens get cut only in the space the constraint leaves open.
-2. **Optimization is deterministic** — enforced by blocking scripts and hooks, not by prompt suggestions the model can ignore.
-3. **Transparency is guaranteed** — objective telemetry and benchmarks that publish their own limits, negative numbers included.
+What you get:
 
----
+- **Your quota lasts longer on the jobs that actually eat it** — ~25% fewer tokens on big reading jobs, ~20% on repetitive mechanical work.
+- **The job you run every week stops costing you** — repeatable work gets promoted to a script; from the second run, that job is close to free.
+- **Your agent can't quietly overspend** — it has to say what a job should cost before it delegates, and a hook blocks the turn at 3× that number. You find out while it happens, not when the limit hits.
+- **Bulk work stops eating your Claude quota** — non-code batches and verification can run on free external models; Claude keeps the planning and the checking.
+- **You can see where your tokens went** — real numbers from your own session logs, not guesses, and produced without spending a single model token.
+- **The agent can't write where you didn't allow it** — a task declares which paths it may touch; anything outside is denied, and your `never_write` patterns always are.
+- **Sensitive work never leaves your machine** — mark it restricted and the external routes refuse to run, deterministically.
+- **The same mistake doesn't cost you twice** — a job that already blew its estimate says so at session start, on the project where it happened.
+- **Quality is never the thing that gets cut** — equal or better everywhere it saves; it's a constraint, not part of the trade.
 
-## The problem
-
-A powerful agent tends to do *everything* itself: it reads huge files, repeats deterministic work a script would do for free, delegates in bursts without knowing whether it pays off, burns context. Cost explodes and you don't notice until the bill (or the rate limit) arrives.
-
-## The solution
-
-fable-director cuts the problem at the root, with enforcement — not with a hint in the prompt the model can ignore:
-
-1. **Enforced budget control** — a pre-delegation gate and a Stop hook block the model when it spends beyond its own estimate.
-2. **Work off your Claude quota** — adversarial verification and (experimentally) non-code bulk work can run on free external models (Gemini, Codex); Claude keeps the planning and checking share.
-3. **Objective local telemetry** — session logs parsed in the background into a local SQLite database: token usage, cache efficiency, delegation overhead. Zero model tokens spent on bookkeeping.
+**The honest price:** small one-off tasks cost **~5% more** — the fixed premium for the checks. If your work is mostly quick one-offs, this plugin is not for you.
 
 ## 🏗️ How it works — hooks in the Claude Code lifecycle
 
@@ -67,20 +60,6 @@ Honest boundary, same as the table above: the *writing* of lessons is hook-enfor
 - **1.16.0** — External executor upgrades distilled from OpenAI's codex-plugin-cc: `--schema-file`, `--resume-last` delta-retry, `--model`/`--effort` overrides, XML-block prompt contracts
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
-
----
-
-## ⭐ Advantages at a glance
-
-| | Advantage | How |
-|---|---|---|
-| 🧭 | **Every task goes to the right means** | A 6-axis routing kernel injected each session (~500 tokens): inline vs delegate vs script vs workflow, with a clear precedence order |
-| 💰 | **Deterministic work at zero cost** | The policy pushes repeatable work into scripts — zero model tokens instead of N calls |
-| 🛡️ | **Budget enforced, not suggested** | Machine-readable pre-budget + a `PreToolUse` gate that denies delegation with no open budget + a `Stop` hook that deterministically blocks at 3× and forces a post-mortem. Anti-Goodhart by construction |
-| 📊 | **Real telemetry, zero overhead** | A `SessionEnd` hook logs tokens, cache hit ratio, delegation overhead to SQLite — without spending model tokens |
-| 🧠 | **The workshop learns** | A heuristics playbook that survives updates: `[candidate]` → confirmed on the 2nd occurrence, uses/ok/ko counters |
-| 📟 | **You always know where you stand** | A statusline with model, context %, 5h and 7d plan quotas with reset times, budget state |
-| 🧾 | **Honest token accounting** | A report from real JSONL transcripts: cost per model/main/subagents, cache metrics, ≥3× flags |
 
 ---
 
