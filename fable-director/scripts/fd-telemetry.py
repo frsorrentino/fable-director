@@ -14,7 +14,7 @@ solo da indicatori oggettivi (test pass/fail, rollback, fix successivo).
 
 Sottocomandi:
   budget-open  --task S --expected-output N [--expected-input N] [--type SLUG]
-               [--approach S] [--fallback S]
+               [--approach S] [--fallback S] [--agents N]
                [--route inline|workflow|script|agent|external] [--reason S] [--alternative S]
                [--effort low|medium|high|xhigh|max] [--cost-ack]
                scrive il budget file (status=open) e logga task_open;
@@ -33,7 +33,10 @@ Sottocomandi:
                --data-class public|internal|restricted = classificazione input:
                restricted BLOCCA external-exec.py e cross-verify.py per il cwd;
                --paths "glob[,glob]" = perimetro scritture del task (enforced
-               dal hook perimeter-gate su Write/Edit dentro il progetto)
+               dal hook perimeter-gate su Write/Edit dentro il progetto);
+               --agents N = fan-out previsto: la stima viene confrontata con
+               l'ancora empirica per agente (~20k out, ~17k in di cold start —
+               playbook confermata) e avvisa se sotto, mai nega
   budget-amend --add-paths "glob[,glob]" [--reason S]
                estende il perimetro del budget aperto (emendamento esplicito,
                loggato come perimeter_amend)
@@ -46,7 +49,9 @@ Sottocomandi:
   session-summary [--transcript P --session-id S --cwd P]
                (hook SessionEnd: legge lo stdin JSON dell'hook) calcola totali token,
                metriche cache/delega e reset di prefisso dal main transcript
-               (l'usage dei subagenti è dentro toolUseResult: niente scan file, niente double counting)
+               (usage Agent tool dentro toolUseResult: niente double counting) più
+               i file agente del Workflow tool (subagents/workflows/ — MAI aggregati
+               nel main, verificato 2026-07-20)
   report [--days N]
                aggrega gli eventi: cache metrics, overhead delega, spreco per categoria,
                hit-rate verifiche, densità per tipo task (soglia override: N≥10).
@@ -290,6 +295,43 @@ def sum_transcript(path):
     return main, sub, n_sub, cache_resets, first_ts, last_ts, stats
 
 
+def sum_workflow_agents(path):
+    """Token degli agenti del Workflow tool: vivono in file propri sotto
+    <sessiondir>/subagents/workflows/wf_*/agent-*.jsonl e NON compaiono mai
+    in toolUseResult del main transcript (verificato 2026-07-20 su sessione
+    reale: 5 call Workflow, zero usage annidati — l'aggregato nel main vale
+    solo per l'Agent tool). Senza questo scan delegation_overhead e
+    coordination_cost leggono zero proprio sulla route di delega più costosa
+    (misurato: 9,2M input freschi invisibili in una sessione).
+    Ritorna (totali usage, n file agente)."""
+    tot = dict.fromkeys(USAGE_KEYS, 0)
+    n_files = 0
+    sdir = Path(path).with_suffix("")  # <sessiondir> = transcript senza .jsonl
+    try:
+        agent_files = list(sdir.glob("subagents/workflows/wf_*/agent-*.jsonl"))
+    except OSError:
+        agent_files = []
+    for f in agent_files:
+        try:
+            fh = open(f, errors="replace")
+        except OSError:
+            continue
+        n_files += 1
+        with fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                for usage, _ in find_usage(rec):
+                    for k in USAGE_KEYS:
+                        tot[k] += usage.get(k) or 0
+    return tot, n_files
+
+
 def derived_metrics(inp, out, cr, cc, main_out, sub_out, n_sub):
     """Metriche derivate; None dove il denominatore è zero."""
     total_in = inp + cr + cc
@@ -317,7 +359,8 @@ def cmd_budget_open(args):
                              "--approach": None, "--fallback": None, "--cwd": None,
                              "--route": None, "--reason": None, "--alternative": None,
                              "--effort": None, "--verify": None,
-                             "--data-class": None, "--paths": None})
+                             "--data-class": None, "--paths": None,
+                             "--agents": None})
     if opts["--data-class"] and opts["--data-class"] not in (
             "public", "internal", "restricted"):
         sys.exit("invalid --data-class (allowed: public, internal, restricted)")
@@ -331,13 +374,35 @@ def cmd_budget_open(args):
     try:
         exp_out = int(opts["--expected-output"])
         exp_in = int(opts["--expected-input"] or 0)
+        n_agents = int(opts["--agents"] or 0)
     except ValueError:
-        sys.exit("--expected-output/--expected-input must be integers")
+        sys.exit("--expected-output/--expected-input/--agents must be integers")
     if exp_out <= 0:
         sys.exit("--expected-output must be > 0: a non-positive estimate "
                  "disables the 2×/3× enforcement (a bypass, not an estimate)")
     if exp_in < 0:
         sys.exit("--expected-input cannot be negative")
+    if n_agents < 0:
+        sys.exit("--agents cannot be negative")
+    # Ancora empirica fan-out (playbook confermata, 2 incidenti: l'overhead
+    # per agente domina il deliverable ~25×): ~20k output e ~17k input di
+    # cold start PER AGENTE, prima ancora dei file letti. Stima sotto
+    # l'ancora → warn, mai deny: la stima è un segnale di falsificazione,
+    # non un vincolo di selezione.
+    if n_agents:
+        floor_out, floor_in = n_agents * 20_000, n_agents * 17_000
+        low = []
+        if exp_out < floor_out:
+            low.append(f"output {exp_out} < {floor_out} (= {n_agents} × ~20k "
+                       f"reasoning+tool-call per agente)")
+        if exp_in and exp_in < floor_in:
+            low.append(f"input {exp_in} < {floor_in} (= {n_agents} × ~17k "
+                       f"prefisso cold-start, esclusi i file)")
+        if low:
+            print("FD ⚠ estimate below the fan-out anchor — "
+                  + "; ".join(low)
+                  + " — raise the estimate or shrink the fan-out "
+                    "(group items ~10-15 per agent).")
     cwd = opts["--cwd"] or os.getcwd()
     BUDGETS.mkdir(parents=True, exist_ok=True)
     # Lease: owner = sessione che apre (CLAUDE_CODE_SESSION_ID nell'env Bash).
@@ -399,6 +464,9 @@ def cmd_budget_open(args):
                   if p.strip()] or None,
         "expected_output_tokens": exp_out,
         "expected_input_tokens": exp_in,
+        # agents: fan-out dichiarato — decision record e denominatore per la
+        # calibrazione per-agente del report (assente = non dichiarato).
+        "agents": n_agents or None,
         # cost_ack: l'utente ha già approvato un task sopra la soglia di costo
         # (checkpoint del gate presentato e accettato) → il gate non ri-chiede.
         "cost_ack": cost_ack,
@@ -472,8 +540,12 @@ def cmd_budget_close(args):
         try:
             st = json.loads(sfile.read_text())
             if st.get("declared") == budget.get("declared_at"):
-                budget.setdefault("actual_output_tokens", int(st.get("out") or 0))
-                budget.setdefault("actual_input_tokens", int(st.get("inp") or 0))
+                # out/inp = main transcript; wf_out/wf_inp = agenti Workflow
+                # (stessa contabilità dell'enforcement Stop, che li somma).
+                budget.setdefault("actual_output_tokens",
+                                  int(st.get("out") or 0) + int(st.get("wf_out") or 0))
+                budget.setdefault("actual_input_tokens",
+                                  int(st.get("inp") or 0) + int(st.get("wf_inp") or 0))
         except (json.JSONDecodeError, OSError, ValueError):
             pass
     write_json_atomic(bfile, budget)
@@ -673,6 +745,13 @@ def cmd_session_summary(args):
         return
     main_tot, sub_tot, n_sub, cache_resets, first_ts, last_ts, stats = \
         sum_transcript(Path(transcript))
+    # Agenti Workflow: fusi nei totali subagent (le metriche derivate restano
+    # un'unica contabilità di delega) ma anche riportati a parte nel payload —
+    # l'allarme input-dominated del report ha bisogno del per-agente.
+    wf_tot, n_wf = sum_workflow_agents(Path(transcript))
+    for k in USAGE_KEYS:
+        sub_tot[k] += wf_tot[k]
+    n_sub += n_wf
     # Sentinella di schema: molti record validi ma zero usage o zero timestamp
     # riconosciuti = formato transcript cambiato → la summary conterebbe zeri
     # in silenzio. Logga l'anomalia (rumore nel report) e avvisa su stderr.
@@ -705,6 +784,11 @@ def cmd_session_summary(args):
         "account": Path(os.environ.get("CLAUDE_CONFIG_DIR")
                         or Path.home() / ".claude").name,
     }
+    if n_wf:
+        payload["wf_agents"] = n_wf
+        payload["wf_output"] = wf_tot["output_tokens"]
+        payload["wf_input_fresh"] = (wf_tot["input_tokens"]
+                                     + wf_tot["cache_creation_input_tokens"])
     yld = git_yield(cwd, first_ts)
     if yld is not None:
         payload["commits"] = yld["commits"]
@@ -770,6 +854,22 @@ def cmd_report(args):
                   f"coordination_cost: {coord_s}")
             if coord is not None and coord > 1:
                 alarms.append("coordination_cost > 1: l'orchestratore spende più dei subagenti")
+        # Agenti Workflow: input fresco PER AGENTE come discriminante — sopra
+        # ~100k/agente il corpus viene ri-letto cold da ogni agente (misurato
+        # 2026-07-20: 267k/agente su audit legale, contro ~17k di solo
+        # prefisso). L'allarme punta al rimedio, non al colpevole.
+        wf_agents = sum(s.get("wf_agents") or 0 for s in sessions)
+        if wf_agents:
+            wf_in = sum(s.get("wf_input_fresh") or 0 for s in sessions)
+            wf_out = sum(s.get("wf_output") or 0 for s in sessions)
+            per_agent = wf_in / wf_agents
+            print(f"workflow agents: {wf_agents} — output {fmt(wf_out)}, "
+                  f"fresh input {fmt(wf_in)} (~{fmt(per_agent)}/agente)")
+            if per_agent > 100_000:
+                alarms.append(
+                    f"workflow input-dominated: ~{fmt(per_agent)} fresh input/agente "
+                    f"— corpus ri-letto cold da ogni agente? Pre-digest inline una "
+                    f"volta e passa estratti mirati (skill delega-efficiente)")
         resets = sum(s.get("cache_resets") or 0 for s in sessions)
         if resets:
             alarms.append(f"cache-thrash: {resets} mid-session prefix resets "

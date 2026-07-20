@@ -8,8 +8,11 @@ totali attesi divergono QUI, all'update, non in produzione contando token
 sbagliati (review duale 2026-07-10, proposta Codex).
 
 Ogni fixture .jsonl ha accanto un .expected.json:
-  {"stop": {"out": N, "inp": N},        # totali stop-budget-check post-declared
+  {"stop": {"out": N, "inp": N},        # totali stop-budget-check post-declared (solo main)
+   "wf": {"out": N, "inp": N},          # totali agenti Workflow post-declared (opzionale;
+                                        # la fixture ha una dir <stem>/subagents/workflows/)
    "summary": {"main_out": N, "sub_out": N},  # split sum_transcript (opzionale)
+   "wf_summary": {"out": N, "in_fresh": N, "n": N},  # sum_workflow_agents (opzionale)
    "sentinel": true}                     # atteso schema_anomaly (opzionale)
 
 Uso: python3 tests/transcript-contract/run.py   (exit 0 = contratto rispettato)
@@ -60,9 +63,10 @@ def stop_totals(fixture, home):
     sentinel = "schema sentinel" in r.stdout
     state_files = list(budgets.glob("*.state.json"))
     if not state_files:
-        return None, None, sentinel
+        return None, None, None, None, sentinel
     st = json.loads(state_files[0].read_text())
-    return st["out"], st["inp"], sentinel
+    return (st["out"], st["inp"],
+            st.get("wf_out") or 0, st.get("wf_inp") or 0, sentinel)
 
 
 def main():
@@ -74,7 +78,7 @@ def main():
     for fx in fixtures:
         exp = json.loads(fx.with_suffix(".expected.json").read_text())
         with tempfile.TemporaryDirectory() as td:
-            out, inp, sentinel = stop_totals(fx, Path(td))
+            out, inp, wf_out, wf_inp, sentinel = stop_totals(fx, Path(td))
         ok = True
         detail = []
         if "stop" in exp:
@@ -83,6 +87,12 @@ def main():
                 ok = False
                 detail.append(f"stop: atteso out={e['out']} inp={e['inp']}, "
                               f"reale out={out} inp={inp}")
+        if "wf" in exp:
+            e = exp["wf"]
+            if wf_out != e["out"] or wf_inp != e["inp"]:
+                ok = False
+                detail.append(f"wf: atteso out={e['out']} inp={e['inp']}, "
+                              f"reale out={wf_out} inp={wf_inp}")
         if exp.get("sentinel") and not sentinel:
             ok = False
             detail.append("sentinella attesa ma non scattata")
@@ -99,6 +109,18 @@ def main():
                               f"sub={e['sub_out']}, reale "
                               f"main={main_tot.get('output_tokens', 0)} "
                               f"sub={sub_tot.get('output_tokens', 0)}")
+        if "wf_summary" in exp:
+            wf_tot, n_wf = telemetry.sum_workflow_agents(fx)
+            e = exp["wf_summary"]
+            in_fresh = (wf_tot.get("input_tokens", 0)
+                        + wf_tot.get("cache_creation_input_tokens", 0))
+            if (wf_tot.get("output_tokens", 0) != e["out"]
+                    or in_fresh != e["in_fresh"] or n_wf != e["n"]):
+                ok = False
+                detail.append(f"wf_summary: atteso out={e['out']} "
+                              f"in_fresh={e['in_fresh']} n={e['n']}, reale "
+                              f"out={wf_tot.get('output_tokens', 0)} "
+                              f"in_fresh={in_fresh} n={n_wf}")
         print(f"[{'PASS' if ok else 'FAIL'}] {fx.name}"
               + (": " + "; ".join(detail) if detail else ""))
         failures += 0 if ok else 1

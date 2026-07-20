@@ -25,11 +25,15 @@ riconosciuti → il formato transcript è cambiato; warning una tantum
 (schema_warned nel budget file) + evento schema_anomaly, enforcement sospeso
 invece di contare zeri in silenzio.
 
-Attribuzione per lineage, non per mtime: il main transcript contiene già
-l'usage aggregato di ogni subagent completato (toolUseResult.usage), quindi
-basta il main transcript — niente scan di file agent, niente double counting,
-niente dipendenza dall'orologio. Subagenti ancora in volo: contati al
-completamento (sottoconteggio temporaneo, conservativo).
+Attribuzione per lineage, non per mtime. Due sorgenti, mai sovrapposte:
+- Agent tool: l'usage aggregato del subagent completato è dentro il main
+  transcript (toolUseResult.usage) — find_usage lo raccoglie, niente scan
+  di file agent, niente double counting.
+- Workflow tool: i suoi agenti NON compaiono mai in toolUseResult (verificato
+  2026-07-20 su sessione reale: 5 call Workflow, zero usage annidati) —
+  vivono in <sessiondir>/subagents/workflows/wf_*/agent-*.jsonl e vanno
+  scansionati lì, o l'enforcement è cieco proprio sulla route più costosa
+  (misurato: 9,2M input freschi invisibili in una sessione).
 Record senza timestamp: inferenza posizionale — il JSONL è append-only
 cronologico, vale il timestamp dell'ultimo record che lo precede.
 """
@@ -97,79 +101,114 @@ def find_usage(obj):
             yield from find_usage(v)
 
 
-def sum_file_incremental(path, since, state_file, declared_iso):
-    """Somma i token dopo `since` con scan INCREMENTALE: il vecchio sum_file
-    rileggeva l'intero JSONL a ogni Stop → costo quadratico sui task lunghi
-    (review duale 2026-07-10). Lo stato (offset in BYTE + totali cumulativi +
-    contatori sentinella + last_ts per l'inferenza posizionale) vive in un
-    file accanto al budget, chiavato su declared_at: budget nuovo → rescan.
-    Lettura in binario e offset avanzato SOLO a fine riga completa: una riga
-    parziale (transcript in scrittura) viene ripresa al giro dopo — un
-    indicatore live può permettersi di perderla, l'enforcement no.
-    I contatori della sentinella restano cumulativi sull'intero file (il
-    primo giro parte da offset 0), quindi la semantica non cambia."""
-    state = {"declared": declared_iso, "path": str(path), "off": 0,
+def scan_jsonl(path, sub, since):
+    """Scan INCREMENTALE di un JSONL: aggiorna `sub` in place (off in BYTE,
+    totali cumulativi out/inp, last_ts per l'inferenza posizionale; i
+    contatori sentinella n_rec/n_usage/n_ts solo se già presenti in `sub` —
+    la sentinella di schema giudica il main, non i file agente). Il vecchio
+    sum_file rileggeva l'intero JSONL a ogni Stop → costo quadratico sui
+    task lunghi (review duale 2026-07-10). Lettura in binario e offset
+    avanzato SOLO a fine riga completa: una riga parziale (transcript in
+    scrittura) viene ripresa al giro dopo — un indicatore live può
+    permettersi di perderla, l'enforcement no."""
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return
+    if size < int(sub.get("off", 0)):  # transcript ruotato/troncato
+        for k in ("off", "out", "inp", "n_rec", "n_usage", "n_ts"):
+            if k in sub:
+                sub[k] = 0
+        sub["last_ts"] = None
+    if size <= int(sub.get("off", 0)):
+        return
+    try:
+        with open(path, "rb") as fh:
+            fh.seek(int(sub.get("off", 0)))
+            data = fh.read()
+    except OSError:
+        return
+    chunks = data.split(b"\n")
+    tail = chunks.pop()  # riga possibilmente incompleta: non consumarla
+    sub["off"] = int(sub.get("off", 0)) + len(data) - len(tail)
+    last_ts = parse_ts(sub.get("last_ts"))
+    sentinel = "n_rec" in sub
+    for raw in chunks:
+        line = raw.decode(errors="replace").strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if sentinel:
+            sub["n_rec"] += 1
+        raw_ts = parse_ts(rec.get("timestamp"))
+        if raw_ts and sentinel:
+            sub["n_ts"] += 1
+        ts = raw_ts or last_ts  # inferenza posizionale
+        if ts:
+            last_ts = ts
+        pre_since = since is not None and (ts is None or ts < since)
+        if pre_since and (not sentinel or sub["n_usage"]):
+            continue  # prefisso storico: al main serve solo per la sentinella
+        usages = list(find_usage(rec))
+        if usages and sentinel:
+            sub["n_usage"] += 1
+        if pre_since:
+            continue
+        for usage in usages:
+            sub["out"] += usage.get("output_tokens") or 0
+            sub["inp"] += (usage.get("input_tokens") or 0) + \
+                          (usage.get("cache_creation_input_tokens") or 0)
+    sub["last_ts"] = last_ts.isoformat() if last_ts else None
+
+
+def scan_workflow_agents(transcript, since, state):
+    """Token degli agenti del Workflow tool: file propri sotto
+    <sessiondir>/subagents/workflows/, mai aggregati nel main (vedi docstring
+    di modulo). Stessa disciplina del main: scan incrementale per file
+    (offset nella mappa state['wf']), filtro since per record — ogni record
+    agente porta il proprio timestamp. Totali riportati anche in
+    state['wf_out']/['wf_inp'] così budget-close li legge senza rifare lo scan."""
+    wf = state.setdefault("wf", {})
+    sdir = transcript.with_suffix("")  # <sessiondir> = transcript senza .jsonl
+    try:
+        agent_files = sorted(sdir.glob("subagents/workflows/wf_*/agent-*.jsonl"))
+    except OSError:
+        agent_files = []
+    for path in agent_files:
+        key = f"{path.parent.name}/{path.name}"
+        sub = wf.setdefault(key, {"off": 0, "out": 0, "inp": 0, "last_ts": None})
+        scan_jsonl(path, sub, since)
+    state["wf_out"] = sum(s.get("out") or 0 for s in wf.values())
+    state["wf_inp"] = sum(s.get("inp") or 0 for s in wf.values())
+    return state["wf_out"], state["wf_inp"]
+
+
+def sum_session_incremental(transcript, since, state_file, declared_iso):
+    """Totali della sessione dopo `since`: main transcript + agenti Workflow.
+    Lo stato (chiavato su declared_at: budget nuovo → rescan) vive in un file
+    accanto al budget; i contatori della sentinella restano cumulativi
+    sull'intero main (il primo giro parte da offset 0)."""
+    state = {"declared": declared_iso, "path": str(transcript), "off": 0,
              "out": 0, "inp": 0, "n_rec": 0, "n_usage": 0, "n_ts": 0,
              "last_ts": None}
     if state_file.is_file():
         try:
             prev = json.loads(state_file.read_text())
             if (prev.get("declared") == declared_iso
-                    and prev.get("path") == str(path)):
+                    and prev.get("path") == str(transcript)):
                 state = prev
         except (json.JSONDecodeError, OSError):
             pass
+    scan_jsonl(transcript, state, since)
+    wf_out, wf_inp = scan_workflow_agents(transcript, since, state)
     try:
-        size = path.stat().st_size
+        write_json_atomic(state_file, state)
     except OSError:
-        return 0, 0, (0, 0, 0)
-    if size < int(state.get("off", 0)):  # transcript ruotato/troncato
-        state.update(off=0, out=0, inp=0, n_rec=0, n_usage=0, n_ts=0,
-                     last_ts=None)
-    last_ts = parse_ts(state.get("last_ts"))
-    if size > int(state.get("off", 0)):
-        try:
-            with open(path, "rb") as fh:
-                fh.seek(int(state.get("off", 0)))
-                data = fh.read()
-        except OSError:
-            return 0, 0, (0, 0, 0)
-        chunks = data.split(b"\n")
-        tail = chunks.pop()  # riga possibilmente incompleta: non consumarla
-        state["off"] = int(state.get("off", 0)) + len(data) - len(tail)
-        for raw in chunks:
-            line = raw.decode(errors="replace").strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            state["n_rec"] += 1
-            raw_ts = parse_ts(rec.get("timestamp"))
-            if raw_ts:
-                state["n_ts"] += 1
-            ts = raw_ts or last_ts  # inferenza posizionale
-            if ts:
-                last_ts = ts
-            pre_since = since is not None and (ts is None or ts < since)
-            if pre_since and state["n_usage"]:
-                continue  # prefisso storico: serve solo alla sentinella
-            usages = list(find_usage(rec))
-            if usages:
-                state["n_usage"] += 1
-            if pre_since:
-                continue
-            for usage in usages:
-                state["out"] += usage.get("output_tokens") or 0
-                state["inp"] += (usage.get("input_tokens") or 0) + \
-                                (usage.get("cache_creation_input_tokens") or 0)
-        state["last_ts"] = last_ts.isoformat() if last_ts else None
-        try:
-            write_json_atomic(state_file, state)
-        except OSError:
-            pass  # stato non persistito: il prossimo giro riparte dal vecchio offset
-    return (state["out"], state["inp"],
+        pass  # stato non persistito: il prossimo giro riparte dal vecchio offset
+    return (state["out"] + wf_out, state["inp"] + wf_inp,
             (state["n_rec"], state["n_usage"], state["n_ts"]))
 
 
@@ -210,10 +249,10 @@ def main():
     transcript = data.get("transcript_path")
     if not transcript or not Path(transcript).is_file():
         return
-    # Solo main transcript: l'usage dei subagenti completati è già dentro
-    # (toolUseResult.usage) e find_usage lo raccoglie ricorsivamente.
+    # Main transcript (usage Agent tool incluso via toolUseResult) + file
+    # agente del Workflow tool: vedi docstring di modulo per l'attribuzione.
     state_file = bfile.with_name(bfile.stem + ".state.json")
-    actual_out, actual_in, (n_rec, n_usage, n_ts) = sum_file_incremental(
+    actual_out, actual_in, (n_rec, n_usage, n_ts) = sum_session_incremental(
         Path(transcript), declared, state_file, budget.get("declared_at"))
 
     # Sentinella di schema: molti record validi ma zero usage o zero timestamp

@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.21.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.22.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need to do.**
 
@@ -207,6 +207,7 @@ Works on its own. These optional companions save further tokens, degrading grace
 
 ## 🆕 What's new
 
+- **1.22.0** — Workflow-tool agent tokens enter budget enforcement and telemetry (9.2M fresh input were invisible in one real session); the gate denies new fan-outs above 90% five-hour quota (resume always passes); `budget-open --agents N` checks the estimate against the per-agent anchor
 - **1.21.0** — The grinding streak shows on the statusline (`[FAIL ×N]`); the statusline legend is back in the README, simplified
 - **1.20.0** — Grinding is caught by a hook: 3 failing commands in a row and the rule-of-3 comes back, with the streak on the record
 - **1.19.0** — Past budget busts resurface at session start; MCP weight split into flow and stock; grounding-guard adopted for dependency verification

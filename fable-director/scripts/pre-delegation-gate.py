@@ -15,7 +15,9 @@ mai negare una delega legittima; il costo del fail-open è tornare al mondo
 pre-gate (solo Stop hook), mai peggio.
 
 Casi budget file:
-- status=open, dichiarato <24h  → allow (silenzio, zero token).
+- status=open, dichiarato <24h  → allow (silenzio, zero token) — salvo
+  quota guard: NUOVO Workflow con finestra 5h oltre soglia → deny
+  (il resume passa sempre; vedi quota_guard).
 - status=open ma >24h           → deny: budget abbandonato, riaprine uno.
   (Stesso orizzonte dello Stop hook: un task di ieri non autorizza oggi.)
 - status=flagged                → deny: post-mortem + budget-close dovuti
@@ -28,6 +30,7 @@ import os
 import re
 import sqlite3
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -163,6 +166,61 @@ def cost_checkpoint(budget):
         return None
 
 
+QUOTA_GUARD_CEILING = 90.0   # five_hour_used_pct oltre cui un nuovo Workflow è negato
+QUOTA_SNAPSHOT_MAX_AGE_S = 600  # snapshot quota più vecchio → nessun check
+
+
+def quota_guard(data):
+    """Fan-out a finestra 5h quasi esausta = run che muore a metà volo: token
+    bruciati, zero deliverable — e il limite colpisce la fase più a valle
+    (verify/sintesi), la più preziosa (misurato 2026-07-20: 594k token,
+    0/7 agenti completati). Deny deterministico dei NUOVI Workflow quando
+    five_hour_used_pct supera la soglia (default 90, override
+    five_hour_pct_ceiling in cost-checkpoint.json). Il resume
+    (resumeFromRunId) passa sempre: rigioca dalla cache, è il modo giusto di
+    chiudere dopo il reset. Snapshot quota stantio (>10 min) o assente →
+    nessun check: fail-open, un deny su dati vecchi è peggio di nessun deny.
+    Ritorna il reason del deny o None."""
+    try:
+        if data.get("tool_name") != "Workflow":
+            return None
+        if (data.get("tool_input") or {}).get("resumeFromRunId"):
+            return None
+        base = Path.home() / ".claude" / "fable-director"
+        ceiling = QUOTA_GUARD_CEILING
+        cfile = base / "cost-checkpoint.json"
+        if cfile.is_file():
+            try:
+                ceiling = float(json.loads(cfile.read_text())
+                                .get("five_hour_pct_ceiling", ceiling))
+            except (json.JSONDecodeError, OSError, TypeError, ValueError):
+                pass
+        acct = hashlib.sha256((os.environ.get("CLAUDE_CONFIG_DIR")
+                               or str(Path.home() / ".claude")).encode()).hexdigest()[:8]
+        qfile = base / f"quota-{acct}.json"
+        if not qfile.is_file():
+            qfile = base / "quota.json"
+        if not qfile.is_file():
+            return None
+        if time.time() - qfile.stat().st_mtime > QUOTA_SNAPSHOT_MAX_AGE_S:
+            return None
+        used = json.loads(qfile.read_text()).get("five_hour_used_pct")
+        if used is None or float(used) < ceiling:
+            return None
+        return (
+            f"✕ FABLE-DIRECTOR quota guard — five-hour window at "
+            f"{float(used):.0f}% used (ceiling {ceiling:.0f}%): a NEW "
+            f"workflow now risks dying mid-flight at the session limit — "
+            f"tokens burned, zero deliverable, and the limit hits the most "
+            f"valuable downstream phase (verify/synthesis) first.\n"
+            f"Options: (a) inline work and closures only until the window "
+            f"resets; (b) size the workflow to finish BEFORE the wall; "
+            f"(c) resume a previous run — resumeFromRunId is always allowed."
+        )
+    except Exception:
+        return None
+
+
 def log_gate_deny(data, kind, budget=None):
     """Evento telemetria `gate_deny`: senza, l'analisi post-hoc non distingue
     "mai tentata delega" da "delega negata e ripiegata inline" (emerso dal
@@ -174,7 +232,7 @@ def log_gate_deny(data, kind, budget=None):
     try:
         ti = data.get("tool_input") or {}
         payload = {
-            "kind": kind,  # no_budget | stale_budget | flagged
+            "kind": kind,  # no_budget | stale_budget | flagged | quota_guard
             "tool": data.get("tool_name"),
             "subagent_type": ti.get("subagent_type"),
             "model": ti.get("model") or "inherit",
@@ -451,6 +509,14 @@ def main():
             return
         now = datetime.now(timezone.utc)
         if (now - declared).total_seconds() <= 86400:
+            # Quota guard PRIMA del registro [DLG]: un Workflow negato qui non
+            # è una delega avvenuta, contarla gonfierebbe il segmento a ogni
+            # retry post-reset.
+            guard = quota_guard(data)
+            if guard:
+                log_gate_deny(data, "quota_guard", budget)
+                deny(guard)
+                return
             # Registro PRIMA del checkpoint: se l'ask viene approvato l'hook non
             # gira di nuovo — senza questo, proprio le deleghe più costose
             # sparirebbero dal [DLG]. Se l'utente nega, sovrastima di 1: stesso

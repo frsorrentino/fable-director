@@ -1,0 +1,4 @@
+{"stop": {"out": 600, "inp": 250},
+ "wf": {"out": 3300, "inp": 40030},
+ "summary": {"main_out": 100, "sub_out": 500},
+ "wf_summary": {"out": 10300, "in_fresh": 47030, "n": 2}}
