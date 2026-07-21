@@ -207,15 +207,11 @@ Works on its own. These optional companions save further tokens, degrading grace
 
 ## 🆕 What's new
 
-- **1.22.0** — Workflow-tool agent tokens enter budget enforcement and telemetry (9.2M fresh input were invisible in one real session); the gate denies new fan-outs above 90% five-hour quota (resume always passes); `budget-open --agents N` checks the estimate against the per-agent anchor
-- **1.21.0** — The grinding streak shows on the statusline (`[FAIL ×N]`); the statusline legend is back in the README, simplified
-- **1.20.0** — Grinding is caught by a hook: 3 failing commands in a row and the rule-of-3 comes back, with the streak on the record
-- **1.19.0** — Past budget busts resurface at session start; MCP weight split into flow and stock; grounding-guard adopted for dependency verification
-- **1.18.0** — read-dedup retired after measuring its real target (0.1% of Read bytes); statusline gains a prompt-cache countdown and a compaction counter; usage interop with claude-hud
-- **1.17.1** — External-executor onboarding as a multiple-choice question (answered, not just announced)
-- **1.17.0** — Auto-update self-enables on GitHub-marketplace installs (announced, reversible, opt-out always respected)
-- **1.16.1** — Hook scripts run through their interpreter, not the `+x` bit — durable across installs
-- **1.16.0** — External executor upgrades distilled from OpenAI's codex-plugin-cc: `--schema-file`, `--resume-last` delta-retry, `--model`/`--effort` overrides, XML-block prompt contracts
+- **1.22.0** — Workflow agent tokens enter enforcement/telemetry; quota guard on new fan-outs; `--agents N` estimate anchor
+- **1.21.0** — `[FAIL ×N]` on the statusline; legend back in the README
+- **1.20.0** — Fail-streak hook: rule-of-3 injected at 3 consecutive Bash failures
+- **1.19.0** — Past busts replayed at SessionStart; MCP weight split flow/stock
+- **1.18.0** — read-dedup retired on measurement; `[CACHE]`/`[CMP]` statusline; claude-hud interop
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 
