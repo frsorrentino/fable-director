@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.22.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.23.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need to do.**
 
@@ -43,6 +43,7 @@ Full details, manual hook merge and edge cases in **[INSTALL.md](INSTALL.md)**.
 
 - 🟢 **`SessionStart` (kernel):** injects the routing policy — the 6 axes — in ~500 tokens; the full policy body loads only on demand.
 - 🧠 **`SessionStart` (hindsight):** replays the budget busts this **cwd** has already paid for — auto-recorded by the Stop hook, never self-reported. Silent where there's no history (zero tokens), hard-capped at 5 lines where there is. Registering without retrieving is an archive, not a memory.
+- 🧭 **`UserPromptSubmit` (route hint):** matches the prompt against `hint_keywords` declared per-entry in `soft-deps.json` (opt-in) and conservative cardinality signals when external providers are configured; on match injects up to 3 `[fd-route-hint]` candidate lines the model must **evaluate** — the entry's `quality_guard`/`data_class` stay sovereign — and logs a `route_hint` event (names only, never the prompt text). Silent on no match: zero tokens.
 - 🛑 **`PreToolUse` (gate):** intercepts every `Agent`/`Task`/`Workflow` call — no machine-readable budget opened first (`budget-open`) → **the call is denied**.
 - 🚧 **`PreToolUse` (perimeter):** the budget can declare *where* the task may write (`--paths`); `Write`/`Edit` outside it are **denied** until an explicit amendment. Your own `never_write` patterns (`.fd-perimeter.json` — e.g. `migrations/*`, `.env*`) are denied unconditionally, budget or not.
 - ⚖️ **`PostToolUse` (MCP meter):** measures context weight along **two** distinct axes — *flow* (bytes each MCP server's results push into context, paid once per call) and *stock* (schema bytes a `ToolSearch` load injects into the prefix, re-paid **every turn** of the session). The report keeps them separate and never sums them; zero model tokens.
@@ -207,11 +208,11 @@ Works on its own. These optional companions save further tokens, degrading grace
 
 ## 🆕 What's new
 
+- **1.23.0** — Proactive route verdict: `[fd-route-hint]` at prompt time from soft-deps keywords + cardinality signals
 - **1.22.0** — Workflow agent tokens enter enforcement/telemetry; quota guard on new fan-outs; `--agents N` estimate anchor
 - **1.21.0** — `[FAIL ×N]` on the statusline; legend back in the README
 - **1.20.0** — Fail-streak hook: rule-of-3 injected at 3 consecutive Bash failures
 - **1.19.0** — Past busts replayed at SessionStart; MCP weight split flow/stock
-- **1.18.0** — read-dedup retired on measurement; `[CACHE]`/`[CMP]` statusline; claude-hud interop
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 

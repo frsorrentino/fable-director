@@ -26,6 +26,8 @@ Score the task on six axes, top to bottom; earlier axes override later ones:
 
 Axes compose rather than exclude: a batch (4) of quality-sensitive items (2) → mid-model executes, top model reviews every diff before delivery.
 
+Route verdict: on every non-trivial task, one line — cheaper/external route yes/no and why, citing both the allowing and the forbidding axis. `[fd-route-hint]` lines (UserPromptSubmit hook, keyword match on `hint_keywords` in soft-deps.json + cardinality signals) are deterministic CANDIDATES to evaluate, never directives; `quality_guard`/`data_class` of the matched entry stay sovereign. Hint events land in telemetry (`route_hint`) so `/review` can compare hinted vs taken routes.
+
 **Binding precedents** — anchor the axes, not exhaustive:
 - Production code (any stack) → axis 2: top model inline; mid-model ONLY for verbatim transcription from a complete spec; new features via brainstorm→spec→plan. Verify: tests/lint/dry-run + top-model diff review.
 - Bug fixing → axes 1+2: top model inline (systematic debugging); delegate only broad code search (a read-only search agent). Verify: reproduce → fix → re-test.

@@ -20,4 +20,6 @@ BEFORE any delegation/orchestration (Agent/Task/Workflow call), and when closing
 
 Soft dependencies: preferred tools per task class live in `~/.claude/fable-director/soft-deps.json` — when a task matches a declared class, use the declared tool (its CLI route is often zero-token); if it's unavailable, tell the user and stop — never silently fall back to an undeclared alternative.
 
+Route verdict (proactive cross-family): before executing any non-trivial task, state in ONE line whether a cheaper/external route applies and why — e.g. "route: gemini-docs (soft-dep documentation-lookup)" or "route: top model inline — axis 2 (client-facing wording)". A `[fd-route-hint]` line may be injected at prompt time: deterministic keyword candidates to EVALUATE, never follow blindly — the verdict cites both the allowing axis and the forbidding one (quality_guard/data_class of the entry stay sovereign). Conversational turns and trivial edits are exempt; the verdict is one line, never a ritual — it must never cost more than it saves.
+
 Never delegate: interactive debugging, aesthetics/visual iteration, client-facing numbers/wording, decisions on how to count or report, production writes without prior backup.
