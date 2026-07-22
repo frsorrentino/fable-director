@@ -222,6 +222,15 @@ def main():
           r.returncode == 0 and field(r.stdout, "STATUS") == "ok",
           r.stdout + r.stderr)
 
+    # E15 — doctor: billing dichiarato mostrato, UNDECLARED è un problema.
+    r = run(home, proj, ["--doctor"])
+    check("E15 doctor reports billing class per provider",
+          "billing: free" in r.stdout and "billing: PAID" in r.stdout
+          and "$9.99" in r.stdout, r.stdout + r.stderr)
+    check("E16 doctor flags undeclared billing as a problem (exit 1)",
+          r.returncode == 1 and "billing UNDECLARED" in r.stdout
+          and "fail-closed" in r.stdout, r.stdout + r.stderr)
+
     print(f"\n{len(passed)} passed, {len(failed)} failed")
     sys.exit(1 if failed else 0)
 

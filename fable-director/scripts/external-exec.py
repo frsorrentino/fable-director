@@ -267,7 +267,7 @@ def today_usage():
     return counts
 
 
-def doctor(ping=False):
+def doctor(ping=False, paid_ok=False):
     """Setup guidato + diagnosi: mai chiamate modello senza --ping."""
     here = Path(__file__).parent
     print("FABLE-DIRECTOR — external executors doctor")
@@ -285,8 +285,8 @@ External executors move NON-quality-sensitive batches off your Claude quota
   2. Got a ChatGPT account? Codex CLI, usage included in your plan:
      npm install -g @openai/codex   then   codex login
 
-Prefer paid models? Same config entries with your paid API key — the
-telemetry judges outcomes the same way.
+Prefer paid models? Same config entries with your paid API key and
+"billing": "paid" — consent-gated (--paid-ok), never auto-proposed.
 
 Setup:
   python3 "{here / 'cross-verify.py'}" --init
@@ -304,6 +304,17 @@ Re-check:
     for name, prov in (cfg.get("providers") or {}).items():
         checks = []
         ok = True
+        if "billing" not in prov:
+            ok = False
+            checks.append('billing UNDECLARED → treated as PAID '
+                          '(fail-closed): add "billing": "free"|"paid" '
+                          'to the config entry')
+        elif billing_of(prov) == "free":
+            checks.append("billing: free")
+        else:
+            checks.append("billing: PAID"
+                          + (f" ({prov['cost_note']})"
+                             if prov.get("cost_note") else ""))
         if prov.get("type") == "cli":
             cmd = prov.get("command") or []
             binary = cmd[0] if cmd else None
@@ -339,7 +350,10 @@ Re-check:
                 ok = False
                 checks.append(f"API key MISSING — export "
                               f"{prov.get('api_key_env')}=... or api_key in config")
-        if ping and ok:
+        if ping and ok and billing_of(prov) != "free" and not paid_ok:
+            checks.append("ping SKIPPED (billed provider — costs real "
+                          "money; add --paid-ok to consent)")
+        elif ping and ok:
             probe = "Reply with exactly: OK"
             try:
                 if prov.get("type") == "cli":
@@ -548,7 +562,7 @@ def main():
     # render_cli_command legge tutto da opts: allinea il flag booleano.
     opts["--resume-last"] = flags["--resume-last"]
     if flags["--doctor"]:
-        doctor(ping=flags["--ping"])
+        doctor(ping=flags["--ping"], paid_ok=flags["--paid-ok"])
     spec_text = opts["--spec"]
     if opts["--spec-file"]:
         try:
