@@ -64,6 +64,13 @@ chiamate Bash): senza budget open per il cwd lo script esce con errore.
 Input oltre il cap → errore esplicito; il troncamento è solo opt-in
 (--allow-truncate) e viene dichiarato al modello nel prompt.
 
+Provider "type": "image" (es. gemini-image): la spec È il prompt; endpoint
+nativo generateContent, bytes su --out (OBBLIGATORIO — binario mai su
+stdout, perimetro scrittura del budget rispettato). Incompatibili e
+rumorosi: --schema-*, --effort, --resume-last, --allow-truncate, --input
+(v1 text-to-image puro). 429 "limit: 0" = billing non abilitato sul
+progetto Google, messaggio dedicato.
+
 Output (grep-abile):
   STATUS: ok|needs_context|unavailable|error
   PROVIDER: <provider> (<model>)
@@ -455,6 +462,43 @@ def call_http(prov, name, api_key, user_msg, timeout):
         return None
 
 
+def call_image(prov, name, api_key, prompt, timeout):
+    """Provider "type": "image" (famiglia gemini-*-image): endpoint nativo
+    generateContent, risposta inlineData base64. Chiave SOLO nell'header
+    x-goog-api-key: in query string finirebbe nei log. Ritorna
+    (bytes, mime, None) oppure (None, None, testo-del-provider)."""
+    import base64
+    body = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode()
+    url = (prov["base_url"].rstrip("/")
+           + f"/models/{prov['model']}:generateContent")
+    req = urllib.request.Request(url, data=body, headers={
+        "Content-Type": "application/json", "x-goog-api-key": api_key})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode(errors="replace"))
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode(errors="replace")[:500]
+        if e.code == 429 and "limit: 0" in detail:
+            unavailable(
+                f"image models need billing enabled on the Google project "
+                f"(free tier limit is 0) — not a transient quota error "
+                f"[{name}]")
+        unavailable(f"HTTP {e.code} from {name} (rate limit / endpoint changed?)")
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        unavailable(f"network/timeout towards {name}: {e}")
+    try:
+        parts = data["candidates"][0]["content"]["parts"]
+    except (KeyError, IndexError, TypeError):
+        return None, None, None
+    for p in parts:
+        blob = p.get("inlineData") or p.get("inline_data") or {}
+        if blob.get("data"):
+            mime = blob.get("mimeType") or blob.get("mime_type") or "image/png"
+            return base64.b64decode(blob["data"]), mime, None
+    text = " ".join(str(p.get("text", "")) for p in parts).strip()
+    return None, None, (text[:300] or None)
+
+
 def load_schema(path):
     """--schema-file: schema illeggibile o non-JSON è errore rumoroso — uno
     schema rotto non deve mai degradare a nessun-controllo."""
@@ -594,6 +638,24 @@ def main():
             + (f" ({prov['cost_note']})" if prov.get("cost_note") else "")
             + " — requires explicit user consent in this conversation; "
               "re-run with --paid-ok ONLY after the user agreed")
+    is_image = prov.get("type") == "image"
+    if is_image:
+        for bad, val in (("--schema-json", flags["--schema-json"]),
+                         ("--schema-file", opts["--schema-file"]),
+                         ("--effort", opts["--effort"]),
+                         ("--resume-last", flags["--resume-last"]),
+                         ("--allow-truncate", flags["--allow-truncate"]),
+                         ("--input", inputs)):
+            if val:
+                out("error", name, prov.get("model", "?"), detail=(
+                    f"{bad} is not supported for image providers "
+                    f"(v1 is text-to-image only)"))
+                sys.exit(1)
+        if not opts["--out"]:
+            out("error", name, prov.get("model", "?"), detail=(
+                "--out FILE is required for image providers (binary "
+                "output never goes to stdout)"))
+            sys.exit(1)
     is_cli = prov.get("type") == "cli"
     # --model override: vale per entrambe le rotte (HTTP: modello nel body;
     # CLI: placeholder {model}) e la riga PROVIDER riporta il modello
@@ -604,12 +666,12 @@ def main():
     if not is_cli:
         # --effort/--resume-last sono semantiche CLI-only → errore, mai
         # ignorati in silenzio.
-        if opts["--effort"]:
+        if not is_image and opts["--effort"]:
             out("error", name, prov.get("model", "?"), detail=(
                 "--effort is only supported for CLI providers with an "
                 "{effort} placeholder in the command template"))
             sys.exit(1)
-        if flags["--resume-last"]:
+        if not is_image and flags["--resume-last"]:
             out("error", name, prov.get("model", "?"), detail=(
                 "--resume-last is only supported for CLI providers with a "
                 "'resume_command' template in the config"))
@@ -659,7 +721,10 @@ def main():
     except OSError:
         pass
     try:
-        if is_cli:
+        if is_image:
+            img_bytes, img_mime, img_text = call_image(
+                prov, name, api_key, spec_text, timeout)
+        elif is_cli:
             content = call_cli(prov, name, user_msg, timeout, opts, schema_path)
         else:
             content = call_http(prov, name, api_key, user_msg, timeout)
@@ -668,6 +733,28 @@ def main():
             ACTIVE_PATH.unlink()
         except OSError:
             pass
+
+    if is_image:
+        base_log = {"provider": name, "model": prov["model"],
+                    "billing": billing_of(prov),
+                    "type": opts.get("--type"), "chars_in": len(spec_text)}
+        if img_bytes is None:
+            out("error", name, prov["model"], detail=(
+                "no image in provider response"
+                + (f" — provider said: {img_text}" if img_text else "")))
+            log_exec({**base_log, "ok": False, "check": "no-image"})
+            sys.exit(1)
+        try:
+            Path(opts["--out"]).write_bytes(img_bytes)
+        except OSError as e:
+            out("error", name, prov["model"], "image", "-",
+                f"--out write failed: {e}")
+            sys.exit(1)
+        out("ok", name, prov["model"], "image", opts["--out"],
+            f"{img_mime}, {len(img_bytes)} bytes")
+        log_exec({**base_log, "ok": True, "check": "image",
+                  "bytes_out": len(img_bytes)})
+        sys.exit(0)
 
     base_log = {"provider": name, "model": prov["model"],
                 "billing": billing_of(prov),
