@@ -400,7 +400,7 @@ Re-check:
         used = usage.get(name, 0)
         checks.append(f"today {used} calls"
                       + (f" / {rpd} declared rpd" if rpd else ""))
-        if used == 0 and ok:
+        if used == 0 and ok and billing_of(prov) == "free":
             checks.append("today's free tier UNUSED (daily reset: unused "
                           "capacity is lost)")
         mark = "OK " if ok else "FAIL"
