@@ -74,12 +74,17 @@ def cardinality_candidate(prompt_lower):
     if not m:
         return None
     providers = load_json(base_dir() / "cross-family.json").get("providers", {})
-    if not providers:
+    # Solo i free: i provider paid non vengono MAI proposti d'ufficio
+    # (fail-closed: billing assente = paid). Policy 2026-07-22.
+    free = sorted(n for n, p in providers.items()
+                  if isinstance(p, dict) and p.get("billing") == "free")
+    if not free:
         return None
-    names = ", ".join(sorted(providers))
+    names = ", ".join(free)
     return ("external-exec",
             f'- external-exec asse 4 (segnale cardinalità "{m.group(0)}") — '
-            f"provider: {names}; solo item non quality-sensitive, pre-budget obbligatorio")
+            f"free-tier provider: {names}; solo item non quality-sensitive, "
+            f"pre-budget obbligatorio")
 
 
 def write_event(payload):

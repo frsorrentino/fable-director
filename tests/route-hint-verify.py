@@ -16,6 +16,8 @@ HOME usa-e-getta con soft-deps.json/cross-family.json sintetici, poi inchioda:
   R12 telemetria: evento route_hint a match, NESSUN evento a silenzio
   R13 exit 0 sempre (mai bloccare il prompt)
   R14 payload telemetria: solo nomi match + lunghezza, MAI il testo del prompt
+  R15 mix free/paid provider                -> hint asse 4 elenca SOLO i free
+  R16 solo provider paid/undeclared         -> nessuna rotta free, silenzio
 """
 import json
 import shutil
@@ -120,7 +122,9 @@ try:
     check("R4 frase multi-parola matcha come substring",
           "gemini-docs" in r.stdout, r.stdout[:150])
 
-    h = mkhome(); tmp.append(h)
+    h = mkhome(xfam={"providers": {
+        "gemini": {"billing": "free"}, "grok": {"billing": "free"}}})
+    tmp.append(h)
     r = run(h, "aggiorna il campo meta description su tutti gli articoli del blog")
     check("R5 cardinalità + provider -> hint external-exec",
           "external-exec" in r.stdout and "asse 4" in r.stdout
@@ -153,6 +157,26 @@ try:
     r = run(h, "documentazione pdf con screenshot del form, alfa-kw e beta-kw e tutti i casi")
     lines = [l for l in r.stdout.splitlines() if l.startswith("- ")]
     check("R11 cap a 3 candidati", len(lines) == 3, r.stdout)
+
+    h = mkhome(xfam={"providers": {
+        "gfree": {"model": "m", "billing": "free"},
+        "gpaid": {"model": "m", "billing": "paid"},
+        "gnone": {"model": "m"},
+    }})
+    tmp.append(h)
+    r = run(h, "processa in batch tutti i file del progetto")
+    check("R15 axis-4 hint lists only free providers",
+          "gfree" in r.stdout and "gpaid" not in r.stdout
+          and "gnone" not in r.stdout, r.stdout[:200])
+
+    h = mkhome(xfam={"providers": {
+        "gpaid": {"model": "m", "billing": "paid"},
+        "gnone": {"model": "m"},
+    }})
+    tmp.append(h)
+    r = run(h, "processa in batch tutti i file del progetto")
+    check("R16 no free providers -> no axis-4 hint",
+          "external-exec" not in r.stdout, r.stdout[:100])
 finally:
     for h in tmp:
         shutil.rmtree(h, ignore_errors=True)
