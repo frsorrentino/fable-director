@@ -6,12 +6,14 @@ HOME usa-e-getta + provider CLI stub che risponde col JSON verdetto:
   C2  provider paid senza --paid-ok → unavailable, exit 1, mai eseguito
   C3  provider paid con --paid-ok → esegue
   C4  billing assente = paid (fail-closed)
+  C2b billing refusal (C2) è loggata in telemetria con check=paid-refused
 
 Usage: python3 tests/cross-verify-billing.py   (exit 0 = all green)
 """
 import json
 import os
 import re
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -87,6 +89,18 @@ def main():
           r.returncode == 1 and field(r.stdout, "STATUS") == "unavailable"
           and "is billed" in r.stdout and "--paid-ok" in r.stdout
           and "$0.003" in r.stdout, r.stdout + r.stderr)
+
+    db_path = home / ".claude" / "fable-director" / "telemetry.db"
+    if db_path.is_file():
+        con = sqlite3.connect(str(db_path))
+        rows = [json.loads(p) for (p,) in con.execute(
+            "SELECT payload FROM events WHERE event='verification'")]
+        con.close()
+    else:
+        rows = []
+    check("C2b refusal logged with check=paid-refused",
+          any(r2.get("check") == "paid-refused" and r2.get("provider") == "vpaid"
+              for r2 in rows))
 
     r = run(home, proj, ["--provider", "vpaid", "--paid-ok"])
     check("C3 paid provider with --paid-ok verifies",

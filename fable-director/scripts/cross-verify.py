@@ -385,6 +385,9 @@ def main():
     if not prov:
         unavailable(f"provider '{name}' not defined in config")
     if billing_of(prov) != "free" and not opts["--paid-ok"]:
+        log_verification({"kind": "cross-family", "provider": name,
+                          "model": prov.get("model", "?"),
+                          "billing": "paid", "check": "paid-refused"})
         unavailable(
             f"provider '{name}' is billed"
             + (f" ({prov['cost_note']})" if prov.get("cost_note") else "")

@@ -360,6 +360,27 @@ Re-check:
         if ping and ok and billing_of(prov) != "free" and not paid_ok:
             checks.append("ping SKIPPED (billed provider — costs real "
                           "money; add --paid-ok to consent)")
+        elif ping and ok and prov.get("type") == "image":
+            try:
+                key = prov.get("api_key") or os.environ.get(
+                    prov.get("api_key_env", ""), "")
+                req = urllib.request.Request(
+                    prov["base_url"].rstrip("/") + "/models?pageSize=200",
+                    headers={"x-goog-api-key": key})
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    data = json.loads(r.read().decode(errors="replace"))
+                model = prov.get("model", "")
+                found = any(
+                    m.get("name") == model or m.get("name", "").endswith("/" + model)
+                    for m in data.get("models", []))
+                if found:
+                    checks.append(f"models-list OK ('{prov['model']}' present)")
+                else:
+                    ok = False
+                    checks.append(f"models-list FAILED: model '{model}' not in list")
+            except Exception as e:
+                ok = False
+                checks.append(f"ping FAILED: {str(e)[:160]}")
         elif ping and ok:
             probe = "Reply with exactly: OK"
             try:

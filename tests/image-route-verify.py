@@ -8,6 +8,7 @@ Mini server HTTP locale che imita generateContent di Gemini:
   I4  429 con "limit: 0" → detail billing dedicato, non quota generica
   I5  flag incompatibili (--schema-json) → errore esplicito
   I6  chiave API nell'header x-goog-api-key, MAI in query string
+  I7  doctor --ping su provider image: models-list, MAI una generazione
 
 Usage: python3 tests/image-route-verify.py   (exit 0 = all green)
 """
@@ -31,13 +32,27 @@ PNG_BYTES = b"\x89PNG\r\n\x1a\nfake-image-payload"
 PNG_B64 = base64.b64encode(PNG_BYTES).decode()
 
 passed, failed = [], []
-seen = {"path": "", "key_header": ""}
+seen = {"path": "", "key_header": "", "gets": 0, "posts": 0}
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
     mode = "ok"
 
+    def do_GET(self):
+        seen["gets"] += 1
+        if self.path.startswith("/v1beta/models"):
+            body = json.dumps({"models": [{"name": "models/img-model"}]}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        else:
+            self.send_response(404)
+            self.end_headers()
+
     def do_POST(self):
+        seen["posts"] += 1
         self.rfile.read(int(self.headers.get("Content-Length", 0)))
         seen["path"] = self.path
         seen["key_header"] = self.headers.get("x-goog-api-key", "")
@@ -155,6 +170,14 @@ def main():
     check("I5 --schema-json on image provider is a loud error",
           r.returncode == 1 and field(r.stdout, "STATUS") == "error"
           and "image" in r.stdout, r.stdout + r.stderr)
+
+    # I7 — doctor --ping su provider image: models-list, MAI una generazione.
+    posts_before = seen["posts"]
+    r = run(home, proj, ["--doctor", "--ping", "--paid-ok"])
+    check("I7 doctor --ping on image provider uses models-list, no generation",
+          "models-list OK" in r.stdout and "ping FAILED" not in r.stdout
+          and seen["posts"] == posts_before,
+          r.stdout + r.stderr)
 
     srv.shutdown()
     print(f"\n{len(passed)} passed, {len(failed)} failed")
