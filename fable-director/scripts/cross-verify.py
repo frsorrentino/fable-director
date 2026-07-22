@@ -30,12 +30,14 @@ Uso:
                                  # free tier non espongono la quota via API)
   cross-verify.py --claim "..." --rubric "..." [--context-file F]
                   [--provider gemini|gemini-stable|codex|grok] [--type SLUG]
-                  [--timeout N]   (default: campo "timeout" del provider, poi 60)
+                  [--timeout N] [--paid-ok]   (default: campo "timeout" del provider, poi 60)
 
 --type = tipo di task (es. cross-lingua, security-review, spec-compliance):
 loggato nella telemetria così `fd-telemetry.py report` può dire EMPIRICAMENTE
 su quali tipi il cross-family refuta davvero (hit-rate per tipo) — quali tipi
 sono affini diventa una domanda di dati, non un'asserzione di bravura-modello.
+
+--paid-ok: obbligatorio per provider "billing" != "free" (assente = paid, fail-closed); solo dopo consenso esplicito dell'utente.
 
 Output (grep-abile):
   STATUS: ok|unavailable|error
@@ -164,6 +166,13 @@ def unavailable(reason):
     sys.exit(1)
 
 
+def billing_of(prov):
+    """Fail-closed: billing non dichiarato = paid — mai proposto né
+    eseguito senza consenso esplicito. La policy vive nel campo del
+    config, mai in euristiche sul nome del provider."""
+    return "free" if prov.get("billing") == "free" else "paid"
+
+
 def log_verification(payload):
     """Best-effort: telemetria oggettiva, mai bloccante."""
     try:
@@ -235,7 +244,7 @@ def cmd_init():
 def parse_args(argv):
     opts = {"--claim": None, "--rubric": None, "--context-file": None,
             "--provider": None, "--timeout": None, "--type": None,
-            "--allow-truncate": False}
+            "--allow-truncate": False, "--paid-ok": False}
     i = 0
     while i < len(argv):
         if argv[i] == "--init":
@@ -246,6 +255,9 @@ def parse_args(argv):
             sys.exit(0)
         if argv[i] == "--allow-truncate":
             opts["--allow-truncate"] = True
+            i += 1
+        elif argv[i] == "--paid-ok":
+            opts["--paid-ok"] = True
             i += 1
         elif argv[i] in opts and i + 1 < len(argv):
             opts[argv[i]] = argv[i + 1]
@@ -354,6 +366,12 @@ def main():
     prov = (cfg.get("providers") or {}).get(name)
     if not prov:
         unavailable(f"provider '{name}' not defined in config")
+    if billing_of(prov) != "free" and not opts["--paid-ok"]:
+        unavailable(
+            f"provider '{name}' is billed"
+            + (f" ({prov['cost_note']})" if prov.get("cost_note") else "")
+            + " — requires explicit user consent in this conversation; "
+              "re-run with --paid-ok ONLY after the user agreed")
     is_cli = prov.get("type") == "cli"
     api_key = ""
     if not is_cli:
@@ -423,6 +441,7 @@ def main():
     out("ok", name, prov["model"], verdict, reasoning)
     log_verification({"kind": "cross-family", "provider": name,
                       "model": prov["model"], "verdict": verdict,
+                      "billing": billing_of(prov),
                       "type": opts.get("--type"),
                       "found": verdict == "refuted"})
     sys.exit(0)
