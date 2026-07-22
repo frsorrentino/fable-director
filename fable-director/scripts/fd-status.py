@@ -179,7 +179,14 @@ def main():
             for k, v in sorted(counts.items()):
                 rpd = ((provs.get(k) or {}).get("limits") or {}).get("rpd")
                 parts.append(f"{k}×{v}" + (f"/{rpd} rpd" if rpd else ""))
-            lines.append("external today: " + ", ".join(parts))
+            # Split free/paid: fail-closed, billing assente = paid. La riga
+            # segnala spesa vera solo quando c'è (zero rumore altrimenti).
+            nfree = sum(v for k, v in counts.items()
+                        if (provs.get(k) or {}).get("billing") == "free")
+            npaid = sum(counts.values()) - nfree
+            lines.append("external today: " + ", ".join(parts)
+                         + (f" — {nfree} free, {npaid} PAID"
+                            if npaid else ""))
         elif xf_cfg:
             lines.append("external today: 0 calls — today's free tier "
                          "unused (daily reset)")

@@ -77,6 +77,7 @@ DEFAULT_CONFIG = {
             "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
             "model": "gemini-3-flash-preview",
             "api_key_env": "GEMINI_API_KEY",
+            "billing": "free",
             "limits": {"rpd": 1500, "rpm": 10},
             "note": "free tier AI Studio (verificato 2026-07-10) — 503 intermittenti da "
                     "preview: unavailable → rotta same-family, MAI fallback silenzioso. "
@@ -86,6 +87,7 @@ DEFAULT_CONFIG = {
             "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
             "model": "gemini-2.5-flash",
             "api_key_env": "GEMINI_API_KEY",
+            "billing": "free",
             "limits": {"rpd": 1500, "rpm": 10},
             "note": "ripiego stabile ESPLICITO (--provider gemini-stable) quando la preview 503a"
         },
@@ -105,6 +107,7 @@ DEFAULT_CONFIG = {
             "effort": "high",
             "timeout": 600,
             "auth_check": ["codex", "login", "status"],
+            "billing": "free",
             "note": "richiede Codex CLI >=0.144 (npm i -g @openai/codex@latest) + login "
                     "ChatGPT (quota finestra 5h; nessuna API di lettura quota). Alternative "
                     "built-in: gpt-5.6-sol (detail), gpt-5.6-luna (repeatable). "
@@ -112,16 +115,31 @@ DEFAULT_CONFIG = {
                     "sovrascrive con --model/--effort (batch massivi → low, verify resta "
                     "high). resume_command/schema_args: --resume-last / --schema-file di "
                     "external-exec.py (codex exec resume non accetta --sandbox: read-only "
-                    "via -c sandbox_mode)"
+                    "via -c sandbox_mode). billing free = flat nel piano ChatGPT (nessun costo marginale per chiamata)"
         },
         "grok": {
             "base_url": "https://api.x.ai/v1",
             "model": "grok-4.3",
             "api_key_env": "XAI_API_KEY",
+            "billing": "paid",
+            "cost_note": "~$0.003/verify",
             "note": "xAI, terza famiglia (facoltativa). A PAGAMENTO — nessun free tier "
                     "documentato (verificato 2026-07-13): ~$1.25/$2.50 per M token, "
                     "~$0.003/verifica. Chiave da console.x.ai; senza XAI_API_KEY resta "
                     "unavailable (mai fallback silenzioso)"
+        },
+        "gemini-image": {
+            "type": "image",
+            "base_url": "https://generativelanguage.googleapis.com/v1beta",
+            "model": "gemini-2.5-flash-image",
+            "api_key_env": "GEMINI_API_KEY",
+            "billing": "paid",
+            "cost_note": "~$0.04/image",
+            "note": "generazione immagini (external-exec.py --out img.png). "
+                    "A PAGAMENTO: il free tier AI Studio ha limit 0 sui "
+                    "modelli image (verificato 2026-07-22) — serve billing "
+                    "abilitato sul progetto Google. Solo su consenso "
+                    "esplicito (--paid-ok)"
         }
     }
 }
