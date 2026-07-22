@@ -40,7 +40,7 @@ openai/codex-plugin-cc (review 2026-07-13).
 Uso:
   external-exec.py --spec-file F | --spec "..."
                    [--input FILE]... [--out FILE] [--schema-json]
-                   [--schema-file SCHEMA.json] [--resume-last]
+                   [--schema-file SCHEMA.json] [--resume-last] [--paid-ok]
                    [--provider gemini|gemini-stable|codex] [--type SLUG]
                    [--model M] [--effort low|medium|high|...]
                    [--items N] [--timeout N] [--allow-truncate]
@@ -53,6 +53,11 @@ piano); oppure chiavi API a pagamento nelle stesse voci di config. Config
 presente → checklist per provider (binario/chiave/auth_check) + uso odierno
 vs limits.rpd dal config. --ping aggiunge una chiamata reale minima per
 provider (consuma 1 richiesta di quota ciascuna: opt-in).
+
+--paid-ok: obbligatorio per provider con "billing" diverso da "free" nel
+config (campo assente = paid, fail-closed). Va passato SOLO dopo consenso
+esplicito dell'utente nella conversazione corrente — mai preventivamente,
+mai "per efficienza". I provider free ignorano il flag.
 
 Pre-budget OBBLIGATORIO e verificato qui (il gate PreToolUse non vede le
 chiamate Bash): senza budget open per il cwd lo script esce con errore.
@@ -123,6 +128,13 @@ def unavailable(reason):
         f"{reason} — run on the normal Claude route (standard axis 4). "
         f"NEVER treat unavailable as executed."))
     sys.exit(1)
+
+
+def billing_of(prov):
+    """Fail-closed: billing non dichiarato = paid — mai proposto né
+    eseguito senza consenso esplicito. La policy vive nel campo del
+    config, mai in euristiche sul nome del provider."""
+    return "free" if prov.get("billing") == "free" else "paid"
 
 
 def require_open_budget():
@@ -386,7 +398,8 @@ def parse_args(argv):
             "--effort": None}
     inputs = []
     flags = {"--schema-json": False, "--allow-truncate": False,
-             "--doctor": False, "--ping": False, "--resume-last": False}
+             "--doctor": False, "--ping": False, "--resume-last": False,
+             "--paid-ok": False}
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -559,6 +572,14 @@ def main():
     prov = (cfg.get("providers") or {}).get(name)
     if not prov:
         unavailable(f"provider '{name}' not defined in config")
+    if billing_of(prov) != "free" and not flags["--paid-ok"]:
+        log_exec({"provider": name, "model": prov.get("model", "?"),
+                  "billing": "paid", "ok": False, "check": "paid-refused"})
+        unavailable(
+            f"provider '{name}' is billed"
+            + (f" ({prov['cost_note']})" if prov.get("cost_note") else "")
+            + " — requires explicit user consent in this conversation; "
+              "re-run with --paid-ok ONLY after the user agreed")
     is_cli = prov.get("type") == "cli"
     # --model override: vale per entrambe le rotte (HTTP: modello nel body;
     # CLI: placeholder {model}) e la riga PROVIDER riporta il modello
@@ -635,6 +656,7 @@ def main():
             pass
 
     base_log = {"provider": name, "model": prov["model"],
+                "billing": billing_of(prov),
                 "type": opts.get("--type"), "resume": flags["--resume-last"],
                 "chars_in": len(user_msg)}
     if content is None or not str(content).strip():

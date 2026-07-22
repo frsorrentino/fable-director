@@ -80,11 +80,25 @@ def setup():
                 "model": "stub-model-1",
                 "effort": "high",
                 "timeout": 2,
+                "billing": "free",
             },
             "stub-plain": {
                 "type": "cli",
                 "command": [py, str(stub), "run", "--out", "{output_file}"],
                 "model": "stub-plain-model",
+                "billing": "free",
+            },
+            "stub-paid": {
+                "type": "cli",
+                "command": [py, str(stub), "run", "--out", "{output_file}"],
+                "model": "stub-paid-model",
+                "billing": "paid",
+                "cost_note": "~$9.99/call",
+            },
+            "stub-nobilling": {
+                "type": "cli",
+                "command": [py, str(stub), "run", "--out", "{output_file}"],
+                "model": "stub-nobilling-model",
             },
         },
     }
@@ -181,6 +195,32 @@ def main():
     check("E10 --model override reaches command",
           r.returncode == 0 and "stub-model-2" in r.stdout
           and "stub-model-1" not in r.stdout, r.stdout + r.stderr)
+
+    # E11 — provider paid senza --paid-ok → unavailable, mai eseguito.
+    r = run(home, proj, ["--spec", "hi", "--provider", "stub-paid"])
+    check("E11 paid provider without --paid-ok is refused",
+          r.returncode == 1 and field(r.stdout, "STATUS") == "unavailable"
+          and "is billed" in r.stdout and "--paid-ok" in r.stdout
+          and "$9.99" in r.stdout, r.stdout + r.stderr)
+
+    # E12 — stesso provider con --paid-ok → esegue.
+    r = run(home, proj, ["--spec", "hi", "--provider", "stub-paid",
+                         "--paid-ok"])
+    check("E12 paid provider with --paid-ok runs",
+          r.returncode == 0 and field(r.stdout, "STATUS") == "ok",
+          r.stdout + r.stderr)
+
+    # E13 — billing assente = paid (fail-closed).
+    r = run(home, proj, ["--spec", "hi", "--provider", "stub-nobilling"])
+    check("E13 missing billing field is fail-closed (treated as paid)",
+          r.returncode == 1 and field(r.stdout, "STATUS") == "unavailable"
+          and "is billed" in r.stdout, r.stdout + r.stderr)
+
+    # E14 — free provider resta invariato anche con --paid-ok presente.
+    r = run(home, proj, ["--spec", "hi", "--paid-ok"])
+    check("E14 --paid-ok on a free provider is a no-op",
+          r.returncode == 0 and field(r.stdout, "STATUS") == "ok",
+          r.stdout + r.stderr)
 
     print(f"\n{len(passed)} passed, {len(failed)} failed")
     sys.exit(1 if failed else 0)
