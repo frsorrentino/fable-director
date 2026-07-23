@@ -217,9 +217,6 @@ Works on its own. These optional companions save further tokens, degrading grace
 - **1.25.0** — Statusline zen: half-light when healthy, ctx gauge + budget micro-gauge, live effort (`·max`), `/1M` window flag, caveman badge adopted
 - **1.24.0** — Paid providers consent-gated (`billing` field fail-closed + `--paid-ok`); Gemini image route (`type: "image"`)
 - **1.23.0** — Proactive route verdict: `[fd-route-hint]` at prompt time from soft-deps keywords + cardinality signals
-- **1.22.0** — Workflow agent tokens enter enforcement/telemetry; quota guard on new fan-outs; `--agents N` estimate anchor
-- **1.21.0** — `[FAIL ×N]` on the statusline; legend back in the README
-- **1.20.0** — Fail-streak hook: rule-of-3 injected at 3 consecutive Bash failures
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 
