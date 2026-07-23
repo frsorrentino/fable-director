@@ -76,12 +76,31 @@ Output: `results/<timestamp>/` (raw JSON + `summary.txt`).
   on ≥ off** (sentiment 98% vs 95%, rest equal). The N=2 −51% halved under regression to the
   mean — published with spread, as the method requires. Merged aggregate:
   `results/merged-05-N4/` (`python3 ../../aggregate.py .` inside it reproduces the table).
+- 2026-07-22 (N-boost): one more run-pair (`MODEL=claude-fable-5`) → consolidated **N=6 off /
+  N=5 on**. The isolated N=2 came out +38.2% tokens / +9.8% USD (on-arm pricier), but merged it
+  pulls the aggregate to **−2.6% tokens (±35%), +2.3% USD, quality on ≥ off** (sentiment 99% vs
+  94%, theme 100% vs 98%, safety recall 98% vs 95%, precision 100% vs 97%). The billable-token
+  delta is now **statistically indistinguishable from zero** (±35% spread swamps a −2.6% mean):
+  the −51% (N=2) → +24.6% (N=4) → −2.6% (N=6) trajectory is textbook regression to the mean.
+  **Conclusion at equal model: this shape is token- and USD-neutral; the reliable signal is
+  QUALITY (on-arm consistently higher), not cost.** A "−X% cost at equal quality" headline is
+  NOT supported by shape 05 — the value here is equal-cost-higher-quality. Merged aggregate:
+  `results/merged-05-N6/`.
 
 ### What this harness measures — and what it doesn't
 
 Both arms run the **same model** (`MODEL=...`). The A/B therefore measures the **policy effect
 at equal model**: script-first routing, grouped batches, output contracts, and the enforcement
-stack actually firing. It does **not** measure the second — and larger — component of
+stack actually firing.
+
+**What equal-model actually buys (shape 05, N=6).** The billable-token delta is neutral
+(−2.6% ±35% — noise), so the honest equal-model claim is NOT cost savings: it is
+**equal cost, measurably higher quality** — the policy arm scored higher on every ground-truth
+axis across the consolidated runs (safety recall 98% vs 95%, sentiment 99% vs 94%). That is the
+value to state alongside the enforcement story, not a "−X% cheaper" headline the data doesn't
+support. A dedicated public reference bench for this quality claim (fan-out on an OSS repo with
+its test-suite as the lock) is a candidate, deliberately **parked** until there's a reason to
+build it — the finding is reused here rather than turned into a new harness. It does **not** measure the second — and larger — component of
 fable-director's value: the **model differential** of the director topology, where an expensive
 top model (Fable/Opus) does only planning/judgment and the heavy tokens land on cheaper
 executors. A cheap model delegating to itself has ~zero differential by construction.
