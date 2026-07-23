@@ -28,11 +28,11 @@ badge=""
 # Tutte le metriche in UNA passata python (statusline gira spesso: un solo processo).
 # Campi assenti → "-" → il segmento si omette. Il budget file è di fable-director
 # (fd-telemetry.py budget-open / stop-budget-check.py): qui SOLO lettura.
-read -r model pct rl rlt wk wkt bdg xf dlg cache cmp grind <<EOF
+read -r model pct rl rlt wk wkt bdg xf dlg cache cmp grind eff bar win <<EOF
 $(printf '%s' "$input" | python3 -c '
 import json,sys,os,time
 from pathlib import Path
-model=pct=rl=rlt=wk=wkt=bdg=xf=dlg=cache=cmp="-"
+model=pct=rl=rlt=wk=wkt=bdg=xf=dlg=cache=cmp=eff=bar=win="-"
 def fmt_reset(ts):
     # entro 24h: orario; oltre: "6 Jul"/"6 lug" (giorno + mese secondo il locale)
     try:
@@ -49,7 +49,17 @@ try:
     m=d.get("model",{}).get("display_name")
     if m: model=str(m).replace(" ","")[:12].upper()
     p=d.get("context_window",{}).get("used_percentage")
-    if p is not None: pct=f"{p:.0f}"
+    if p is not None:
+        pct=f"{p:.0f}"
+        # gauge 8 celle, ceil: anche 1% accende la prima — vuoto solo a 0
+        cells=min(8,max(0,int(-(-float(p)*8//100))))
+        bar="▓"*cells+"░"*(8-cells)
+    ws=d.get("context_window",{}).get("context_window_size")
+    if ws and int(ws)>200000: win=f"/{int(ws)//1000000}M"
+    # effort LIVE della sessione (non quello del budget): xhigh/max = quota
+    # che brucia in silenzio, acceso giallo; high e sotto = penombra
+    el=d.get("effort",{}).get("level")
+    if el: eff=("y:" if el in ("xhigh","max") else "d:")+"·"+str(el)
     fh=d.get("rate_limits",{}).get("five_hour",{})
     r=fh.get("used_percentage")
     if r is not None: rl=f"{r:.0f}"
@@ -270,14 +280,17 @@ try:
     if b_status=="flagged":
         bdg="r:✕ BUDGET 3× — POST-MORTEM DUE"
     elif b_status=="open":
-        eff=("·"+str(b_eff)) if b_eff else ""
+        beff=("·"+str(b_eff)) if b_eff else ""
         if spent is not None and b_exp>0:
             ratio=spent/b_exp
-            if ratio>=3: bdg=f"r:✕ BUDGET {ratio:.1f}× OF ESTIMATE{eff}"
-            elif ratio>=2: bdg=f"y:⚠ BUDGET {ratio:.1f}× OF ESTIMATE{eff}"
-            else: bdg=f"g:BDG {ratio:.1f}×{eff}"
+            if ratio>=3: bdg=f"r:✕ BUDGET {ratio:.1f}× OF ESTIMATE{beff}"
+            elif ratio>=2: bdg=f"y:⚠ BUDGET {ratio:.1f}× OF ESTIMATE{beff}"
+            else:
+                # micro-barra 0-3x: una cella per checkpoint intero raggiunto
+                bc="▓"*max(1,min(2,int(ratio)+1))
+                bdg=f"g:bdg {bc}{chr(9617)*(3-len(bc))} {ratio:.1f}×{beff}"
         else:
-            bdg=("y:⚠ BUDGET 2× OF ESTIMATE"+eff) if b_warned else ("g:BDG ok"+eff)
+            bdg=("y:⚠ BUDGET 2× OF ESTIMATE"+beff) if b_warned else ("g:bdg ok"+beff)
     # schema_anomaly sul budget aperto = contabilita transcript inaffidabile:
     # enforcement di fatto spento — va urlato, non contato zero in silenzio
     if b_sch and b_status=="open":
@@ -313,7 +326,7 @@ try:
         except Exception: pass
     xparts=[]
     for prov in sorted(set(list(xcounts)+([active] if active else []))):
-        label=str(prov).upper()[:8]
+        label=str(prov).lower()[:8]
         if prov==active: xparts.append(f"{label}▲")
         elif xcounts.get(prov): xparts.append(f"{label}×{xcounts[prov]}")
     if xparts: xf=",".join(xparts[:3])
@@ -337,70 +350,112 @@ try:
             if gs>=2: grind=str(gs)
 except Exception:
     pass
-print(model,pct,rl,rlt,wk,wkt,bdg,xf,dlg,cache,cmp,grind)
+print(model,pct,rl,rlt,wk,wkt,bdg,xf,dlg,cache,cmp,grind,eff,bar,win)
 ' 2>/dev/null)
 EOF
 
 color_for() {
   if [ "$1" -ge 80 ] 2>/dev/null; then printf '\033[38;5;196m'   # rosso
   elif [ "$1" -ge 60 ] 2>/dev/null; then printf '\033[38;5;220m' # giallo
-  else printf '\033[38;5;114m'                                   # verde
+  else printf '\033[38;5;245m'                                   # penombra: sano = quieto
   fi
 }
 
-out="$badge"
-[ "$model" != "-" ] && out="$out $(printf '\033[38;5;75m[%s]\033[0m' "$model")"
-[ "$pct" != "-" ] && out="$out $(printf "$(color_for "$pct")[CTX %s%%]\033[0m" "$pct")"
-# [CMP n] solo se ≥1 compattazione: contesto perso, sempre giallo
-[ "$cmp" != "-" ] && [ -n "$cmp" ] && out="$out $(printf '\033[38;5;220m[CMP %s]\033[0m' "$cmp")"
+# Adozione badge caveman nello stile zen: strip ANSI e, SOLO se il testo è il
+# badge noto [CAVEMAN] / [CAVEMAN:MODE], re-render minuscolo in 172 (firma
+# ocra preservata, quadre via) + eventuale suffisso savings in penombra.
+# Qualunque altro formato passa INTATTO: mai riscrivere ciò che non si conosce.
+if [ -n "$badge" ]; then
+  bplain=$(printf '%s' "$badge" | sed 's/\x1b\[[0-9;]*m//g')
+  case "$bplain" in
+    "[CAVEMAN]"*|"[CAVEMAN:"*)
+      bmode=$(printf '%s' "$bplain" | sed -n 's/^\[CAVEMAN:\([A-Z-]*\)\].*/\1/p' | tr '[:upper:]' '[:lower:]')
+      bsuf=$(printf '%s' "$bplain" | sed 's/^\[CAVEMAN[^]]*\]//')
+      badge=$(printf '\033[38;5;172mcaveman%s\033[0m' "${bmode:+:$bmode}")
+      [ -n "$bsuf" ] && badge="$badge$(printf '\033[38;5;245m%s\033[0m' "$bsuf")"
+      ;;
+  esac
+fi
+
+SEP=$(printf '\033[38;5;239m · \033[0m')
+pre=""
+[ -n "$badge" ] && pre="$badge$(printf '\033[38;5;239m │ \033[0m')"
+out=""
+app() { [ -n "$out" ] && out="$out$SEP"; out="$out$1"; }
+
+# ✦ MODELLO in penombra + effort LIVE attaccato (giallo da xhigh: brucia quota)
+if [ "$model" != "-" ]; then
+  seg="$(printf '\033[38;5;245m\342\234\246 %s\033[0m' "$model")"
+  case "$eff" in
+    y:*) seg="$seg$(printf '\033[38;5;220m%s\033[0m' "${eff#y:}")" ;;
+    d:*) seg="$seg$(printf '\033[38;5;245m%s\033[0m' "${eff#d:}")" ;;
+  esac
+  app "$seg"
+fi
+# ctx: gauge 8 celle + /1M se window estesa
+if [ "$pct" != "-" ]; then
+  gb=""; [ "$bar" != "-" ] && gb="$bar "
+  gw=""; [ "$win" != "-" ] && gw="$win"
+  app "$(printf "$(color_for "$pct")ctx %s%s%%%s\033[0m" "$gb" "$pct" "$gw")"
+fi
+# cmp solo se ≥1 compattazione: contesto perso, deviazione per natura
+[ "$cmp" != "-" ] && [ -n "$cmp" ] && app "$(printf '\033[38;5;220mcmp %s\033[0m' "$cmp")"
 if [ "$rl" != "-" ]; then
-  seg="[5H ${rl}%"
+  seg="5H ${rl}%"
   [ "$rlt" != "-" ] && seg="${seg}→${rlt}"
-  out="$out $(printf "$(color_for "$rl")%s]\033[0m" "$seg")"
+  app "$(printf "$(color_for "$rl")%s\033[0m" "$seg")"
 fi
 if [ "$wk" != "-" ]; then
-  seg="[7D ${wk}%"
+  seg="7D ${wk}%"
   [ "$wkt" != "-" ] && seg="${seg}→${wkt}"
-  out="$out $(printf "$(color_for "$wk")%s]\033[0m" "$seg")"
+  app "$(printf "$(color_for "$wk")%s\033[0m" "$seg")"
 fi
-# Il testo BDG include già la propria etichetta (compatta da sano, parole
-# intere in allarme): la shell mappa solo il colore.
+# Il testo bdg include già la propria etichetta (micro-barra da sano, parole
+# intere in allarme): la shell mappa solo il colore. Sano = penombra.
 case "$bdg" in
-  g:*) out="$out $(printf '\033[38;5;114m[%s]\033[0m' "$(printf '%s' "${bdg#g:}" | tr ',' ' ')")" ;;
-  y:*) out="$out $(printf '\033[38;5;220m[%s]\033[0m' "$(printf '%s' "${bdg#y:}" | tr ',' ' ')")" ;;
-  r:*) out="$out $(printf '\033[38;5;196m[%s]\033[0m' "$(printf '%s' "${bdg#r:}" | tr ',' ' ')")" ;;
+  g:*) app "$(printf '\033[38;5;245m%s\033[0m' "$(printf '%s' "${bdg#g:}" | tr ',' ' ')")" ;;
+  y:*) app "$(printf '\033[38;5;220m%s\033[0m' "$(printf '%s' "${bdg#y:}" | tr ',' ' ')")" ;;
+  r:*) app "$(printf '\033[38;5;196m%s\033[0m' "$(printf '%s' "${bdg#r:}" | tr ',' ' ')")" ;;
 esac
-# [FAIL ×N] grinding: stato PROTETTO come budget/quota — mai eroso su schermi
+# fail ×N grinding: stato PROTETTO come budget/quota — mai eroso su schermi
 # stretti. Giallo a 2 (early warning), rosso da 3 (il nudge del hook e scattato).
 if [ "$grind" != "-" ] && [ -n "$grind" ]; then
   if [ "$grind" -ge 3 ] 2>/dev/null; then
-    out="$out $(printf '\033[38;5;196m[FAIL \303\227%s]\033[0m' "$grind")"
+    app "$(printf '\033[38;5;196mfail \303\227%s\033[0m' "$grind")"
   else
-    out="$out $(printf '\033[38;5;220m[FAIL \303\227%s]\033[0m' "$grind")"
+    app "$(printf '\033[38;5;220mfail \303\227%s\033[0m' "$grind")"
   fi
 fi
 seg_xf=""; seg_dlg=""; seg_cache=""
 case "$cache" in
-  g:*) seg_cache="$(printf '\033[38;5;114m[CACHE %s]\033[0m' "${cache#g:}")" ;;
-  y:*) seg_cache="$(printf '\033[38;5;220m[CACHE %s]\033[0m' "${cache#y:}")" ;;
-  r:*) seg_cache="$(printf '\033[38;5;196m[CACHE %s]\033[0m' "${cache#r:}")" ;;
+  g:*) seg_cache="$(printf '\033[38;5;245mcache %s\033[0m' "${cache#g:}")" ;;
+  y:*) seg_cache="$(printf '\033[38;5;220mcache %s\033[0m' "${cache#y:}")" ;;
+  r:*) seg_cache="$(printf '\033[38;5;196mcache %s\033[0m' "${cache#r:}")" ;;
 esac
-[ "$xf" != "-" ] && [ -n "$xf" ] && \
-  seg_xf="$(printf '\033[38;5;216m[XF %s]\033[0m' "$(printf '%s' "$xf" | tr ',' ' ')")"
+# xf acceso (216) solo con chiamata in flight (▲); a riposo penombra
+if [ "$xf" != "-" ] && [ -n "$xf" ]; then
+  case "$xf" in
+    *▲*) seg_xf="$(printf '\033[38;5;216mxf %s\033[0m' "$(printf '%s' "$xf" | tr ',' ' ')")" ;;
+    *)   seg_xf="$(printf '\033[38;5;245mxf %s\033[0m' "$(printf '%s' "$xf" | tr ',' ' ')")" ;;
+  esac
+fi
 [ "$dlg" != "-" ] && [ -n "$dlg" ] && \
-  seg_dlg="$(printf '\033[38;5;183m[DLG %s]\033[0m' "$(printf '%s' "$dlg" | tr ',' ' ')")"
-# Degradazione deterministica su schermi stretti: cade prima CACHE, poi DLG,
-# poi XF — MAI budget/quota/stati di errore. Lunghezza senza codici ANSI.
-plain_len() { printf '%s' "$1" | sed 's/\x1b\[[0-9;]*m//g' | wc -c; }
+  seg_dlg="$(printf '\033[38;5;245mdlg %s\033[0m' "$(printf '%s' "$dlg" | tr ',' ' ')")"
+# Degradazione deterministica su schermi stretti: cade prima cache, poi dlg,
+# poi xf — MAI budget/quota/stati di errore. Lunghezza senza codici ANSI,
+# in CARATTERI: i glifi zen (▓░✦·│) sono multibyte, wc -c li conterebbe
+# doppi/tripli e degraderebbe righe corte. Senza C.UTF-8 wc -m ricade sui
+# byte: degrada solo prima, mai oltre il terminale.
+plain_len() { printf '%s' "$1" | sed 's/\x1b\[[0-9;]*m//g' | LC_ALL=C.UTF-8 wc -m 2>/dev/null || printf '%s' "$1" | sed 's/\x1b\[[0-9;]*m//g' | wc -c; }
 compose() {
   c="$out"
-  [ "$1" -ge 3 ] && [ -n "$seg_cache" ] && c="$c $seg_cache"
-  [ "$1" -ge 1 ] && [ -n "$seg_xf" ] && c="$c $seg_xf"
-  [ "$1" -ge 2 ] && [ -n "$seg_dlg" ] && c="$c $seg_dlg"
+  [ "$1" -ge 3 ] && [ -n "$seg_cache" ] && c="$c$SEP$seg_cache"
+  [ "$1" -ge 1 ] && [ -n "$seg_xf" ] && c="$c$SEP$seg_xf"
+  [ "$1" -ge 2 ] && [ -n "$seg_dlg" ] && c="$c$SEP$seg_dlg"
   printf '%s' "$c"
 }
-full="$(compose 3)"
-[ "$(plain_len "$full")" -gt 120 ] && full="$(compose 2)"   # cade CACHE
-[ "$(plain_len "$full")" -gt 120 ] && full="$(compose 1)"   # cade DLG
-[ "$(plain_len "$full")" -gt 120 ] && full="$(compose 0)"   # cade XF
-printf '%s' "${full# }"
+full="$pre$(compose 3)"
+[ "$(plain_len "$full")" -gt 120 ] && full="$pre$(compose 2)"   # cade cache
+[ "$(plain_len "$full")" -gt 120 ] && full="$pre$(compose 1)"   # cade dlg
+[ "$(plain_len "$full")" -gt 120 ] && full="$pre$(compose 0)"   # cade xf
+printf '%s' "$full"

@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.24.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.25.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need to do.**
 
@@ -144,30 +144,31 @@ Optional paid third lane: Grok (xAI), OpenAI-compatible, active only if you expo
 
 ## 📟 The statusline
 
-One glance at model, context and plan quotas — so you see the rate limit coming **before** it hits. **Quiet when healthy, loud in plain words when broken**: compact tags like `[BDG 0.7×·high]` while everything is fine, full-word alarms when it isn't (`⚠ BUDGET 2.3× OF ESTIMATE`, `✕ BUDGET 3× — POST-MORTEM DUE`), with text markers that survive terminals without color. On narrow screens it degrades deterministically — never dropping a budget, quota or alarm state.
+One glance at model, context and plan quotas — so you see the rate limit coming **before** it hits. The line follows one rule, **half-light when healthy, full words when broken**: everything that's fine sits in quiet grey, and colour is reserved for what deviates — a quota past 60%, a session running at `xhigh`/`max` effort, a budget past its checkpoint. Alarms are full words with text markers that survive terminals without colour. On narrow screens it degrades deterministically — never dropping a budget, quota or alarm state.
 
 ![fable-director statusline](assets/statusline.svg)
 
 ```
-[FABLE5] [CTX 26%] [CMP 1] [5H 71%→17:30] [7D 46%→14 Jul] [BDG 0.7×·high] [FAIL ×3] [CACHE 47m] [XF GEMINI×2] [DLG SONNET-5 41k]
+caveman │ ✦ FABLE5·max · ctx ▓▓▓░░░░░ 26%/1M · cmp 1 · 5H 71%→17:30 · 7D 46%→14 Jul · bdg ▓░░ 0.7×·high · fail ×3 · cache 47m · xf gemini×2 · dlg ≡ 41k
 ```
 
-Read left to right — each tag answers one question, and colour goes green → yellow → red as it needs attention:
+Read left to right — each segment answers one question, and lights up yellow → red only as it needs attention:
 
-| Tag | What it tells you |
+| Segment | What it tells you |
 |---|---|
-| `[FABLE5]` | Which model is driving this session |
-| `[CTX 26%]` | How full the context window is — red near the top means a compaction is coming |
-| `[CMP 1]` | How many times context was compacted this session (each one dropped history); hidden until the first |
-| `[5H 71%→17:30]` | Your 5-hour plan quota used, and when it resets |
-| `[7D 46%→14 Jul]` | Your weekly plan quota used, and when it resets |
-| `[BDG 0.7×·high]` | Current task spend vs the estimate it declared (0.7× = under budget); turns to a full-word alarm at 2× and 3× |
-| `[FAIL ×3]` | Bash commands failing in a row — a sign you're grinding; shows from 2, red at 3 where the plugin nudges you to step back |
-| `[CACHE 47m]` | How long the prompt cache stays warm — cheap to keep working now, a fresh start costs more |
-| `[XF GEMINI×2]` | Calls sent to a free external model today (verification or bulk work, off your Claude quota) |
-| `[DLG SONNET-5 41k]` | Work handed to cheaper models this session, and how much |
+| `caveman` | The caveman plugin's badge, re-dressed in the zen theme (ochre signature kept); any other statusline badge passes through untouched |
+| `✦ FABLE5·max` | Which model is driving the session — and its **live** reasoning effort: yellow from `xhigh` up, because a forgotten `/effort max` burns quota silently |
+| `ctx ▓▓▓░░░░░ 26%/1M` | How full the context window is, as an 8-cell gauge; `/1M` marks an extended 1M-token window (26% of 1M is not 26% of 200k) |
+| `cmp 1` | How many times context was compacted this session (each one dropped history); hidden until the first |
+| `5H 71%→17:30` | Your 5-hour plan quota used, and when it resets |
+| `7D 46%→14 Jul` | Your weekly plan quota used, and when it resets |
+| `bdg ▓░░ 0.7×·high` | Current task spend vs the estimate it declared, as a micro-gauge on the 0–3× checkpoint scale; turns to a full-word alarm at 2× and 3× |
+| `fail ×3` | Bash commands failing in a row — a sign you're grinding; shows from 2, red at 3 where the plugin nudges you to step back |
+| `cache 47m` | How long the prompt cache stays warm — cheap to keep working now, a fresh start costs more |
+| `xf gemini×2` | Calls sent to a free external model today (verification or bulk work, off your Claude quota); lights up while a call is in flight |
+| `dlg ≡ 41k` | Work handed to cheaper models this session, and how much (`≡` = same model as the main loop) |
 
-Healthy tags stay compact and quiet; when something breaks they turn into full words that survive terminals without colour (`⚠ BUDGET 2.3× OF ESTIMATE`, `✕ BUDGET 3× — POST-MORTEM DUE`). On narrow screens the line trims the least urgent tags first (`[CACHE]`, then `[DLG]`, then `[XF]`) and never drops a budget, quota or alarm.
+When something breaks, the quiet form turns into full words that survive terminals without colour (`⚠ BUDGET 2.3× OF ESTIMATE`, `✕ BUDGET 3× — POST-MORTEM DUE`). On narrow screens the line trims the least urgent segments first (`cache`, then `dlg`, then `xf`) and never drops a budget, quota or alarm.
 
 **Turn it on:** `/fable-director:statusline`, then restart Claude Code. Idempotent, backs up `settings.json`, won't touch a third-party statusLine already there; `--remove` takes it out.
 
@@ -208,6 +209,7 @@ Works on its own. These optional companions save further tokens, degrading grace
 
 ## 🆕 What's new
 
+- **1.25.0** — Statusline zen: half-light when healthy, ctx gauge + budget micro-gauge, live effort (`·max`), `/1M` window flag, caveman badge adopted
 - **1.24.0** — Paid providers consent-gated (`billing` field fail-closed + `--paid-ok`); Gemini image route (`type: "image"`)
 - **1.23.0** — Proactive route verdict: `[fd-route-hint]` at prompt time from soft-deps keywords + cardinality signals
 - **1.22.0** — Workflow agent tokens enter enforcement/telemetry; quota guard on new fan-outs; `--agents N` estimate anchor

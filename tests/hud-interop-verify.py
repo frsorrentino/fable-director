@@ -5,8 +5,8 @@ Deterministica, HOME usa-e-getta, nessuna rete. Copre:
 - gate cost-checkpoint: fallback allo snapshot usage di claude-hud quando il
   ponte quota di fable-director manca (fresco → usato, stantio → ignorato,
   quota propria → vince, config corrotto → fail-open);
-- statusline: [CMP n] da compact_boundary, [CACHE ...] countdown/exp da
-  FD_CACHE_TTL_S, [DLG] con token dopo lo spostamento dei campi, e lo
+- statusline (formato zen 1.25.0): cmp n da compact_boundary, cache countdown/
+  exp da FD_CACHE_TTL_S, dlg con token dopo lo spostamento dei campi, e lo
   snapshot usage-snapshot-<acct>.json nello schema esterno di claude-hud.
 """
 import hashlib
@@ -117,13 +117,13 @@ def render(home, **env):
 
 h1 = tmp / "home-a"
 line = render(h1)
-check("S1 [CMP 1] da compact_boundary", "[CMP 1]" in line, line)
-check("S2 [CACHE Nm] countdown con TTL default 3600", re.search(r"\[CACHE \d+m\]", line) is not None, line)
+check("S1 cmp 1 da compact_boundary", "cmp 1" in line, line)
+check("S2 cache Nm countdown con TTL default 3600", re.search(r"cache \d+m", line) is not None, line)
 check("S3 [DLG] conserva i token dopo lo shift dei campi",
-      re.search(r"\[DLG SONNET-5 12k\]", line) is not None, line)
+      re.search(r"dlg SONNET-5 12k", line) is not None, line)
 
 line2 = render(tmp / "home-b", FD_CACHE_TTL_S=300)
-check("S4 [CACHE exp] con TTL 300 e ultima attività 13 min fa", "[CACHE exp]" in line2, line2)
+check("S4 cache exp con TTL 300 e ultima attività 13 min fa", "cache exp" in line2, line2)
 
 snaps = list((h1 / ".claude" / "fable-director").glob("usage-snapshot-*.json"))
 ok = False

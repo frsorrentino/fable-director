@@ -17,10 +17,10 @@
     <text x="28" y="104" font-size="16" fill="#484f58">…batch of 240 reviews → workflow (fd-executor, effort low, JSON schema)</text>
     <text x="28" y="130" font-size="16" fill="#484f58">…canary rung-1 verified ✓  fan-out 1+(N-1)  budget 0.7× of estimate</text>
 
-    <!-- statusline strip -->
+    <!-- statusline strip — zen: healthy segments in half-light, colour only where it matters -->
     <rect x="14" y="160" width="952" height="44" rx="8" fill="#161b22" stroke="#21262d"/>
-    <text x="30" y="187" font-size="15" letter-spacing="0.2">
-      <tspan fill="#5fafff">[FABLE5]</tspan><tspan fill="#8b949e"> </tspan><tspan fill="#87d787">[CTX 26%]</tspan><tspan fill="#8b949e"> </tspan><tspan fill="#ffd700">[5H 71%→17:30]</tspan><tspan fill="#8b949e"> </tspan><tspan fill="#87d787">[7D 46%→14 Jul]</tspan><tspan fill="#8b949e"> </tspan><tspan fill="#87d787">[BDG 0.7×·high]</tspan><tspan fill="#8b949e"> </tspan><tspan fill="#ffaf87">[XF CODEX×2]</tspan><tspan fill="#8b949e"> </tspan><tspan fill="#d7afff">[DLG SONNET-5 41k]</tspan>
+    <text x="20" y="187" font-size="13">
+      <tspan fill="#d78700">caveman</tspan><tspan fill="#4a4d59"> │ </tspan><tspan fill="#8a8a8a">✦ FABLE5</tspan><tspan fill="#ffd700">·max</tspan><tspan fill="#4a4d59"> · </tspan><tspan fill="#8a8a8a">ctx ▓▓▓░░░░░ 26%/1M</tspan><tspan fill="#4a4d59"> · </tspan><tspan fill="#ffd700">5H 71%→17:30</tspan><tspan fill="#4a4d59"> · </tspan><tspan fill="#8a8a8a">7D 46%→14 Jul</tspan><tspan fill="#4a4d59"> · </tspan><tspan fill="#8a8a8a">bdg ▓░░ 0.7×·high</tspan><tspan fill="#4a4d59"> · </tspan><tspan fill="#8a8a8a">xf gemini×2</tspan><tspan fill="#4a4d59"> · </tspan><tspan fill="#8a8a8a">dlg ≡ 41k</tspan>
     </text>
   </g>
 </svg>
