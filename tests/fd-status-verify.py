@@ -73,6 +73,23 @@ check("B5 con history → burn con sparkline e proiezione 100%",
       re.search(r"burn\s+~[\d.]+%/h [▁▂▃▄▅▆▇█]{3,}", out2) is not None
       and "100%" in out2, out2)
 
+# B6: bucket ignoti registrati dalla statusline → riga informativa
+(base / f"quota-{acct}.json").write_text(json.dumps(
+    {"five_hour_used_pct": 35.0, "weekly_used_pct": 70.0,
+     "unknown_buckets": ["seven_day_opus"]}))
+out3 = run(home)
+check("B6 unknown bucket → riga new col nome del campo",
+      "seven_day_opus" in out3, out3)
+
+# B7: plan file con frazione premium → riga bound ✦ ≤N%
+(base / f"plan-{acct}.json").write_text(json.dumps(
+    {"premium_weekly_fraction": 0.5}))
+(base / f"quota-{acct}.json").write_text(json.dumps(
+    {"five_hour_used_pct": 35.0, "weekly_used_pct": 13.0}))
+out4 = run(home)
+check("B7 plan con frazione → bound ✦ ≤26% dichiarato come tetto",
+      re.search(r"✦\s*≤26%", out4) is not None and "bound" in out4, out4)
+
 print()
 if FAILS:
     print(f"FAIL: {len(FAILS)} — " + ", ".join(FAILS))

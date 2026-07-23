@@ -124,6 +124,33 @@ def main():
                           f"{q['weekly_used_pct']:.0f}%")
             add("qta", f"[{acct_name}] as-of {age_str(qf.stat().st_mtime)}"
                        f" — updated only by a statusline render")
+            # Bound finestra premium (plan-<acct>.json, frazione DICHIARATA
+            # dall'utente): % finestra ≤ 7D% / frazione — sempre un tetto,
+            # mai il consumo reale. Bound saturo → si dice, niente numeri.
+            try:
+                pf = BASE / f"plan-{acct}.json"
+                frac = (float(json.loads(pf.read_text())
+                              .get("premium_weekly_fraction") or 0)
+                        if pf.is_file() else 0)
+                wv = q.get("weekly_used_pct")
+                if frac > 0 and wv is not None:
+                    bound = float(wv) / frac
+                    if bound >= 100:
+                        add("✦", f"premium window bound saturated "
+                                 f"(7D ≥ {frac * 100:.0f}%) — check usage")
+                    else:
+                        add("✦", f"≤{bound:.0f}% of the premium window "
+                                 f"(bound = 7D% ÷ {frac}, declared — "
+                                 f"a ceiling, never measured spend)")
+            except Exception:
+                pass
+            # Sentinella: bucket rate_limits mai visti prima (registrati
+            # dalla statusline) — forse una quota per-modello e arrivata
+            if q.get("unknown_buckets"):
+                add("new", "rate_limits exposes unknown bucket(s): "
+                           + ", ".join(q["unknown_buckets"])
+                           + " — a per-model quota may have landed, "
+                             "update the plugin")
         except Exception:
             add("qta", f"[{acct_name}] file unreadable")
     else:

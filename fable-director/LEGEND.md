@@ -22,6 +22,8 @@ caveman │ ✦ FABLE5·max · ctx ▓▓▓░░░░░ 26%/1M · cmp 1 · 5
 | `cache ◕ 47m` | Prompt-cache countdown from the last API activity, with a quarter-clock (`●◕◑◔○`) of the TTL left: grey >10 min, yellow ≤10 min, red <1 min, `○ exp` = expired (next turn repays the prefix cold; alone it never summons row 2). TTL default 3600 s (Max plans); set `FD_CACHE_TTL_S=300` for 5-minute plans |
 | `xf gemini 2/1500→09:00` | External free-tier calls in the **provider's own reset window**: used/limit, → local time the tier resets. Needs `limits.reset {period, tz}` declared in `cross-family.json` (Gemini: midnight Pacific); a provider without it shows plain `×N` on the UTC day and **no invented reset time**. Yellow at ≥80% of the tier, red at ≥95%; `gemini▲` = call in flight (orange) |
 | `dlg ≡ 41k` | Output tokens delegated per model this session; `≡` = same model as the main loop; `≈` prefix = declared-only fallback (no transcript) |
+| `✦≤26%` | **Ceiling** on the premium-model weekly window, shown only while that model drives the session: your plan reserves a fraction of the 7D capacity for it (declared in `plan-<acct>.json` as `premium_weekly_fraction`, e.g. `0.5`), and premium spend can never exceed total spend — so window% ≤ 7D% ÷ fraction. Always a bound (`≤`), never measured spend; when it saturates (7D ≥ fraction) it becomes `✦?` — check the usage page, never a made-up number. Absent without the plan file |
+| `pr #42` | Open pull request for the current branch (data Claude Code already provides): green = approved, yellow = changes requested, half-light = pending. Row 2, never trimmed |
 
 ## Alarm states (full words, they replace the quiet form)
 
@@ -40,5 +42,9 @@ On narrow screens row 2 degrades deterministically: `cache` drops first, then `d
 | `/fable-director:status` | The same state as a box-drawn bulletin (for smartphone/remote clients): quota bars, burn-rate sparkline from the quota history, honest freshness labels. `--detail` adds delegations and the last task receipt |
 | `/fable-director:review` | Data-driven improvement plan from telemetry + playbook |
 | `/fable-director:help` | This legend |
+
+## Clickable segments (opt-in)
+
+With `"statusline_links": true` in `~/.claude/fable-director/plan-<acct>.json`, four segments become OSC 8 hyperlinks (Ctrl+click): model → status.anthropic.com, `5H`/`7D`/`✦≤` → your plan's usage page (where the real per-model window lives), `xf` → AI Studio usage, `pr #42` → the pull request. **Off by default on purpose**: on terminals that open links in-place (some webview-based ones) a click can replace the terminal page and kill your session. Test yours first, in a throwaway terminal window: `printf '\e]8;;https://example.com\e\\test\e]8;;\e\\\n'` — enable only if Ctrl+click opens a **new** browser tab. URL length never counts toward the width degradation.
 
 Health check for external free-tier models: `python3 <plugin>/scripts/external-exec.py --doctor [--ping]`

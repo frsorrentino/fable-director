@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.27.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.28.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need to do.**
 
@@ -170,6 +170,10 @@ Read left to right — each segment answers one question, and lights up yellow �
 | `cache ◕ 47m` | How long the prompt cache stays warm, as a draining quarter-clock — cheap to keep working now, a fresh start costs more |
 | `xf gemini 2/1500→09:00` | Free external calls used vs the provider's daily tier, counted in the **provider's own reset window**, → when it refills (declared per provider; without it, plain `×N` and no invented time). Lights up while a call is in flight |
 | `dlg ≡ 41k` | Work handed to cheaper models this session, and how much (`≡` = same model as the main loop) |
+| `✦≤26%` | Ceiling on your premium model's weekly window (declared fraction of the 7D quota, e.g. Fable = 50%); shown only while that model drives the session — always a bound, never invented telemetry |
+| `pr #42` | Open PR for the branch, colour = review state; Ctrl+click opens it (links are opt-in) |
+
+Segments can become clickable (opt-in, off by default — some webview terminals open links in-place and would kill the session; the legend ships a safe test): quotas link to your plan's usage page, `xf` to the AI Studio dashboard, `pr` to the pull request, the model to the Anthropic status page.
 
 When something breaks, the quiet form turns into full words — and at 3× (or broken enforcement) the alarm **takes over**: a solid-red block at the head of the line while everything else falls to half-light. On narrow screens (real terminal width via `COLUMNS`) row 2 trims the least urgent segments first (`cache`, then `dlg`, then `xf`) and never drops the budget; row 1 never degrades.
 
@@ -212,11 +216,11 @@ Works on its own. These optional companions save further tokens, degrading grace
 
 ## 🆕 What's new
 
+- **1.28.0** — Clickable segments (opt-in OSC 8), `pr #N` segment, premium-window ceiling (`✦≤26%`) conditional on the live model, unknown-bucket sentinel
 - **1.27.0** — Cache quarter-clock (`● ◕ ◑ ◔ ○`), box-drawn `/status` bulletin with quota bars + burn sparkline, lazy timezone cost fix
 - **1.26.0** — Statusline two-row HUD: on-demand activity row, red takeover at 3×, free-tier residue in the provider's reset window, real-width degradation
 - **1.25.0** — Statusline zen: half-light when healthy, ctx gauge + budget micro-gauge, live effort (`·max`), `/1M` window flag, caveman badge adopted
 - **1.24.0** — Paid providers consent-gated (`billing` field fail-closed + `--paid-ok`); Gemini image route (`type: "image"`)
-- **1.23.0** — Proactive route verdict: `[fd-route-hint]` at prompt time from soft-deps keywords + cardinality signals
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 

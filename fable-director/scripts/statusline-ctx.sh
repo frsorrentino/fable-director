@@ -28,7 +28,7 @@ badge=""
 # Tutte le metriche in UNA passata python (statusline gira spesso: un solo processo).
 # Campi assenti → "-" → il segmento si omette. Il budget file è di fable-director
 # (fd-telemetry.py budget-open / stop-budget-check.py): qui SOLO lettura.
-read -r model pct rl rlt wk wkt bdg xf dlg cache cmp grind eff bar win <<EOF
+read -r model pct rl rlt wk wkt bdg xf dlg cache cmp grind eff bar win lk fw prn pru <<EOF
 $(printf '%s' "$input" | python3 -c '
 import json,sys,os,time
 from pathlib import Path
@@ -80,6 +80,12 @@ try:
         if r is not None: q["five_hour_used_pct"]=round(float(r),1)
         if w is not None: q["weekly_used_pct"]=round(float(w),1)
         if w_reset: q["weekly_resets_at"]=w_reset
+        # Sentinella bucket ignoti: se rate_limits espone una chiave nuova
+        # (es. un futuro bucket per-modello) la registriamo nel quota file —
+        # la si scopre alla prima sessione, non per caso. Mai interpretata.
+        unk=sorted(set(d.get("rate_limits") or {})
+                   -{"five_hour","seven_day","weekly","seven_days"})
+        if unk: q["unknown_buckets"]=unk
         if q:
             qd=Path.home()/".claude"/"fable-director"
             qd.mkdir(parents=True,exist_ok=True)
@@ -133,6 +139,43 @@ try:
                 except Exception: pass
     except Exception:
         pass
+    # plan-<acct>.json: proprieta del piano DICHIARATE dall utente (il plugin
+    # non conosce i piani): statusline_links attiva i link OSC 8 (opt-in,
+    # solo dopo test sul proprio terminale — su webview che navigano in
+    # place un click ucciderebbe la sessione); premium_weekly_fraction e la
+    # quota della finestra settimanale riservata al modello premium.
+    lk="0"; fw="-"
+    try:
+        import hashlib as _hp
+        _acct=_hp.sha256((os.environ.get("CLAUDE_CONFIG_DIR") or str(Path.home()/".claude")).encode()).hexdigest()[:8]
+        _pf=Path.home()/".claude"/"fable-director"/f"plan-{_acct}.json"
+        if _pf.is_file():
+            _plan=json.loads(_pf.read_text())
+            if _plan.get("statusline_links"): lk="1"
+            _frac=float(_plan.get("premium_weekly_fraction") or 0)
+            _pm=str(_plan.get("premium_model_match") or "fable").lower()
+            # Bound finestra premium: consumo premium ≤ consumo totale e
+            # limite premium = frac × capacita → % finestra ≤ 7D% / frac.
+            # SEMPRE un tetto (≤), mai il consumo reale; a bound saturo si
+            # mostra ✦? — mai un numero finto. Solo sul modello premium.
+            if _frac>0 and w is not None and _pm in str(m or "").lower().replace(" ",""):
+                _bound=float(w)/_frac
+                if _bound>=100: fw="y:✦?"
+                else:
+                    _c="r:" if _bound>=80 else ("y:" if _bound>=60 else "g:")
+                    fw=_c+f"✦≤{_bound:.0f}%"
+    except Exception: pass
+    # pr aperta sul branch (dati gia forniti da Claude Code, finora ignorati)
+    prn="-"; pru="-"
+    try:
+        _pr=d.get("pr") or {}
+        _n=_pr.get("number")
+        if _n:
+            _st=str(_pr.get("review_state") or "")
+            _pc={"approved":"a:","changes_requested":"c:"}.get(_st,"p:")
+            prn=_pc+"pr #"+str(_n)
+            if _pr.get("url"): pru=str(_pr.get("url"))
+    except Exception: pass
     cwd=d.get("cwd") or os.getcwd()
     # slug identico a cwd_slug() in fd-telemetry.py (canonico + hash)
     import hashlib as _hl, re as _re
@@ -394,6 +437,7 @@ bdg=str(bdg).replace(" ",",")
 dlg=str(dlg).replace(" ",",")
 # xf con residuo ("gemini 2/1500→09:00") ha spazi: stessa disciplina
 xf=str(xf).replace(" ",",")
+prn=str(prn).replace(" ",",")
 # [FAIL xN] grinding: lo streak di Bash falliti lo calcola l hook fail-streak
 # (autorita), qui si LEGGE soltanto il suo file di stato per il sid corrente.
 # Quieto sotto 2; mostrato da 2 in su (il nudge del hook scatta a 3).
@@ -406,7 +450,7 @@ try:
             if gs>=2: grind=str(gs)
 except Exception:
     pass
-print(model,pct,rl,rlt,wk,wkt,bdg,xf,dlg,cache,cmp,grind,eff,bar,win)
+print(model,pct,rl,rlt,wk,wkt,bdg,xf,dlg,cache,cmp,grind,eff,bar,win,lk,fw,prn,pru)
 ' 2>/dev/null)
 EOF
 
@@ -433,6 +477,13 @@ if [ -n "$badge" ]; then
   esac
 fi
 
+# Link OSC 8 (opt-in via plan file): il testo resta identico, il wrap
+# aggiunge solo la marcatura URL. Il terminale che non li rende li ignora.
+osc8() { # $1=url $2=testo-gia-colorato
+  if [ "$lk" = "1" ] && [ -n "$1" ] && [ "$1" != "-" ]; then
+    printf '\033]8;;%s\033\\%s\033]8;;\033\\' "$1" "$2"
+  else printf '%s' "$2"; fi
+}
 SEP=$(printf '\033[38;5;239m · \033[0m')
 pre=""
 [ -n "$badge" ] && pre="$badge$(printf '\033[38;5;239m │ \033[0m')"
@@ -446,7 +497,7 @@ if [ "$model" != "-" ]; then
     y:*) seg="$seg$(printf '\033[38;5;220m%s\033[0m' "${eff#y:}")" ;;
     d:*) seg="$seg$(printf '\033[38;5;245m%s\033[0m' "${eff#d:}")" ;;
   esac
-  app "$seg"
+  app "$(osc8 "https://status.anthropic.com" "$seg")"
 fi
 # ctx: gauge 8 celle + /1M se window estesa
 if [ "$pct" != "-" ]; then
@@ -456,16 +507,24 @@ if [ "$pct" != "-" ]; then
 fi
 # cmp solo se ≥1 compattazione: contesto perso, deviazione per natura
 [ "$cmp" != "-" ] && [ -n "$cmp" ] && app "$(printf '\033[38;5;220mcmp %s\033[0m' "$cmp")"
+USAGE_URL="https://claude.ai/settings/usage"
 if [ "$rl" != "-" ]; then
   seg="5H ${rl}%"
   [ "$rlt" != "-" ] && seg="${seg}→${rlt}"
-  app "$(printf "$(color_for "$rl")%s\033[0m" "$seg")"
+  app "$(osc8 "$USAGE_URL" "$(printf "$(color_for "$rl")%s\033[0m" "$seg")")"
 fi
 if [ "$wk" != "-" ]; then
   seg="7D ${wk}%"
   [ "$wkt" != "-" ] && seg="${seg}→${wkt}"
-  app "$(printf "$(color_for "$wk")%s\033[0m" "$seg")"
+  app "$(osc8 "$USAGE_URL" "$(printf "$(color_for "$wk")%s\033[0m" "$seg")")"
 fi
+# Bound finestra premium (✦≤N% / ✦? a bound saturo) — vive accanto al 7D
+# da cui deriva; stesso link usage: li c e il valore vero per-modello.
+case "$fw" in
+  g:*) app "$(osc8 "$USAGE_URL" "$(printf '\033[38;5;245m%s\033[0m' "${fw#g:}")")" ;;
+  y:*) app "$(osc8 "$USAGE_URL" "$(printf '\033[38;5;220m%s\033[0m' "${fw#y:}")")" ;;
+  r:*) app "$(osc8 "$USAGE_URL" "$(printf '\033[38;5;196m%s\033[0m' "${fw#r:}")")" ;;
+esac
 # fail ×N grinding: stato PROTETTO, resta in riga 1 accanto alle quote —
 # uno streak esiste anche senza budget/deleghe e non deve dipendere dalla
 # riga 2. Giallo a 2 (early warning), rosso da 3 (il nudge e scattato).
@@ -485,6 +544,18 @@ case "$bdg" in
   g:*) seg_bdg="$(printf '\033[38;5;245m%s\033[0m' "$(printf '%s' "${bdg#g:}" | tr ',' ' ')")" ;;
   y:*) seg_bdg="$(printf '\033[38;5;220m%s\033[0m' "$(printf '%s' "${bdg#y:}" | tr ',' ' ')")" ;;
 esac
+# pr aperta: colore da review_state (verde=approved e l unico verde della
+# riga: significa mergiabile; giallo=changes_requested; penombra=pending)
+seg_pr=""
+if [ "$prn" != "-" ] && [ -n "$prn" ]; then
+  ptxt="$(printf '%s' "${prn#[acp]:}" | tr ',' ' ')"
+  case "$prn" in
+    a:*) seg_pr="$(printf '\033[38;5;114m%s\033[0m' "$ptxt")" ;;
+    c:*) seg_pr="$(printf '\033[38;5;220m%s\033[0m' "$ptxt")" ;;
+    *)   seg_pr="$(printf '\033[38;5;245m%s\033[0m' "$ptxt")" ;;
+  esac
+  seg_pr="$(osc8 "$pru" "$seg_pr")"
+fi
 seg_xf=""; seg_dlg=""; seg_cache=""
 case "$cache" in
   g:*) seg_cache="$(printf '\033[38;5;245mcache %s\033[0m' "$(printf '%s' "${cache#g:}" | tr ',' ' ')")" ;;
@@ -501,12 +572,14 @@ if [ "$xf" != "-" ] && [ -n "$xf" ]; then
     *▲*) seg_xf="$(printf '\033[38;5;216mxf %s\033[0m' "$xtxt")" ;;
     *)   seg_xf="$(printf '\033[38;5;245mxf %s\033[0m' "$xtxt")" ;;
   esac
+  seg_xf="$(osc8 "https://aistudio.google.com/usage" "$seg_xf")"
 fi
 [ "$dlg" != "-" ] && [ -n "$dlg" ] && \
   seg_dlg="$(printf '\033[38;5;245mdlg %s\033[0m' "$(printf '%s' "$dlg" | tr ',' ' ')")"
 # Larghezza in CARATTERI (glifi zen multibyte; wc -c li conterebbe tripli).
 # COLUMNS lo fornisce Claude Code ≥2.1.153; assente → 120 conservativo.
-plain_len() { printf '%s' "$1" | sed 's/\x1b\[[0-9;]*m//g' | LC_ALL=C.UTF-8 wc -m 2>/dev/null || printf '%s' "$1" | sed 's/\x1b\[[0-9;]*m//g' | wc -c; }
+strip_esc() { sed -e 's/\x1b][^\x07\x1b]*\x07//g' -e 's/\x1b][^\x1b]*\x1b\\\\//g' -e 's/\x1b\[[0-9;]*m//g'; }
+plain_len() { printf '%s' "$1" | strip_esc | LC_ALL=C.UTF-8 wc -m 2>/dev/null || printf '%s' "$1" | strip_esc | wc -c; }
 W="${COLUMNS:-120}"
 case "$W" in (*[!0-9]*|"") W=120 ;; esac
 # Riga 2 on-demand — l ATTIVITA (budget, deleghe, esterni, cache): esiste
@@ -518,6 +591,7 @@ compose2() {
   c=""
   a2() { [ -n "$c" ] && c="$c$SEP"; c="$c$1"; }
   [ -n "$seg_bdg" ] && a2 "$seg_bdg"
+  [ -n "$seg_pr" ] && a2 "$seg_pr"
   [ "$1" -ge 2 ] && [ -n "$seg_dlg" ] && a2 "$seg_dlg"
   [ "$1" -ge 1 ] && [ -n "$seg_xf" ] && a2 "$seg_xf"
   # cache SCADUTA non giustifica da sola la riga 2 (sessione fredda =

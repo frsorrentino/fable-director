@@ -40,7 +40,7 @@ def check(name, ok, detail=""):
 
 
 def payload(ctx_pct=12, ctx_size=1_000_000, five=10, seven=10, effort="max",
-            model="Fable 5"):
+            model="Fable 5", pr=None, extra_bucket=None):
     d = {
         "session_id": "zen-test-session",
         "transcript_path": "/nonexistent/zen.jsonl",
@@ -55,6 +55,10 @@ def payload(ctx_pct=12, ctx_size=1_000_000, five=10, seven=10, effort="max",
     }
     if effort is not None:
         d["effort"] = {"level": effort}
+    if pr is not None:
+        d["pr"] = pr
+    if extra_bucket:
+        d["rate_limits"][extra_bucket] = {"used_percentage": 42}
     return json.dumps(d)
 
 
@@ -265,8 +269,65 @@ check("F12 cache exp con compagnia → ○ exp in riga 2",
       "cache ○ exp" in plain(expc)
       and "bdg ok·high" in plain(expc), plain(expc))
 
+# ---------- fase 4: link OSC 8, pr, bound Fable, bucket ignoti ----------
+print("zen fase 4:")
+
+OSC = "\x1b]8;;"
+home4 = tmp / "home4"
+home4.mkdir()
+fd4 = home4 / ".claude" / "fable-director"
+fd4.mkdir(parents=True)
+
+
+def acct_of(home):
+    return hashlib.sha256(str(home / ".claude").encode()).hexdigest()[:8]
+
+
+# L1: senza plan file → nessun OSC 8, nessun bound
+off = render(home4, payload())
+check("L1 default → nessun link, nessun bound",
+      OSC not in off and "✦≤" not in plain(off), off)
+
+# plan file: links on + frazione premium dichiarata
+(fd4 / f"plan-{acct_of(home4)}.json").write_text(json.dumps(
+    {"statusline_links": True, "premium_weekly_fraction": 0.5}))
+
+# L2: links on → 7D wrappato verso usage, modello verso status page
+on = render(home4, payload())
+check("L2 links on → 7D linkato alla pagina usage",
+      "]8;;https://claude.ai/settings/usage" in on, on)
+check("L3 links on → modello linkato alla status page",
+      "]8;;https://status.anthropic.com" in on, on)
+
+# L4: bound Fable — 7D 13%, frazione 0.5, modello Fable → ✦≤26%
+b13 = render(home4, payload(seven=13))
+check("L4 modello Fable, 7D 13% → ✦≤26%",
+      "✦≤26%" in plain(b13), plain(b13))
+# L5: stessa sessione su Sonnet → bound assente (condizionale al modello)
+b_son = render(home4, payload(seven=13, model="Sonnet 5"))
+check("L5 modello Sonnet → bound assente",
+      "✦≤" not in plain(b_son) and "✦?" not in plain(b_son), plain(b_son))
+# L6: bound saturo (7D 60% ≥ 50%) → ✦? mai un numero finto
+b_sat = render(home4, payload(seven=60))
+check("L6 7D 60% → bound saturo ✦?",
+      "✦?" in plain(b_sat) and "✦≤" not in plain(b_sat), plain(b_sat))
+
+# L7: pr aperta → segmento in riga 2, linkato al pr.url
+prd = {"number": 42, "url": "https://github.com/o/r/pull/42",
+       "review_state": "approved"}
+wpr = render(home4, payload(pr=prd))
+check("L7 pr aperta → 'pr #42' in riga 2, linkato",
+      "pr #42" in plain(wpr).split("\n")[-1]
+      and "]8;;https://github.com/o/r/pull/42" in wpr, wpr)
+
+# L8: bucket rate_limits sconosciuto → registrato nel quota file
+render(home4, payload(extra_bucket="seven_day_opus"))
+qf4 = json.loads((fd4 / f"quota-{acct_of(home4)}.json").read_text())
+check("L8 bucket ignoto → unknown_buckets nel quota file",
+      qf4.get("unknown_buckets") == ["seven_day_opus"], str(qf4))
+
 print()
 if FAILS:
     print(f"FAIL: {len(FAILS)} — " + ", ".join(FAILS))
     sys.exit(1)
-print("OK: contratto zen fase 1+2 rispettato")
+print("OK: contratto zen fase 1+2+4 rispettato")
