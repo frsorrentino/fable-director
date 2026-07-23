@@ -6,7 +6,7 @@ Two rows with distinct jobs. **Row 1 is what you are** (model, effort, context, 
 
 ```
 caveman │ ✦ FABLE5·max · ctx ▓▓▓░░░░░ 26%/1M · cmp 1 · 5H 71%→17:30 · 7D 46%→14 Jul · fail ×3
-└ bdg ▓░░ 0.7×·high · dlg ≡ 41k · xf gemini 2/1500→09:00 · cache 47m
+└ bdg ▓░░ 0.7×·high · dlg ≡ 41k · xf gemini 2/1500→09:00 · cache ◕ 47m
 ```
 
 | Segment | Meaning |
@@ -19,7 +19,7 @@ caveman │ ✦ FABLE5·max · ctx ▓▓▓░░░░░ 26%/1M · cmp 1 · 5
 | `7D 46%→14 Jul` | Weekly plan quota used, → reset day. Same thresholds |
 | `bdg ▓░░ 0.7×·high` | Open task budget: **actual spend ÷ declared estimate** as a micro-gauge on the 0–3× checkpoint scale (one cell per whole × reached), `·high` = declared effort tier. `bdg ok` when no live ratio is available. Absent = no open budget |
 | `fail ×3` | **Consecutive failing Bash commands** since the last success (your own denials don't count). Hidden below 2; yellow at 2, red at ≥3 — where the fail-streak hook injects the rule-of-3. Cleared by the next successful Bash |
-| `cache 47m` | Prompt-cache countdown from the last API activity: grey >10 min, yellow ≤10 min, red <1 min, `exp` = expired (next turn repays the prefix cold). TTL default 3600 s (Max plans); set `FD_CACHE_TTL_S=300` for 5-minute plans |
+| `cache ◕ 47m` | Prompt-cache countdown from the last API activity, with a quarter-clock (`●◕◑◔○`) of the TTL left: grey >10 min, yellow ≤10 min, red <1 min, `○ exp` = expired (next turn repays the prefix cold; alone it never summons row 2). TTL default 3600 s (Max plans); set `FD_CACHE_TTL_S=300` for 5-minute plans |
 | `xf gemini 2/1500→09:00` | External free-tier calls in the **provider's own reset window**: used/limit, → local time the tier resets. Needs `limits.reset {period, tz}` declared in `cross-family.json` (Gemini: midnight Pacific); a provider without it shows plain `×N` on the UTC day and **no invented reset time**. Yellow at ≥80% of the tier, red at ≥95%; `gemini▲` = call in flight (orange) |
 | `dlg ≡ 41k` | Output tokens delegated per model this session; `≡` = same model as the main loop; `≈` prefix = declared-only fallback (no transcript) |
 
@@ -37,7 +37,7 @@ On narrow screens row 2 degrades deterministically: `cache` drops first, then `d
 
 | Command | What it does |
 |---|---|
-| `/fable-director:status` | This statusline as text (for smartphone/remote clients) + burn-rate projection. `--detail` adds delegations and the last task receipt |
+| `/fable-director:status` | The same state as a box-drawn bulletin (for smartphone/remote clients): quota bars, burn-rate sparkline from the quota history, honest freshness labels. `--detail` adds delegations and the last task receipt |
 | `/fable-director:review` | Data-driven improvement plan from telemetry + playbook |
 | `/fable-director:help` | This legend |
 

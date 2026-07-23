@@ -46,9 +46,29 @@ def age_str(mtime):
     return f"{mins // 60}h {mins % 60}m ago"
 
 
+def bar10(pct):
+    cells = min(10, max(0, int(float(pct) // 10)))
+    return "▓" * cells + "░" * (10 - cells)
+
+
+def spark(vals, width=12):
+    # sparkline min-max sugli ultimi `width` campioni; piatta → ▁
+    vs = list(vals)[-width:]
+    if not vs:
+        return ""
+    lo, hi = min(vs), max(vs)
+    glyphs = "▁▂▃▄▅▆▇█"
+    if hi - lo < 1e-9:
+        return glyphs[0] * len(vs)
+    return "".join(glyphs[int((v - lo) / (hi - lo) * 7)] for v in vs)
+
+
 def main():
     detail = "--detail" in sys.argv[1:]
-    lines = []
+    rows = []          # (label, text) → impacchettate nel box a fine corsa
+
+    def add(label, text):
+        rows.append((label, text))
     cfg = os.environ.get("CLAUDE_CONFIG_DIR") or str(Path.home() / ".claude")
     acct_name = Path(cfg).name
     acct = hashlib.sha256(cfg.encode()).hexdigest()[:8]
@@ -60,9 +80,9 @@ def main():
         try:
             b = json.loads(bfile.read_text())
         except Exception:
-            lines.append("now: budget file unreadable")
+            add("now", "budget file unreadable")
     if isinstance(b, dict) and b.get("status") == "open":
-        seg = f"now: budget OPEN — '{b.get('task')}'"
+        seg = f"budget OPEN — '{b.get('task')}'"
         sf = bfile.with_name(bfile.stem + ".state.json")
         exp = int(b.get("expected_output_tokens") or 0)
         if sf.is_file() and exp > 0:
@@ -73,42 +93,42 @@ def main():
                 pass
         if b.get("effort"):
             seg += f", effort {b['effort']}"
-        lines.append(seg)
+        add("now", seg)
         if b.get("warned"):
-            lines.append("  ⚠ 2× checkpoint already hit — route was reassessed"
-                         " or is due")
+            add("", "⚠ 2× checkpoint already hit — route was reassessed"
+                    " or is due")
         if b.get("schema_warned"):
-            lines.append("  ✕ ENFORCEMENT OFF: transcript unreadable "
-                         "(schema_anomaly) — accounting unreliable, update "
-                         "the plugin")
+            add("", "✕ ENFORCEMENT OFF: transcript unreadable "
+                    "(schema_anomaly) — accounting unreliable, update "
+                    "the plugin")
     elif isinstance(b, dict) and b.get("status") == "flagged":
-        lines.append(f"now: ✕ budget FLAGGED 3× — post-mortem due "
-                     f"('{b.get('task')}')")
+        add("now", f"✕ budget FLAGGED 3× — post-mortem due "
+                   f"('{b.get('task')}')")
     elif isinstance(b, dict):
-        lines.append(f"now: no open budget (last: {b.get('status')})")
+        add("now", f"no open budget (last: {b.get('status')})")
     else:
-        lines.append("now: no open budget for this cwd")
+        add("now", "no open budget for this cwd")
 
-    # Plan quotas (as-of the last statusline render)
+    # Plan quotas (as-of the last statusline render) — barre a 10 celle
     qf = BASE / f"quota-{acct}.json"
     if not qf.is_file():
         qf = BASE / "quota.json"
     if qf.is_file():
         try:
             q = json.loads(qf.read_text())
-            parts = []
             if q.get("five_hour_used_pct") is not None:
-                parts.append(f"5H {q['five_hour_used_pct']:.0f}% used")
+                add("5H", f"{bar10(q['five_hour_used_pct'])} "
+                          f"{q['five_hour_used_pct']:.0f}%")
             if q.get("weekly_used_pct") is not None:
-                parts.append(f"7D {q['weekly_used_pct']:.0f}% used")
-            lines.append(f"quotas [{acct_name}]: " + " · ".join(parts)
-                         + f"  (as-of {age_str(qf.stat().st_mtime)} — "
-                         f"updated only by a statusline render)")
+                add("7D", f"{bar10(q['weekly_used_pct'])} "
+                          f"{q['weekly_used_pct']:.0f}%")
+            add("qta", f"[{acct_name}] as-of {age_str(qf.stat().st_mtime)}"
+                       f" — updated only by a statusline render")
         except Exception:
-            lines.append(f"quotas [{acct_name}]: file unreadable")
+            add("qta", f"[{acct_name}] file unreadable")
     else:
-        lines.append(f"quotas [{acct_name}]: n/a — no statusline render "
-                     f"from this account yet")
+        add("qta", f"[{acct_name}] n/a — no statusline render "
+                   f"from this account yet")
 
     # 7D burn-rate: projection from the LAST MONOTONIC tail of the quota
     # history (the weekly reset drops the % — only the stretch after the
@@ -139,10 +159,9 @@ def main():
                     rate = dw / span_h
                     eta = tail[-1][0] + timedelta(
                         hours=(100 - tail[-1][1]) / rate)
-                    lines.append(
-                        f"burn-rate 7D: ~{rate:.1f}%/h (last "
-                        f"{span_h:.0f}h) — at this pace 100% "
-                        f"~{eta.astimezone().strftime('%a %d/%m %H:%M')}")
+                    add("burn", f"~{rate:.1f}%/h {spark(w for _, w in tail)}"
+                                f"  (last {span_h:.0f}h) — 100% "
+                                f"≈ {eta.astimezone().strftime('%a %d/%m %H:%M')}")
     except Exception:
         pass
 
@@ -210,12 +229,10 @@ def main():
             nfree = sum(v for k, v in counts.items()
                         if (provs.get(k) or {}).get("billing") == "free")
             npaid = sum(counts.values()) - nfree
-            lines.append("external today: " + ", ".join(parts)
-                         + (f" — {nfree} free, {npaid} PAID"
-                            if npaid else ""))
+            add("xf", ", ".join(parts)
+                + (f" — {nfree} free, {npaid} PAID" if npaid else ""))
         elif xf_cfg:
-            lines.append("external today: 0 calls — today's free tier "
-                         "unused (daily reset)")
+            add("xf", "0 calls — today's free tier unused (daily reset)")
     except Exception:
         pass
 
@@ -229,16 +246,15 @@ def main():
                 if tok.is_file():
                     mm = (json.loads(tok.read_text()).get("models") or {})
                     if mm:
-                        lines.append("session delegations: " + ", ".join(
+                        add("dlg", ", ".join(
                             f"{k} {v // 1000}k" if v >= 1000 else f"{k} {v}"
                             for k, v in sorted(mm.items(),
                                                key=lambda x: -x[1])))
                 elif reg.is_file():
                     c = json.loads(reg.read_text())
-                    lines.append("session delegations (declared): "
-                                 + ", ".join(f"{k}×{v}" for k, v in
-                                             sorted(c.items(),
-                                                    key=lambda x: -x[1])))
+                    add("dlg", "declared: "
+                        + ", ".join(f"{k}×{v}" for k, v in
+                                    sorted(c.items(), key=lambda x: -x[1])))
             except Exception:
                 pass
         # Last receipt for this cwd
@@ -252,14 +268,24 @@ def main():
                 act = r.get("actual_output_tokens")
                 ratio = (f", {act / exp:.1f}× of estimate"
                          if act is not None and exp else "")
-                lines.append(f"last receipt: '{r.get('task')}' — "
-                             f"{r.get('outcome')}{ratio}"
-                             + (f", verify: {r['verify']}"
-                                if r.get("verify") else ""))
+                add("rcpt", f"'{r.get('task')}' — "
+                            f"{r.get('outcome')}{ratio}"
+                            + (f", verify: {r['verify']}"
+                               if r.get("verify") else ""))
         except Exception:
             pass
 
-    print("\n".join(lines))
+    # Bollettino: stesso linguaggio della statusline (box, barre, glifi).
+    # Va in conversazione come testo monospace: niente colori, il disegno
+    # regge da solo. Larghezza = contenuto piu largo, titolo con orologio.
+    title = ("\u250c\u2500 fable-director \u2500\u2500 "
+             + datetime.now().astimezone().strftime("%d %b %H:%M") + " ")
+    body = [f"\u2502 {lab:<5}{txt}" for lab, txt in rows]
+    width = max([len(title)] + [len(x) + 1 for x in body])
+    out = [title + "\u2500" * (width - len(title)) + "\u2510"]
+    out += [x + " " * (width - len(x)) + "\u2502" for x in body]
+    out.append("\u2514" + "\u2500" * (width - 1) + "\u2518")
+    print("\n".join(out))
 
 
 if __name__ == "__main__":

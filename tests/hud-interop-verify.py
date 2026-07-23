@@ -118,12 +118,12 @@ def render(home, **env):
 h1 = tmp / "home-a"
 line = render(h1)
 check("S1 cmp 1 da compact_boundary", "cmp 1" in line, line)
-check("S2 cache Nm countdown con TTL default 3600", re.search(r"cache \d+m", line) is not None, line)
+check("S2 cache Nm countdown con TTL default 3600", re.search(r"cache [●◕◑◔○] \d+m", line) is not None, line)
 check("S3 [DLG] conserva i token dopo lo shift dei campi",
       re.search(r"dlg SONNET-5 12k", line) is not None, line)
 
 line2 = render(tmp / "home-b", FD_CACHE_TTL_S=300)
-check("S4 cache exp con TTL 300 e ultima attività 13 min fa", "cache exp" in line2, line2)
+check("S4 cache exp con TTL 300 e ultima attività 13 min fa", "cache ○ exp" in line2, line2)
 
 snaps = list((h1 / ".claude" / "fable-director").glob("usage-snapshot-*.json"))
 ok = False

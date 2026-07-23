@@ -251,6 +251,20 @@ warm = render(home3, json.dumps(p3), FD_CACHE_TTL_S=86400)
 check("F10 cache viva da sola → riga 2 col countdown",
       "\n" in warm and "cache" in plain(warm).split("\n")[1], warm)
 
+# F11: orologio cache — glifo a quarti dal TTL residuo (2h su 24h → ●)
+check("F11 cache ricca → orologio ● pieno",
+      re.search(r"cache ● \d+m", plain(warm)) is not None, plain(warm))
+# F12: cache scaduta accompagnata (budget aperto) → ○ exp visibile
+b3 = home3 / ".claude" / "fable-director" / "budgets"
+b3.mkdir(parents=True, exist_ok=True)
+(b3 / f"{slug}.json").write_text(json.dumps(
+    {"status": "open", "task": "t", "effort": "high",
+     "declared_at": "2026-07-23T10:00:00Z"}))
+expc = render(home3, json.dumps(p3), FD_CACHE_TTL_S=300)
+check("F12 cache exp con compagnia → ○ exp in riga 2",
+      "cache ○ exp" in plain(expc)
+      and "bdg ok·high" in plain(expc), plain(expc))
+
 print()
 if FAILS:
     print(f"FAIL: {len(FAILS)} — " + ", ".join(FAILS))

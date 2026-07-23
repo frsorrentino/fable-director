@@ -261,10 +261,14 @@ try:
                 from datetime import timezone as _tzk
                 ttl=int(os.environ.get("FD_CACHE_TTL_S") or 3600)
                 remc=ttl-(_dtb.now(_tzk.utc)-lts).total_seconds()
-                if remc<=0: cache="y:exp"
+                # orologio a quarti: TTL residuo leggibile senza leggere i
+                # minuti — pieno appena toccata, si svuota fino a ○ exp
+                if remc<=0: cache="y:○,exp"
                 else:
+                    q=remc/max(ttl,1)
+                    gl="●" if q>0.875 else ("◕" if q>0.625 else ("◑" if q>0.375 else ("◔" if q>0.125 else "○")))
                     lblc=f"{int(remc//60)}m" if remc>=120 else f"{int(remc)}s"
-                    cache=("g:" if remc>600 else ("y:" if remc>=60 else "r:"))+lblc
+                    cache=("g:" if remc>600 else ("y:" if remc>=60 else "r:"))+gl+","+lblc
             except Exception: pass
     elif sid:
         df=Path.home()/".claude"/"fable-director"/"delegations"/f"{sid}.json"
@@ -319,44 +323,52 @@ try:
         cfp=fd/"cross-family.json"
         if cfp.is_file(): xf_cfg=json.loads(cfp.read_text())
     except Exception: pass
-    xmeta={}
-    try:
-        from zoneinfo import ZoneInfo as _ZI
-        from datetime import datetime as _dtw, timedelta as _tdw, timezone as _tzw
-        for pk,pv in ((xf_cfg or {}).get("providers") or {}).items():
-            lim=(pv or {}).get("limits") or {}
-            rst=lim.get("reset") or {}
-            if (pv or {}).get("billing")=="free" and lim.get("rpd") \
-               and rst.get("period")=="daily" and rst.get("tz"):
-                try:
-                    tzp=_ZI(str(rst["tz"]))
-                    nl=_dtw.now(tzp)
-                    st=nl.replace(hour=0,minute=0,second=0,microsecond=0)
-                    xmeta[pk]=(int(lim["rpd"]),
-                               st.astimezone(_tzw.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                               (st+_tdw(days=1)).astimezone().strftime("%H:%M"))
-                except Exception: pass
-    except Exception: pass
-    xcounts={}
+    # Query larga 24h SENZA zoneinfo (spawn misurato ~150 ms): copre ogni
+    # finestra daily possibile. zoneinfo si importa SOLO se esistono eventi
+    # esterni recenti — a riposo il render non paga il costo delle finestre.
+    xrows=[]
     dbf=fd/"telemetry.db"
     if dbf.is_file():
         try:
             import sqlite3
-            from datetime import datetime as _dt2, timezone as _tz2
-            today=_dt2.now(_tz2.utc).strftime("%Y-%m-%d")
-            floor=min([today]+[m[1] for m in xmeta.values()])
+            from datetime import datetime as _dt2, timedelta as _td2, timezone as _tz2
+            floor=(_dt2.now(_tz2.utc)-_td2(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
             con=sqlite3.connect(dbf, timeout=0.3)
             con.execute("PRAGMA busy_timeout=300")  # render: mai bloccare a lungo
             for (ts,pl) in con.execute("SELECT ts, payload FROM events WHERE event=? AND ts >= ?", ("verification", floor)):
                 try: p=json.loads(pl or "{}")
                 except Exception: continue
-                if p.get("kind")!="cross-family" or not p.get("provider"): continue
-                prov=p["provider"]
-                lo=xmeta[prov][1] if prov in xmeta else today
-                if str(ts)>=lo:
-                    xcounts[prov]=xcounts.get(prov,0)+1
+                if p.get("kind")=="cross-family" and p.get("provider"):
+                    xrows.append((str(ts),p["provider"]))
             con.close()
         except Exception: pass
+    xmeta={}
+    if xrows or active:
+        try:
+            from zoneinfo import ZoneInfo as _ZI
+            from datetime import datetime as _dtw, timedelta as _tdw, timezone as _tzw
+            for pk,pv in ((xf_cfg or {}).get("providers") or {}).items():
+                lim=(pv or {}).get("limits") or {}
+                rst=lim.get("reset") or {}
+                if (pv or {}).get("billing")=="free" and lim.get("rpd") \
+                   and rst.get("period")=="daily" and rst.get("tz"):
+                    try:
+                        tzp=_ZI(str(rst["tz"]))
+                        nl=_dtw.now(tzp)
+                        st=nl.replace(hour=0,minute=0,second=0,microsecond=0)
+                        xmeta[pk]=(int(lim["rpd"]),
+                                   st.astimezone(_tzw.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                   (st+_tdw(days=1)).astimezone().strftime("%H:%M"))
+                    except Exception: pass
+        except Exception: pass
+    xcounts={}
+    if xrows:
+        from datetime import datetime as _dt3, timezone as _tz3
+        today=_dt3.now(_tz3.utc).strftime("%Y-%m-%d")
+        for ts,prov in xrows:
+            lo=xmeta[prov][1] if prov in xmeta else today
+            if ts>=lo:
+                xcounts[prov]=xcounts.get(prov,0)+1
     xparts=[]
     xratio=0.0
     for prov in sorted(set(list(xcounts)+([active] if active else []))):
@@ -475,9 +487,9 @@ case "$bdg" in
 esac
 seg_xf=""; seg_dlg=""; seg_cache=""
 case "$cache" in
-  g:*) seg_cache="$(printf '\033[38;5;245mcache %s\033[0m' "${cache#g:}")" ;;
-  y:*) seg_cache="$(printf '\033[38;5;220mcache %s\033[0m' "${cache#y:}")" ;;
-  r:*) seg_cache="$(printf '\033[38;5;196mcache %s\033[0m' "${cache#r:}")" ;;
+  g:*) seg_cache="$(printf '\033[38;5;245mcache %s\033[0m' "$(printf '%s' "${cache#g:}" | tr ',' ' ')")" ;;
+  y:*) seg_cache="$(printf '\033[38;5;220mcache %s\033[0m' "$(printf '%s' "${cache#y:}" | tr ',' ' ')")" ;;
+  r:*) seg_cache="$(printf '\033[38;5;196mcache %s\033[0m' "$(printf '%s' "${cache#r:}" | tr ',' ' ')")" ;;
 esac
 # xf: residuo a soglia (y ≥80%, r ≥95% del free tier), acceso 216 con
 # chiamata in flight (▲), penombra a riposo
@@ -510,7 +522,7 @@ compose2() {
   [ "$1" -ge 1 ] && [ -n "$seg_xf" ] && a2 "$seg_xf"
   # cache SCADUTA non giustifica da sola la riga 2 (sessione fredda =
   # rumore permanente); un countdown vivo si — serve al timing deleghe
-  [ "$1" -ge 3 ] && [ -n "$seg_cache" ] && { [ "$cache" != "y:exp" ] || [ -n "$c" ]; } && a2 "$seg_cache"
+  [ "$1" -ge 3 ] && [ -n "$seg_cache" ] && { [ "$cache" != "y:○,exp" ] || [ -n "$c" ]; } && a2 "$seg_cache"
   [ -n "$c" ] && printf '%s%s' "$L2P" "$c"
 }
 line1="$tko$pre$out"
