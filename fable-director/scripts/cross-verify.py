@@ -78,7 +78,13 @@ DEFAULT_CONFIG = {
             "model": "gemini-3-flash-preview",
             "api_key_env": "GEMINI_API_KEY",
             "billing": "free",
-            "limits": {"rpd": 1500, "rpm": 10},
+            # reset: finestra di azzeramento del free tier — AI Studio azzera
+            # a midnight Pacific; statusline e fd-status contano su questa
+            # finestra e mostrano l'orario locale del prossimo azzeramento.
+            # Senza il campo: conteggio giorno UTC, nessun orario (onesto).
+            "limits": {"rpd": 1500, "rpm": 10,
+                       "reset": {"period": "daily",
+                                 "tz": "America/Los_Angeles"}},
             "note": "free tier AI Studio (verificato 2026-07-10) — 503 intermittenti da "
                     "preview: unavailable → rotta same-family, MAI fallback silenzioso. "
                     "La subscription consumer AI Pro NON alimenta l'API"
@@ -88,7 +94,9 @@ DEFAULT_CONFIG = {
             "model": "gemini-2.5-flash",
             "api_key_env": "GEMINI_API_KEY",
             "billing": "free",
-            "limits": {"rpd": 1500, "rpm": 10},
+            "limits": {"rpd": 1500, "rpm": 10,
+                       "reset": {"period": "daily",
+                                 "tz": "America/Los_Angeles"}},
             "note": "ripiego stabile ESPLICITO (--provider gemini-stable) quando la preview 503a"
         },
         "codex": {

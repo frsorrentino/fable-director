@@ -139,11 +139,120 @@ check("Z13 warned 2× → parole intere gialle",
       YEL + "⚠ BUDGET 2× OF ESTIMATE·high" in warn, warn)
 bf.write_text(json.dumps({"status": "flagged", "task": "t"}))
 flag = render(home, payload())
-check("Z14 flagged → parole intere rosse",
-      RED + "✕ BUDGET 3× — POST-MORTEM DUE" in flag, flag)
+check("Z14 flagged → takeover a parole intere (fase 2: inverse in testa)",
+      "✕ BUDGET 3× — POST-MORTEM DUE" in plain(flag)
+      and flag.startswith("\x1b[48;5;196m"), flag)
+
+# ---------- fase 2: riga 2 on-demand, takeover, COLUMNS, residuo free-tier ----------
+print("zen fase 2:")
+
+INV = "\x1b[48;5;196m"
+
+home2 = tmp / "home2"
+home2.mkdir()
+
+# F1: nessuna attivita → UNA riga sola
+idle = render(home2, payload())
+check("F1 nessuna attivita → una riga", "\n" not in idle.strip(), idle)
+
+# F2: budget aperto → riga 2 con └ e bdg; riga 1 senza bdg
+b2 = home2 / ".claude" / "fable-director" / "budgets"
+b2.mkdir(parents=True)
+bf2 = b2 / f"{slug}.json"
+bf2.write_text(json.dumps({"status": "open", "task": "t", "effort": "high",
+                           "declared_at": "2026-07-23T10:00:00Z"}))
+two = render(home2, payload())
+rows = plain(two).split("\n")
+check("F2 budget aperto → due righe, riga 2 = └ bdg",
+      len(rows) == 2 and rows[1].startswith("└ ") and "bdg ok·high" in rows[1]
+      and "bdg" not in rows[0], two)
+
+# F3: takeover flagged → inverse bg rosso IN TESTA alla riga 1
+bf2.write_text(json.dumps({"status": "flagged", "task": "t"}))
+tko = render(home2, payload())
+check("F3 flagged → takeover inverse in testa",
+      tko.startswith(INV) and "✕ BUDGET 3× — POST-MORTEM DUE" in plain(tko),
+      tko)
+
+# F4: enforcement off → takeover inverse
+bf2.write_text(json.dumps({"status": "open", "task": "t",
+                           "schema_warned": True,
+                           "declared_at": "2026-07-23T10:00:00Z"}))
+eoff = render(home2, payload())
+check("F4 schema_warned → ✕ ENFORCEMENT OFF inverse",
+      eoff.startswith(INV) and "✕ ENFORCEMENT OFF" in plain(eoff), eoff)
+bf2.unlink()
+
+# F5/F6: residuo free-tier con finestra provider dichiarata
+import sqlite3
+from datetime import datetime, timedelta, timezone
+fd2 = home2 / ".claude" / "fable-director"
+(fd2 / "cross-family.json").write_text(json.dumps({
+    "providers": {
+        "gemini": {"billing": "free",
+                   "limits": {"rpd": 1500,
+                              "reset": {"period": "daily",
+                                        "tz": "America/Los_Angeles"}}},
+        "mystery": {"billing": "free", "limits": {"rpd": 50}},
+    }}))
+con = sqlite3.connect(fd2 / "telemetry.db")
+con.execute("CREATE TABLE events (ts TEXT, event TEXT, payload TEXT)")
+now = datetime.now(timezone.utc)
+for prov in ("gemini", "mystery"):
+    con.execute("INSERT INTO events VALUES (?,?,?)",
+                (now.strftime("%Y-%m-%dT%H:%M:%SZ"), "verification",
+                 json.dumps({"kind": "cross-family", "provider": prov})))
+con.commit(); con.close()
+resid = render(home2, payload())
+check("F5 provider con reset → residuo n/rpd→HH:MM",
+      re.search(r"gemini 1/1500→\d{2}:\d{2}", plain(resid)) is not None,
+      plain(resid))
+check("F6 provider senza reset → solo ×N, nessun orario inventato",
+      re.search(r"mystery×1(?!/)", plain(resid)) is not None
+      and "mystery×1→" not in plain(resid), plain(resid))
+
+# F7: la chiamata di IERI (fuori finestra provider ma stesso giorno UTC no)
+#     — un evento vecchio di 26h non deve contare nel residuo
+con = sqlite3.connect(fd2 / "telemetry.db")
+con.execute("INSERT INTO events VALUES (?,?,?)",
+            ((now - timedelta(hours=26)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+             "verification",
+             json.dumps({"kind": "cross-family", "provider": "gemini"})))
+con.commit(); con.close()
+resid2 = render(home2, payload())
+check("F7 evento 26h fa fuori finestra → conteggio invariato",
+      re.search(r"gemini 1/1500", plain(resid2)) is not None, plain(resid2))
+
+# F8: COLUMNS stringe → riga 2 degrada (cache cade prima), mai bdg
+bf2.write_text(json.dumps({"status": "open", "task": "t", "effort": "high",
+                           "declared_at": "2026-07-23T10:00:00Z"}))
+wide = render(home2, payload(), COLUMNS=200)
+narrow = render(home2, payload(), COLUMNS=45)
+wrows = plain(wide).split("\n")
+nrows = plain(narrow).split("\n")
+check("F8 COLUMNS 45 → riga 2 degrada ma bdg resta",
+      len(nrows) == 2 and "bdg ok·high" in nrows[1]
+      and len(nrows[1]) <= len(wrows[1]) and "xf" not in nrows[1], narrow)
+
+# F9: cache SCADUTA da sola non giustifica la riga 2 (rumore permanente
+#     su sessioni fredde); una cache viva si (timing deleghe, asse 6)
+home3 = tmp / "home3"
+home3.mkdir()
+tr3 = tmp / "tr3.jsonl"
+old_ts = (datetime.now(timezone.utc) - timedelta(hours=2)).strftime(
+    "%Y-%m-%dT%H:%M:%S.000Z")
+tr3.write_text(json.dumps({"timestamp": old_ts, "message": {}}) + "\n")
+p3 = json.loads(payload())
+p3["transcript_path"] = str(tr3)
+cold = render(home3, json.dumps(p3))
+check("F9 solo cache exp → una riga (niente riga 2 di rumore)",
+      "\n" not in cold.strip() and "cache" not in plain(cold), cold)
+warm = render(home3, json.dumps(p3), FD_CACHE_TTL_S=86400)
+check("F10 cache viva da sola → riga 2 col countdown",
+      "\n" in warm and "cache" in plain(warm).split("\n")[1], warm)
 
 print()
 if FAILS:
     print(f"FAIL: {len(FAILS)} — " + ", ".join(FAILS))
     sys.exit(1)
-print("OK: contratto zen fase 1 rispettato")
+print("OK: contratto zen fase 1+2 rispettato")

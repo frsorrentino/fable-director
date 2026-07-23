@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.25.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.26.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need to do.**
 
@@ -149,8 +149,11 @@ One glance at model, context and plan quotas — so you see the rate limit comin
 ![fable-director statusline](assets/statusline.svg)
 
 ```
-caveman │ ✦ FABLE5·max · ctx ▓▓▓░░░░░ 26%/1M · cmp 1 · 5H 71%→17:30 · 7D 46%→14 Jul · bdg ▓░░ 0.7×·high · fail ×3 · cache 47m · xf gemini×2 · dlg ≡ 41k
+caveman │ ✦ FABLE5·max · ctx ▓▓▓░░░░░ 26%/1M · cmp 1 · 5H 71%→17:30 · 7D 46%→14 Jul · fail ×3
+└ bdg ▓░░ 0.7×·high · dlg ≡ 41k · xf gemini 2/1500→09:00 · cache 47m
 ```
+
+Row 1 is *what you are* — always present. Row 2 is *what is happening* (open budget, delegations, external calls, cache) — it appears only while there's activity; at rest the line stays single.
 
 Read left to right — each segment answers one question, and lights up yellow → red only as it needs attention:
 
@@ -165,10 +168,10 @@ Read left to right — each segment answers one question, and lights up yellow �
 | `bdg ▓░░ 0.7×·high` | Current task spend vs the estimate it declared, as a micro-gauge on the 0–3× checkpoint scale; turns to a full-word alarm at 2× and 3× |
 | `fail ×3` | Bash commands failing in a row — a sign you're grinding; shows from 2, red at 3 where the plugin nudges you to step back |
 | `cache 47m` | How long the prompt cache stays warm — cheap to keep working now, a fresh start costs more |
-| `xf gemini×2` | Calls sent to a free external model today (verification or bulk work, off your Claude quota); lights up while a call is in flight |
+| `xf gemini 2/1500→09:00` | Free external calls used vs the provider's daily tier, counted in the **provider's own reset window**, → when it refills (declared per provider; without it, plain `×N` and no invented time). Lights up while a call is in flight |
 | `dlg ≡ 41k` | Work handed to cheaper models this session, and how much (`≡` = same model as the main loop) |
 
-When something breaks, the quiet form turns into full words that survive terminals without colour (`⚠ BUDGET 2.3× OF ESTIMATE`, `✕ BUDGET 3× — POST-MORTEM DUE`). On narrow screens the line trims the least urgent segments first (`cache`, then `dlg`, then `xf`) and never drops a budget, quota or alarm.
+When something breaks, the quiet form turns into full words — and at 3× (or broken enforcement) the alarm **takes over**: a solid-red block at the head of the line while everything else falls to half-light. On narrow screens (real terminal width via `COLUMNS`) row 2 trims the least urgent segments first (`cache`, then `dlg`, then `xf`) and never drops the budget; row 1 never degrades.
 
 **Turn it on:** `/fable-director:statusline`, then restart Claude Code. Idempotent, backs up `settings.json`, won't touch a third-party statusLine already there; `--remove` takes it out.
 
@@ -209,6 +212,7 @@ Works on its own. These optional companions save further tokens, degrading grace
 
 ## 🆕 What's new
 
+- **1.26.0** — Statusline two-row HUD: on-demand activity row, red takeover at 3×, free-tier residue in the provider's reset window, real-width degradation
 - **1.25.0** — Statusline zen: half-light when healthy, ctx gauge + budget micro-gauge, live effort (`·max`), `/1M` window flag, caveman badge adopted
 - **1.24.0** — Paid providers consent-gated (`billing` field fail-closed + `--paid-ok`); Gemini image route (`type: "image"`)
 - **1.23.0** — Proactive route verdict: `[fd-route-hint]` at prompt time from soft-deps keywords + cardinality signals

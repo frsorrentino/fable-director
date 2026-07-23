@@ -308,6 +308,35 @@ try:
             st=_dt.fromisoformat(str(a.get("started","")).replace("Z","+00:00"))
             if (_dt.now(_tz.utc)-st).total_seconds() < 900: active=a.get("provider")
         except Exception: pass
+    # Residuo free-tier per FINESTRA DEL PROVIDER: chi dichiara in config
+    # limits.reset {period: daily, tz: IANA} viene contato dalla sua ultima
+    # mezzanotte in quel tz (Gemini azzera a midnight Pacific, non a
+    # mezzanotte UTC) e mostra residuo n/rpd + orario locale del prossimo
+    # azzeramento. Chi non dichiara la finestra resta al conteggio giorno
+    # UTC e NON mostra orario: fallback onesto, mai inventato.
+    xf_cfg=None
+    try:
+        cfp=fd/"cross-family.json"
+        if cfp.is_file(): xf_cfg=json.loads(cfp.read_text())
+    except Exception: pass
+    xmeta={}
+    try:
+        from zoneinfo import ZoneInfo as _ZI
+        from datetime import datetime as _dtw, timedelta as _tdw, timezone as _tzw
+        for pk,pv in ((xf_cfg or {}).get("providers") or {}).items():
+            lim=(pv or {}).get("limits") or {}
+            rst=lim.get("reset") or {}
+            if (pv or {}).get("billing")=="free" and lim.get("rpd") \
+               and rst.get("period")=="daily" and rst.get("tz"):
+                try:
+                    tzp=_ZI(str(rst["tz"]))
+                    nl=_dtw.now(tzp)
+                    st=nl.replace(hour=0,minute=0,second=0,microsecond=0)
+                    xmeta[pk]=(int(lim["rpd"]),
+                               st.astimezone(_tzw.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                               (st+_tdw(days=1)).astimezone().strftime("%H:%M"))
+                except Exception: pass
+    except Exception: pass
     xcounts={}
     dbf=fd/"telemetry.db"
     if dbf.is_file():
@@ -315,21 +344,34 @@ try:
             import sqlite3
             from datetime import datetime as _dt2, timezone as _tz2
             today=_dt2.now(_tz2.utc).strftime("%Y-%m-%d")
+            floor=min([today]+[m[1] for m in xmeta.values()])
             con=sqlite3.connect(dbf, timeout=0.3)
             con.execute("PRAGMA busy_timeout=300")  # render: mai bloccare a lungo
-            for (pl,) in con.execute("SELECT payload FROM events WHERE event=? AND ts >= ?", ("verification", today)):
+            for (ts,pl) in con.execute("SELECT ts, payload FROM events WHERE event=? AND ts >= ?", ("verification", floor)):
                 try: p=json.loads(pl or "{}")
                 except Exception: continue
-                if p.get("kind")=="cross-family" and p.get("provider"):
-                    xcounts[p["provider"]]=xcounts.get(p["provider"],0)+1
+                if p.get("kind")!="cross-family" or not p.get("provider"): continue
+                prov=p["provider"]
+                lo=xmeta[prov][1] if prov in xmeta else today
+                if str(ts)>=lo:
+                    xcounts[prov]=xcounts.get(prov,0)+1
             con.close()
         except Exception: pass
     xparts=[]
+    xratio=0.0
     for prov in sorted(set(list(xcounts)+([active] if active else []))):
         label=str(prov).lower()[:8]
-        if prov==active: xparts.append(f"{label}▲")
-        elif xcounts.get(prov): xparts.append(f"{label}×{xcounts[prov]}")
-    if xparts: xf=",".join(xparts[:3])
+        star="▲" if prov==active else ""
+        n=xcounts.get(prov,0)
+        if prov in xmeta and n>0:
+            rpd,_,nxt=xmeta[prov]
+            xparts.append(f"{label}{star} {n}/{rpd}→{nxt}")
+            xratio=max(xratio,n/rpd)
+        elif n>0: xparts.append(f"{label}{star}×{n}")
+        elif star: xparts.append(label+star)
+    if xparts:
+        xcls="r:" if xratio>=0.95 else ("y:" if xratio>=0.8 else "g:")
+        xf=xcls+",".join(xparts[:3])
 except Exception:
     pass
 # bdg puo contenere spazi (allarmi a parole intere) ma la shell fa read
@@ -338,6 +380,8 @@ bdg=str(bdg).replace(" ",",")
 # dlg ha spazi interni ("SONNET-5 12k"): non è più ultimo campo del read
 # shell, quindi stessa disciplina di bdg (virgole, la shell le ripristina)
 dlg=str(dlg).replace(" ",",")
+# xf con residuo ("gemini 2/1500→09:00") ha spazi: stessa disciplina
+xf=str(xf).replace(" ",",")
 # [FAIL xN] grinding: lo streak di Bash falliti lo calcola l hook fail-streak
 # (autorita), qui si LEGGE soltanto il suo file di stato per il sid corrente.
 # Quieto sotto 2; mostrato da 2 in su (il nudge del hook scatta a 3).
@@ -410,15 +454,9 @@ if [ "$wk" != "-" ]; then
   [ "$wkt" != "-" ] && seg="${seg}→${wkt}"
   app "$(printf "$(color_for "$wk")%s\033[0m" "$seg")"
 fi
-# Il testo bdg include già la propria etichetta (micro-barra da sano, parole
-# intere in allarme): la shell mappa solo il colore. Sano = penombra.
-case "$bdg" in
-  g:*) app "$(printf '\033[38;5;245m%s\033[0m' "$(printf '%s' "${bdg#g:}" | tr ',' ' ')")" ;;
-  y:*) app "$(printf '\033[38;5;220m%s\033[0m' "$(printf '%s' "${bdg#y:}" | tr ',' ' ')")" ;;
-  r:*) app "$(printf '\033[38;5;196m%s\033[0m' "$(printf '%s' "${bdg#r:}" | tr ',' ' ')")" ;;
-esac
-# fail ×N grinding: stato PROTETTO come budget/quota — mai eroso su schermi
-# stretti. Giallo a 2 (early warning), rosso da 3 (il nudge del hook e scattato).
+# fail ×N grinding: stato PROTETTO, resta in riga 1 accanto alle quote —
+# uno streak esiste anche senza budget/deleghe e non deve dipendere dalla
+# riga 2. Giallo a 2 (early warning), rosso da 3 (il nudge e scattato).
 if [ "$grind" != "-" ] && [ -n "$grind" ]; then
   if [ "$grind" -ge 3 ] 2>/dev/null; then
     app "$(printf '\033[38;5;196mfail \303\227%s\033[0m' "$grind")"
@@ -426,36 +464,60 @@ if [ "$grind" != "-" ] && [ -n "$grind" ]; then
     app "$(printf '\033[38;5;220mfail \303\227%s\033[0m' "$grind")"
   fi
 fi
+# Takeover: budget flagged / enforcement off (classe r:) va IN TESTA alla
+# riga 1 a sfondo pieno — la gerarchia visiva si inverte con la priorita.
+# Le classi g:/y: del budget vivono invece nella riga 2 (attivita).
+tko=""; seg_bdg=""
+case "$bdg" in
+  r:*) tko="$(printf '\033[48;5;196m\033[38;5;16m %s \033[0m' "$(printf '%s' "${bdg#r:}" | tr ',' ' ')") " ;;
+  g:*) seg_bdg="$(printf '\033[38;5;245m%s\033[0m' "$(printf '%s' "${bdg#g:}" | tr ',' ' ')")" ;;
+  y:*) seg_bdg="$(printf '\033[38;5;220m%s\033[0m' "$(printf '%s' "${bdg#y:}" | tr ',' ' ')")" ;;
+esac
 seg_xf=""; seg_dlg=""; seg_cache=""
 case "$cache" in
   g:*) seg_cache="$(printf '\033[38;5;245mcache %s\033[0m' "${cache#g:}")" ;;
   y:*) seg_cache="$(printf '\033[38;5;220mcache %s\033[0m' "${cache#y:}")" ;;
   r:*) seg_cache="$(printf '\033[38;5;196mcache %s\033[0m' "${cache#r:}")" ;;
 esac
-# xf acceso (216) solo con chiamata in flight (▲); a riposo penombra
+# xf: residuo a soglia (y ≥80%, r ≥95% del free tier), acceso 216 con
+# chiamata in flight (▲), penombra a riposo
 if [ "$xf" != "-" ] && [ -n "$xf" ]; then
+  xtxt="$(printf '%s' "${xf#[gyr]:}" | tr ',' ' ')"
   case "$xf" in
-    *▲*) seg_xf="$(printf '\033[38;5;216mxf %s\033[0m' "$(printf '%s' "$xf" | tr ',' ' ')")" ;;
-    *)   seg_xf="$(printf '\033[38;5;245mxf %s\033[0m' "$(printf '%s' "$xf" | tr ',' ' ')")" ;;
+    r:*) seg_xf="$(printf '\033[38;5;196mxf %s\033[0m' "$xtxt")" ;;
+    y:*) seg_xf="$(printf '\033[38;5;220mxf %s\033[0m' "$xtxt")" ;;
+    *▲*) seg_xf="$(printf '\033[38;5;216mxf %s\033[0m' "$xtxt")" ;;
+    *)   seg_xf="$(printf '\033[38;5;245mxf %s\033[0m' "$xtxt")" ;;
   esac
 fi
 [ "$dlg" != "-" ] && [ -n "$dlg" ] && \
   seg_dlg="$(printf '\033[38;5;245mdlg %s\033[0m' "$(printf '%s' "$dlg" | tr ',' ' ')")"
-# Degradazione deterministica su schermi stretti: cade prima cache, poi dlg,
-# poi xf — MAI budget/quota/stati di errore. Lunghezza senza codici ANSI,
-# in CARATTERI: i glifi zen (▓░✦·│) sono multibyte, wc -c li conterebbe
-# doppi/tripli e degraderebbe righe corte. Senza C.UTF-8 wc -m ricade sui
-# byte: degrada solo prima, mai oltre il terminale.
+# Larghezza in CARATTERI (glifi zen multibyte; wc -c li conterebbe tripli).
+# COLUMNS lo fornisce Claude Code ≥2.1.153; assente → 120 conservativo.
 plain_len() { printf '%s' "$1" | sed 's/\x1b\[[0-9;]*m//g' | LC_ALL=C.UTF-8 wc -m 2>/dev/null || printf '%s' "$1" | sed 's/\x1b\[[0-9;]*m//g' | wc -c; }
-compose() {
-  c="$out"
-  [ "$1" -ge 3 ] && [ -n "$seg_cache" ] && c="$c$SEP$seg_cache"
-  [ "$1" -ge 1 ] && [ -n "$seg_xf" ] && c="$c$SEP$seg_xf"
-  [ "$1" -ge 2 ] && [ -n "$seg_dlg" ] && c="$c$SEP$seg_dlg"
-  printf '%s' "$c"
+W="${COLUMNS:-120}"
+case "$W" in (*[!0-9]*|"") W=120 ;; esac
+# Riga 2 on-demand — l ATTIVITA (budget, deleghe, esterni, cache): esiste
+# solo quando succede qualcosa; a riposo la statusline resta a una riga.
+# Degradazione deterministica dentro la riga 2: cade cache, poi dlg, poi
+# xf — MAI il budget. La riga 1 (identita e quote) non degrada mai.
+L2P="$(printf '\033[38;5;239m\342\224\224 \033[0m')"
+compose2() {
+  c=""
+  a2() { [ -n "$c" ] && c="$c$SEP"; c="$c$1"; }
+  [ -n "$seg_bdg" ] && a2 "$seg_bdg"
+  [ "$1" -ge 2 ] && [ -n "$seg_dlg" ] && a2 "$seg_dlg"
+  [ "$1" -ge 1 ] && [ -n "$seg_xf" ] && a2 "$seg_xf"
+  # cache SCADUTA non giustifica da sola la riga 2 (sessione fredda =
+  # rumore permanente); un countdown vivo si — serve al timing deleghe
+  [ "$1" -ge 3 ] && [ -n "$seg_cache" ] && { [ "$cache" != "y:exp" ] || [ -n "$c" ]; } && a2 "$seg_cache"
+  [ -n "$c" ] && printf '%s%s' "$L2P" "$c"
 }
-full="$pre$(compose 3)"
-[ "$(plain_len "$full")" -gt 120 ] && full="$pre$(compose 2)"   # cade cache
-[ "$(plain_len "$full")" -gt 120 ] && full="$pre$(compose 1)"   # cade dlg
-[ "$(plain_len "$full")" -gt 120 ] && full="$pre$(compose 0)"   # cade xf
-printf '%s' "$full"
+line1="$tko$pre$out"
+line2="$(compose2 3)"
+[ -n "$line2" ] && [ "$(plain_len "$line2")" -gt "$W" ] && line2="$(compose2 2)"  # cade cache
+[ -n "$line2" ] && [ "$(plain_len "$line2")" -gt "$W" ] && line2="$(compose2 1)"  # cade dlg
+[ -n "$line2" ] && [ "$(plain_len "$line2")" -gt "$W" ] && line2="$(compose2 0)"  # cade xf
+printf '%s' "$line1"
+[ -n "$line2" ] && printf '\n%s' "$line2"
+exit 0

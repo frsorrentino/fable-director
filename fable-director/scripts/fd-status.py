@@ -157,28 +157,54 @@ def main():
     except Exception:
         pass
     try:
+        provs = (xf_cfg or {}).get("providers") or {}
+        # Finestra per provider da limits.reset {period: daily, tz: IANA}:
+        # il conteggio parte dall'ultima mezzanotte NEL TZ DEL PROVIDER
+        # (Gemini azzera a midnight Pacific, non UTC). Senza dichiarazione:
+        # giorno UTC come prima, e nessun orario inventato. Logica duplicata
+        # dalla statusline: script standalone, nessun modulo condiviso.
+        windows, resets = {}, {}
+        try:
+            from zoneinfo import ZoneInfo
+            for pk, pv in provs.items():
+                rst = ((pv or {}).get("limits") or {}).get("reset") or {}
+                if rst.get("period") == "daily" and rst.get("tz"):
+                    try:
+                        st = datetime.now(ZoneInfo(str(rst["tz"]))).replace(
+                            hour=0, minute=0, second=0, microsecond=0)
+                        windows[pk] = st.astimezone(timezone.utc).strftime(
+                            "%Y-%m-%dT%H:%M:%SZ")
+                        resets[pk] = (st + timedelta(days=1)).astimezone(
+                            ).strftime("%H:%M")
+                    except Exception:
+                        pass
+        except Exception:
+            pass
         con = sqlite3.connect(BASE / "telemetry.db", timeout=0.5)
         con.execute("PRAGMA busy_timeout=500")
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        floor = min([today] + list(windows.values()))
         counts = {}
-        for ev, pl in con.execute(
-                "SELECT event, payload FROM events WHERE event IN "
-                "('verification','external_exec') AND ts >= ?", (today,)):
+        for ev, ts, pl in con.execute(
+                "SELECT event, ts, payload FROM events WHERE event IN "
+                "('verification','external_exec') AND ts >= ?", (floor,)):
             try:
                 p = json.loads(pl or "{}")
             except json.JSONDecodeError:
                 continue
             if ev == "verification" and p.get("kind") != "cross-family":
                 continue
-            if p.get("provider"):
-                counts[p["provider"]] = counts.get(p["provider"], 0) + 1
+            prov = p.get("provider")
+            if prov and str(ts) >= windows.get(prov, today):
+                counts[prov] = counts.get(prov, 0) + 1
         con.close()
         if counts:
-            provs = (xf_cfg or {}).get("providers") or {}
             parts = []
             for k, v in sorted(counts.items()):
                 rpd = ((provs.get(k) or {}).get("limits") or {}).get("rpd")
-                parts.append(f"{k}×{v}" + (f"/{rpd} rpd" if rpd else ""))
+                parts.append(f"{k}×{v}" + (f"/{rpd} rpd" if rpd else "")
+                             + (f" (resets {resets[k]})" if k in resets
+                                else ""))
             # Split free/paid: fail-closed, billing assente = paid. La riga
             # segnala spesa vera solo quando c'è (zero rumore altrimenti).
             nfree = sum(v for k, v in counts.items()
