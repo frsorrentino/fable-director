@@ -320,6 +320,20 @@ try:
             parts=[("≡" if k=="inherit" else str(k).replace("claude-","").upper()[:10])+f"×{v}"
                    for k,v in sorted(c.items(), key=lambda x:-x[1])]
             if parts: dlg="≈"+",".join(parts[:4])
+    # [dlg ⟲N] deleghe IN VOLO adesso, dal misuratore SubagentStart/Stop: e
+    # il solo segnale che esiste PRIMA dei token nel transcript, e il solo che
+    # vede gli spawn annidati. Con refreshInterval attivo e cio che tiene viva
+    # la riga proprio mentre il coordinatore aspetta i subagent.
+    # (Nessun apostrofo in questo blocco: il python vive dentro python3 -c '...',
+    #  una virgoletta singola chiuderebbe la stringa shell — regola del file.)
+    if sid:
+        try:
+            _sg="".join(c if (c.isalnum() or c in "-_") else "-" for c in str(sid))[:120]
+            sgf=Path.home()/".claude"/"fable-director"/"subagents"/f"{_sg}.json"
+            if sgf.is_file():
+                nfl=len((json.loads(sgf.read_text()).get("inflight") or {}))
+                if nfl>0: dlg=(f"⟲{nfl}" if dlg=="-" else f"⟲{nfl},{dlg}")
+        except Exception: pass
     # [BDG] = classe:testo — la classe colore (g/y/r) si decide qui, la shell
     # mappa solo ANSI. Principio: quieto quando sano (sigla compatta BDG),
     # PAROLE INTERE quando in allarme (2x, 3x, enforcement rotto) + marcatori

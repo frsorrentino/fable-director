@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.28.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.29.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need to do.**
 
@@ -48,6 +48,7 @@ Full details, manual hook merge and edge cases in **[INSTALL.md](INSTALL.md)**.
 - 🚧 **`PreToolUse` (perimeter):** the budget can declare *where* the task may write (`--paths`); `Write`/`Edit` outside it are **denied** until an explicit amendment. Your own `never_write` patterns (`.fd-perimeter.json` — e.g. `migrations/*`, `.env*`) are denied unconditionally, budget or not.
 - ⚖️ **`PostToolUse` (MCP meter):** measures context weight along **two** distinct axes — *flow* (bytes each MCP server's results push into context, paid once per call) and *stock* (schema bytes a `ToolSearch` load injects into the prefix, re-paid **every turn** of the session). The report keeps them separate and never sums them; zero model tokens.
 - 🔁 **`PostToolUse` (fail-streak):** counts *consecutive* failing Bash commands, recomputed from the transcript each time so there's no counter to drift (resets on the first success; your own denials never count). At every 3rd it injects the rule-of-3 — diagnose the failure **type** before retrying, blind escalation is itself waste — surfaces the streak on the statusline as `[FAIL ×N]`, and logs it. Advisory: it never blocks.
+- 🛰️ **`SubagentStart`/`SubagentStop` (delegation meter):** counts the delegations that actually **started** — including the nested ones, which the gate never sees: since Claude Code 2.1.219 a subagent can spawn subagents three levels deep by default, so an authorised fan-out can multiply under a budget declared for one level. It also reads the **real** `effort.level` each subagent ran with and compares it to the tier pinned in the agent's frontmatter: a mismatch means the pin was ignored, and that used to be a silent degradation you could only read about in this README's limits. Zero model tokens, never blocks — the count feeds `dlg ⟲N` on the statusline and `/fable-director:status`.
 - ✋ **`Stop` (enforcement):** at each turn end, compares real token usage against the declared budget. Warns once at 2×; at 3× **blocks the turn** until the post-mortem lands in the playbook.
 - 📉 **`SessionEnd` (telemetry):** logs session totals to SQLite in the background — statistics without spending a model token. Every closed task also leaves a local **receipt** (estimate vs actual, verification contract, perimeter, amendments) under `~/.claude/fable-director/receipts/`.
 
@@ -91,7 +92,8 @@ python3 fable-director/skills/delega-efficiente/tools/session-cost-report.py
 
 ## ⚠️ Known limits (honest by design)
 
-- **Claude Code versions.** The optional statusline needs Claude Code ≥ 2.1.x for `context_window` and `rate_limits`; older versions omit those segments without an error. Older Claude Code versions may ignore the `effort` frontmatter on `fd-executor` and `fd-verifier`, so those agents inherit the session effort instead — silent degradation, no error. Effort coherence (budget `--effort` vs pinned tier) is a warn-only check by design.
+- **Claude Code versions.** The optional statusline needs Claude Code ≥ 2.1.x for `context_window` and `rate_limits`; older versions omit those segments without an error. Older Claude Code versions may ignore the `effort` frontmatter on `fd-executor` and `fd-verifier`, so those agents inherit the session effort instead. Since 1.29.0 that degradation is no longer silent where `SubagentStop` exists: the meter compares the tier the agent actually ran with against its pinned one and logs `effort_ignored`. On harnesses without that event it stays invisible. Effort coherence (budget `--effort` vs effective tier) is a warn-only check by design.
+- **Nested delegations.** A subagent spawning subagents runs under the **same** per-cwd budget as the first level. The gate flags the nesting and the meter counts it, but neither denies it: if you declared a fan-out for one level, a depth-3 cascade is your estimate breaking, not the gate failing. Claude Code's own `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` is the hard backstop.
 - **Concurrent sessions.** An open budget is one file per working directory. Since 1.13.0 it carries a session lease: `budget-open` refuses to clobber another session's fresh open budget (`--force` to override) and the SessionEnd reaper only closes its own. The file is still one per cwd, so two sessions can't hold budgets on the same directory at once — for parallel budgeted work use separate worktrees.
 - **Transcript dependency.** Token accounting reads Claude Code's undocumented JSONL transcript schema. If at least 20 valid records contain no recognized usage or timestamp fields, the schema sentinel warns, logs `schema_anomaly`, and suspends budget enforcement rather than silently counting zero. Update the plugin before relying on accounting again.
 - **In-flight subagents.** The Stop hook counts subagent usage after it appears in the main transcript, so work still in flight can be temporarily undercounted.
@@ -140,6 +142,10 @@ Two roles, both **off your Claude quota**:
 
 **No silent fallback.** Missing key, dead endpoint, spent window → `STATUS: unavailable` and an explicit instruction to fall back to the normal Claude route. An `unavailable` is never "verified", nor "executed".
 
+**A free tier that closes is not a rate limit.** Since 1.29.0, `401`/`402`/`403` — and a `429` whose body talks about billing or credit — are reported as an access/billing refusal, logged as `billing-block`, and never dressed up as a transient quota error. Free windows do end (Grok's is a time-limited promotion), and the failure that says "retry later" about a door that won't reopen is worse than no message.
+
+**Running with Claude Code's native sandbox?** Subagents inherit the parent's sandbox, so external calls need the provider's domains in `sandbox.network.allowedDomains` (`generativelanguage.googleapis.com` for Gemini, `api.x.ai` for Grok) or they fail as network errors. `sandbox.credentials` with `mode: "mask"` is the native way to keep those API keys out of unrelated subprocesses.
+
 Optional paid third lane: Grok (xAI), OpenAI-compatible, active only if you export `XAI_API_KEY` (≈$0.003 per verification; no free tier as of July 2026). Useful when Gemini 503s and the Codex window is spent.
 
 ## 📟 The statusline
@@ -155,6 +161,8 @@ caveman │ ✦ FABLE5·max · ctx ▓▓▓░░░░░ 26%/1M · cmp 1 · 5
 
 Row 1 is *what you are* — always present. Row 2 is *what is happening* (open budget, delegations, external calls, cache) — it appears only while there's activity; at rest the line stays single.
 
+Updates are event-driven, and event triggers go quiet exactly while a coordinator waits on background subagents — the minutes when the budget climbs and the in-flight count is the only thing you'd want to see. Since 1.29.0 the installer also writes `refreshInterval: 5` (seconds), so the line keeps breathing during the wait. `FD_STATUSLINE_REFRESH=<n>` changes it, `0` turns the timer off.
+
 Read left to right — each segment answers one question, and lights up yellow → red only as it needs attention:
 
 | Segment | What it tells you |
@@ -169,7 +177,7 @@ Read left to right — each segment answers one question, and lights up yellow �
 | `fail ×3` | Bash commands failing in a row — a sign you're grinding; shows from 2, red at 3 where the plugin nudges you to step back |
 | `cache ◕ 47m` | How long the prompt cache stays warm, as a draining quarter-clock — cheap to keep working now, a fresh start costs more |
 | `xf gemini 2/1500→09:00` | Free external calls used vs the provider's daily tier, counted in the **provider's own reset window**, → when it refills (declared per provider; without it, plain `×N` and no invented time). Lights up while a call is in flight |
-| `dlg ≡ 41k` | Work handed to cheaper models this session, and how much (`≡` = same model as the main loop) |
+| `dlg ⟲2 ≡ 41k` | Work handed to cheaper models this session, and how much (`≡` = same model as the main loop); `⟲N` = delegations **in flight right now**, counted by the harness as they start — nested ones included |
 | `✦≤26%` | Ceiling on your premium model's weekly window (declared fraction of the 7D quota, e.g. Fable = 50%); shown only while that model drives the session — always a bound, never invented telemetry |
 | `pr #42` | Open PR for the branch, colour = review state; Ctrl+click opens it (links are opt-in) |
 
@@ -200,6 +208,7 @@ Routing cuts **cost per token** (cheap executor does the heavy work). A separate
 | **Skill `delega-efficiente`** | Full policy on-demand: delegation contract, falsifiable pre-budget, rule-of-3 best-of-3, script promotion, playbook rules |
 | **`Stop` hook (budget-check)** | Deterministic 3× enforcement: compares actual tokens against the open budget, blocks the turn from closing and imposes the post-mortem |
 | **`SessionEnd` hook (telemetry)** | Logs tokens and cache/delegation metrics to SQLite, zero model tokens; reaps per-session registries |
+| **`SubagentStart`/`SubagentStop` hooks (meter)** | Counts delegations as they start — nested ones included — and measures the effort each subagent really ran with against its pinned tier; zero model tokens, never blocks |
 | **Playbook** | Learned heuristics that survive updates |
 | **`session-cost-report.py`** | Token report from the real JSONL transcripts |
 | **Statusline + installer** | `/fable-director:statusline` writes the statusLine to settings.json, idempotent and merge-safe |
@@ -216,11 +225,11 @@ Works on its own. These optional companions save further tokens, degrading grace
 
 ## 🆕 What's new
 
+- **1.29.0** — Delegation meter (`SubagentStart`/`SubagentStop`): nested spawns counted, effort degradation measured; statusline `refreshInterval`
 - **1.28.0** — Clickable segments (opt-in OSC 8), `pr #N` segment, premium-window ceiling (`✦≤26%`) conditional on the live model, unknown-bucket sentinel
 - **1.27.0** — Cache quarter-clock (`● ◕ ◑ ◔ ○`), box-drawn `/status` bulletin with quota bars + burn sparkline, lazy timezone cost fix
 - **1.26.0** — Statusline two-row HUD: on-demand activity row, red takeover at 3×, free-tier residue in the provider's reset window, real-width degradation
 - **1.25.0** — Statusline zen: half-light when healthy, ctx gauge + budget micro-gauge, live effort (`·max`), `/1M` window flag, caveman badge adopted
-- **1.24.0** — Paid providers consent-gated (`billing` field fail-closed + `--paid-ok`); Gemini image route (`type: "image"`)
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 

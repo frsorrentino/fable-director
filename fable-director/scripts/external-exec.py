@@ -459,6 +459,43 @@ def parse_args(argv):
     return opts, inputs, flags
 
 
+BILLING_MARKERS = ("billing", "payment required", "credit", "insufficient_quota",
+                   "insufficient quota", "no credits", "purchase", "subscription",
+                   "upgrade your plan", "enable billing")
+
+
+def http_failure(e, name, prov, detail=None):
+    """Classifica un HTTPError PRIMA di chiamarlo 'rate limit'. Un free tier che
+    CHIUDE — finestra promozionale scaduta (è il caso dichiarato di Grok),
+    credito esaurito, chiave decaduta — risponde 401/402/403, o 429 con un corpo
+    che parla di billing. Trattarlo come quota transitoria fa ritentare una porta
+    che non riaprirà, e fa sembrare gratuito ciò che gratuito non è più. Qui il
+    provider viene dichiarato non disponibile con la diagnosi giusta e l'evento
+    finisce in telemetria: fail-closed, mai un fallback silenzioso. Non ritorna
+    mai (unavailable esce 1)."""
+    if detail is None:
+        try:
+            detail = e.read().decode(errors="replace")[:500]
+        except Exception:
+            detail = ""
+    low = (detail or "").lower()
+    if e.code in (401, 402, 403) or (
+            e.code == 429 and any(m in low for m in BILLING_MARKERS)):
+        log_exec({"provider": name, "model": prov.get("model"),
+                  "billing": billing_of(prov), "ok": False,
+                  "check": "billing-block", "http": e.code,
+                  "detail": (detail or "")[:200]})
+        unavailable(
+            f"[{name}] HTTP {e.code}: access or billing refused, NOT a "
+            f"transient quota error — the free window may have closed, or the "
+            f"key lost entitlement. Check the provider's CURRENT free tier "
+            f"before retrying: fix the key, or declare \"billing\": \"paid\" "
+            f"in cross-family.json (consent-gated, needs --paid-ok). "
+            f"Detail: {(detail or '')[:180]}")
+    unavailable(f"HTTP {e.code} from {name} (rate limit / endpoint changed?)"
+                + (f" — {detail[:180]}" if detail else ""))
+
+
 def call_http(prov, name, api_key, user_msg, timeout):
     body = json.dumps({
         "model": prov["model"],
@@ -474,7 +511,7 @@ def call_http(prov, name, api_key, user_msg, timeout):
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read().decode(errors="replace"))
     except urllib.error.HTTPError as e:
-        unavailable(f"HTTP {e.code} from {name} (rate limit / endpoint changed?)")
+        http_failure(e, name, prov)
     except (urllib.error.URLError, TimeoutError, OSError) as e:
         unavailable(f"network/timeout towards {name}: {e}")
     try:
@@ -504,7 +541,7 @@ def call_image(prov, name, api_key, prompt, timeout):
                 f"image models need billing enabled on the Google project "
                 f"(free tier limit is 0) — not a transient quota error "
                 f"[{name}]")
-        unavailable(f"HTTP {e.code} from {name} (rate limit / endpoint changed?)")
+        http_failure(e, name, prov, detail)
     except (urllib.error.URLError, TimeoutError, OSError) as e:
         unavailable(f"network/timeout towards {name}: {e}")
     try:

@@ -224,10 +224,10 @@ def quota_guard(data):
 def log_gate_deny(data, kind, budget=None):
     """Evento telemetria `gate_deny`: senza, l'analisi post-hoc non distingue
     "mai tentata delega" da "delega negata e ripiegata inline" (emerso dal
-    benchmark shape 04). Scrittura sqlite diretta (fd-telemetry.py sarebbe
-    importabile via importlib, come fa cross-verify.py, ma il gate resta
-    autonomo: hot path PreToolUse, zero dipendenze da caricare — lo schema
-    events va tenuto allineato a open_db() in fd-telemetry.py).
+    benchmark shape 04). Scrittura sqlite diretta via log_gate_event
+    (fd-telemetry.py sarebbe importabile via importlib, come fa cross-verify.py,
+    ma il gate resta autonomo: hot path PreToolUse, zero dipendenze da caricare
+    — lo schema events va tenuto allineato a open_db() in fd-telemetry.py).
     Best-effort: un errore qui non deve mai impedire il deny."""
     try:
         ti = data.get("tool_input") or {}
@@ -240,24 +240,50 @@ def log_gate_deny(data, kind, budget=None):
         if isinstance(budget, dict):
             payload["task"] = budget.get("task")
             payload["effort"] = budget.get("effort")
-        base = Path.home() / ".claude" / "fable-director"
-        base.mkdir(parents=True, exist_ok=True)
-        con = sqlite3.connect(base / "telemetry.db", timeout=1.0)
-        con.execute("PRAGMA journal_mode=WAL")
-        con.execute("PRAGMA busy_timeout=1000")
-        con.execute("CREATE TABLE IF NOT EXISTS events("
-                    "id INTEGER PRIMARY KEY, ts TEXT NOT NULL, session_id TEXT, "
-                    "cwd TEXT, event TEXT NOT NULL, payload TEXT)")
-        con.execute(
-            "INSERT INTO events(ts, session_id, cwd, event, payload) "
-            "VALUES(?,?,?,?,?)",
-            (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-             data.get("session_id"), str(data.get("cwd") or os.getcwd()),
-             "gate_deny", json.dumps(payload, ensure_ascii=False)))
-        con.commit()
-        con.close()
+        log_gate_event(data, "gate_deny", payload)
     except Exception:
         pass
+
+
+def log_gate_event(data, event, payload):
+    """Canale unico degli eventi del gate (`gate_deny`, `nested_spawn`,
+    `effort_mismatch`), con retry+backoff: sotto contesa vera — un fan-out in
+    cui molti hook scrivono nello stesso istante — il solo busy_timeout scade e
+    l'evento sparisce in silenzio. È la perdita già misurata sulla telemetria
+    (113/800 eventi con 8 writer, stress test 2026-07-11): lì risolta col retry,
+    qui era rimasta scoperta perché il gate scrive su sqlite per conto suo (hot
+    path PreToolUse, zero dipendenze da caricare). Schema allineato a open_db()
+    in fd-telemetry.py. Best-effort: esauriti i tentativi si rinuncia in
+    silenzio, un errore qui non deve mai impedire il deny."""
+    import random
+    import time
+    row = (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+           data.get("session_id"), str(data.get("cwd") or os.getcwd()),
+           str(event), json.dumps(payload, ensure_ascii=False))
+    for attempt in range(6):
+        con = None
+        try:
+            base = Path.home() / ".claude" / "fable-director"
+            base.mkdir(parents=True, exist_ok=True)
+            con = sqlite3.connect(base / "telemetry.db", timeout=1.0)
+            con.execute("PRAGMA journal_mode=WAL")
+            con.execute("PRAGMA busy_timeout=1000")
+            con.execute("CREATE TABLE IF NOT EXISTS events("
+                        "id INTEGER PRIMARY KEY, ts TEXT NOT NULL, session_id TEXT, "
+                        "cwd TEXT, event TEXT NOT NULL, payload TEXT)")
+            con.execute(
+                "INSERT INTO events(ts, session_id, cwd, event, payload) "
+                "VALUES(?,?,?,?,?)", row)
+            con.commit()
+            return
+        except Exception:
+            time.sleep(0.05 * (2 ** attempt) * (0.5 + random.random()))
+        finally:
+            if con is not None:
+                try:
+                    con.close()
+                except Exception:
+                    pass
 
 
 def record_delegation(data):
@@ -338,34 +364,63 @@ def effort_coherence(data, budget):
             return None
         ti = data.get("tool_input") or {}
         pinned = agent_pinned_effort(ti.get("subagent_type"))
-        if not pinned or pinned == declared:
+        # Un agent SENZA effort pinnato eredita quello della sessione: il
+        # payload dell'hook lo porta nativo (`effort.level`, anche in
+        # $CLAUDE_EFFORT). Prima la coerenza si poteva verificare solo sugli
+        # agent fd-*; ora vale per qualunque bersaglio — e un budget dichiarato
+        # 'low' su un target non pinnato, in una sessione a 'xhigh', smette di
+        # essere un mismatch invisibile.
+        session_eff = ((data.get("effort") or {}).get("level")
+                       if isinstance(data.get("effort"), dict) else None)
+        session_eff = session_eff or os.environ.get("CLAUDE_EFFORT") or None
+        effective = pinned or session_eff
+        origin = "frontmatter" if pinned else "session"
+        if not effective or effective == declared:
             return None
         try:
             payload = {"declared": declared, "pinned": pinned,
+                       "effective": effective, "origin": origin,
+                       "session_effort": session_eff,
                        "subagent_type": ti.get("subagent_type"),
                        "task": (budget or {}).get("task")}
-            base = Path.home() / ".claude" / "fable-director"
-            base.mkdir(parents=True, exist_ok=True)
-            con = sqlite3.connect(base / "telemetry.db", timeout=1.0)
-            con.execute("PRAGMA journal_mode=WAL")
-            con.execute("PRAGMA busy_timeout=1000")
-            con.execute("CREATE TABLE IF NOT EXISTS events("
-                        "id INTEGER PRIMARY KEY, ts TEXT NOT NULL, session_id TEXT, "
-                        "cwd TEXT, event TEXT NOT NULL, payload TEXT)")
-            con.execute(
-                "INSERT INTO events(ts, session_id, cwd, event, payload) "
-                "VALUES(?,?,?,?,?)",
-                (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                 data.get("session_id"), str(data.get("cwd") or os.getcwd()),
-                 "effort_mismatch", json.dumps(payload, ensure_ascii=False)))
-            con.commit()
-            con.close()
+            log_gate_event(data, "effort_mismatch", payload)
         except Exception:
             pass
+        where = (f"has effort pinned to '{pinned}' (frontmatter)" if pinned
+                 else f"inherits the session effort '{effective}' "
+                      f"(no pinned tier)")
         return (f"FD ⚠ effort mismatch — the budget declares '{declared}' but "
-                f"{ti.get('subagent_type')} has effort pinned to '{pinned}' "
-                f"(frontmatter). Delegation allowed — double-check the route "
-                f"or reopen the budget with the right effort.")
+                f"{ti.get('subagent_type') or 'the target'} {where}. "
+                f"Delegation allowed — double-check the route or reopen the "
+                f"budget with the right effort.")
+    except Exception:
+        return None
+
+
+def nested_notice(data):
+    """Delega di secondo livello: il payload porta `agent_id` solo DENTRO un
+    subagent, quindi un Agent/Task/Workflow chiesto qui è un nipote, non un
+    figlio. Da Claude Code 2.1.219 la profondità di default è 3 (prima 1): un
+    fan-out annidato può moltiplicare il costo sotto un unico budget dichiarato
+    per il primo livello. Nessun deny — il budget del cwd lo copre già — ma
+    l'evento va scritto, altrimenti resta invisibile fino alla bolletta.
+    Backstop nativo complementare: CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH."""
+    try:
+        aid = data.get("agent_id")
+        if not aid:
+            return None
+        parent = data.get("agent_type") or "?"
+        target = ((data.get("tool_input") or {}).get("subagent_type")
+                  or data.get("tool_name") or "delega")
+        try:
+            log_gate_event(data, "nested_spawn",
+                           {"parent_agent_type": parent, "target": target})
+        except Exception:
+            pass
+        return (f"FD ⇊ nested delegation — '{parent}' is spawning '{target}' "
+                f"from inside a subagent (depth ≥2). It runs under THIS cwd's "
+                f"budget: re-estimate if the fan-out was declared for one level "
+                f"only.")
     except Exception:
         return None
 
@@ -529,6 +584,7 @@ def main():
             # UN solo systemMessage: due print JSON separati romperebbero il
             # parsing dell'output hook.
             msgs = [m for m in (announce_model(data),
+                                nested_notice(data),
                                 effort_coherence(data, budget),
                                 verify_contract(budget, bfile),
                                 xf_advisory(budget)) if m]

@@ -284,6 +284,37 @@ def main():
                                     sorted(c.items(), key=lambda x: -x[1])))
             except Exception:
                 pass
+        # Deleghe viste dall'HARNESS (hook SubagentStart/Stop): in volo adesso
+        # — incluse quelle annidate, che il gate non intercetta — e degradi di
+        # effort MISURATI sul valore reale, non dedotti dal frontmatter.
+        try:
+            _sg = "".join(c if (c.isalnum() or c in "-_") else "-"
+                          for c in str(sid))[:120]
+            sgf = BASE / "subagents" / f"{_sg}.json"
+            if sgf.is_file():
+                st = json.loads(sgf.read_text())
+                fl = st.get("inflight") or {}
+                bits = []
+                if fl:
+                    kinds = {}
+                    for v in fl.values():
+                        k = (v or {}).get("type") or "?"
+                        kinds[k] = kinds.get(k, 0) + 1
+                    bits.append("⟲ " + ", ".join(
+                        f"{k}×{n}" for k, n in sorted(kinds.items())))
+                if st.get("started"):
+                    bits.append(f"{st.get('stopped', 0)}/{st['started']} done")
+                ign = int(st.get("effort_ignored") or 0)
+                if ign:
+                    li = st.get("last_effort_ignored") or {}
+                    bits.append(f"⚠ effort ignored ×{ign} "
+                                f"({li.get('agent_type')}: pinned "
+                                f"{li.get('pinned')}, ran {li.get('actual')})")
+                if bits:
+                    add("agt", " · ".join(bits))
+        except Exception:
+            pass
+
         # Last receipt for this cwd
         try:
             slug = cwd_slug(os.getcwd())

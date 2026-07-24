@@ -41,6 +41,17 @@ mode     = os.environ["FD_MODE"]
 command = f'bash "{target}"'
 marker  = "statusline-ctx.sh"   # firma per riconoscere una NOSTRA statusLine
 
+# refreshInterval (secondi, minimo 1 — doc statusline): gli update sono
+# event-driven e "possono zittirsi mentre il coordinatore aspetta subagent in
+# background". È esattamente il momento in cui questa statusline serve: budget
+# che sale, deleghe in volo, quota che scende. Senza timer l'HUD resta congelato
+# per tutta la durata di un workflow. Override: FD_STATUSLINE_REFRESH (0 = mai).
+try:
+    refresh = int(os.environ.get("FD_STATUSLINE_REFRESH", "5"))
+except ValueError:
+    refresh = 5
+refresh = 0 if refresh <= 0 else max(1, refresh)
+
 # Carica settings esistenti (o oggetto vuoto).
 data = {}
 if settings.is_file():
@@ -83,11 +94,18 @@ if existing is not None and not is_ours:
     print("Non la sovrascrivo. Per usare quella di fable-director rimuovila a mano, poi rilancia.", file=sys.stderr)
     sys.exit(2)
 
-if is_ours and existing_cmd == command:
+desired = {"type": "command", "command": command}
+if refresh:
+    desired["refreshInterval"] = refresh
+
+if is_ours and isinstance(existing, dict) and existing == desired:
     print("statusLine fable-director già installata e aggiornata. Nulla da fare.")
     sys.exit(0)
 
-data["statusLine"] = {"type": "command", "command": command}
+data["statusLine"] = desired
 verb = "AGGIORNATA" if is_ours else "INSTALLATA"
-backup_and_write(data, f"statusLine fable-director {verb}. Backup: {settings}.bak\n  → {command}\nRiavvia Claude Code per vederla.")
+tick = (f"\n  → refreshInterval: {refresh}s (aggiorna anche mentre aspetti "
+        f"subagent in background; FD_STATUSLINE_REFRESH=0 per disattivarlo)"
+        if refresh else "\n  → refreshInterval: disattivato (solo eventi)")
+backup_and_write(data, f"statusLine fable-director {verb}. Backup: {settings}.bak\n  → {command}{tick}\nRiavvia Claude Code per vederla.")
 PY

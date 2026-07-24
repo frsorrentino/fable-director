@@ -129,6 +129,10 @@ for 1:1 behavior.
 - **Stop hook (`stop-budget-check.py`)** → deterministic 3× enforcement on the open budget
   (`~/.claude/fable-director/budgets/<cwd-slug>.json`, written by `fd-telemetry.py budget-open`):
   on overrun it blocks the turn from closing until the post-mortem is written.
+- **SubagentStart/SubagentStop hooks (`subagent-meter.py`)** → counts the delegations that really
+  started (nested spawns included: Claude Code ≥ 2.1.219 nests three levels by default) and compares
+  each subagent's actual `effort.level` with the tier pinned in its frontmatter. Zero model tokens,
+  never blocks; feeds `dlg ⟲N` on the statusline and `/fable-director:status`.
 - **SessionEnd hook (`fd-telemetry.py session-summary`)** → logs to SQLite
   (`~/.claude/fable-director/telemetry.db`) token totals and cache/delegation metrics, zero model tokens.
 - **`~/.claude/delega-playbook.md`** (external, survives updates) → learned heuristics:
