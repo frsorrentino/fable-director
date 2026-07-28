@@ -175,7 +175,7 @@ Read left to right — each segment answers one question, and lights up yellow �
 | `7D 46% 14 Jul` | Your weekly plan quota used, and the day it resets |
 | `bdg ▓░░ 0.7×·high` | Current task spend vs the estimate it declared, as a micro-gauge on the 0–3× checkpoint scale; turns to a full-word alarm at 2× and 3× |
 | `fail ×3` | Bash commands failing in a row — a sign you're grinding; shows from 2, red at 3 where the plugin nudges you to step back |
-| `cache ◕ 47m` | How long the prompt cache stays warm, as a draining quarter-clock — cheap to keep working now, a fresh start costs more |
+| `cache ◕ 47m` | How long the prompt cache stays warm, as a draining quarter-clock — cheap to keep working now, a fresh start costs more. It only claims row 2 for itself in the last 10 minutes, when the timing of a delegation actually changes; before that it shows up only if row 2 is already there |
 | `xf gemini 2/1500 09:00` | Free external calls used vs the provider's daily tier, counted in the **provider's own reset window**, then when it refills (declared per provider; without it, plain `×N` and no invented time). Lights up while a call is in flight |
 | `dlg ⟲2 ≡ 41k` | Work handed to cheaper models this session, and how much (`≡` = same model as the main loop); `⟲N` = delegations **in flight right now**, counted by the harness as they start — nested ones included |
 | `✦≤26%` | Ceiling on your premium model's weekly window (declared fraction of the 7D quota, e.g. Fable = 50%); shown only while that model drives the session — always a bound, never invented telemetry |

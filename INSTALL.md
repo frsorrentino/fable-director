@@ -80,9 +80,11 @@ Only if the plugin system is unusable:
 
 ## 6. Statusline (optional)
 
-Always shows `[MODEL]`, `[CTX %]` (conversation context window), `[5H %→HH:MM]` (5-hour plan
-quota with reset time, the "Current session" in /usage), `[7D %→reset]` (weekly quota) and
-`[BDG]` (fable-director pre-budget state).
+Always shows `[MODEL]`, `[CTX %]` (conversation context window), `[5H % HH:MM]` (5-hour plan
+quota with the reset time set apart in half-light — no arrow, the "Current session" in /usage),
+`[7D % reset]` (weekly quota) and `[BDG]` (fable-director pre-budget state). On a narrow
+terminal row 1 sheds decoration before data: the caveman badge first, then the ctx gauge,
+then the reset times — quotas and alarms survive at any width.
 
 The statusLine is NOT a component the plugin can auto-register (unlike hooks/skills/commands):
 it must be written to `settings.json`. To make the step uniform and foolproof on every machine,
@@ -140,6 +142,6 @@ for 1:1 behavior.
   cap of 30 with consolidation.
 - **`tools/session-cost-report.py`** → real token report from the JSONL transcripts, cache/delegation
   metrics, ≥3× flag (reads the budget file on its own).
-- **`scripts/statusline-ctx.sh`** (optional, §6) → statusline with `[MODEL]`, `[CTX %]`, `[5H %→HH:MM]`, `[7D %→reset]`, `[BDG]`.
+- **`scripts/statusline-ctx.sh`** (optional, §6) → statusline with `[MODEL]`, `[CTX %]`, `[5H % HH:MM]`, `[7D % reset]`, `[BDG]`.
   Enable it with the **`/fable-director:statusline`** command (or `scripts/statusline-install.sh`): it writes
   the statusLine to settings.json resolving the path on its own, idempotent and merge-safe.
