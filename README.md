@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.29.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.30.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need to do.**
 
@@ -150,13 +150,13 @@ Optional paid third lane: Grok (xAI), OpenAI-compatible, active only if you expo
 
 ## 📟 The statusline
 
-One glance at model, context and plan quotas — so you see the rate limit coming **before** it hits. The line follows one rule, **half-light when healthy, full words when broken**: everything that's fine sits in quiet grey, and colour is reserved for what deviates — a quota past 60%, a session running at `xhigh`/`max` effort, a budget past its checkpoint. Alarms are full words with text markers that survive terminals without colour. On narrow screens it degrades deterministically — never dropping a budget, quota or alarm state.
+One glance at model, context and plan quotas — so you see the rate limit coming **before** it hits. The line follows one rule, **half-light when healthy, full words when broken**: everything that's fine sits in quiet grey, and colour is reserved for what deviates — a quota past 60%, a session running at `xhigh`/`max` effort, a budget past its checkpoint. Alarms are full words with text markers that survive terminals without colour. On narrow screens it degrades deterministically, shedding decoration before data — never a budget, a quota or an alarm state.
 
 ![fable-director statusline](assets/statusline.svg)
 
 ```
-caveman │ ✦ FABLE5·max · ctx ▓▓▓░░░░░ 26%/1M · cmp 1 · 5H 71%→17:30 · 7D 46%→14 Jul · fail ×3
-└ bdg ▓░░ 0.7×·high · dlg ≡ 41k · xf gemini 2/1500→09:00 · cache ◕ 47m
+✦ FABLE 5·max · ctx ▓▓▓░░░░░ 26%/1M · cmp 1 · 5H 71% 17:30 · 7D 46% 14 Jul · fail ×3 │ caveman
+└ bdg ▓░░ 0.7×·high · dlg ≡ 41k · xf gemini 2/1500 09:00 · cache ◕ 47m
 ```
 
 Row 1 is *what you are* — always present. Row 2 is *what is happening* (open budget, delegations, external calls, cache) — it appears only while there's activity; at rest the line stays single.
@@ -167,23 +167,23 @@ Read left to right — each segment answers one question, and lights up yellow �
 
 | Segment | What it tells you |
 |---|---|
-| `caveman` | The caveman plugin's badge, re-dressed in the zen theme (ochre signature kept); any other statusline badge passes through untouched |
-| `✦ FABLE5·max` | Which model is driving the session — and its **live** reasoning effort: yellow from `xhigh` up, because a forgotten `/effort max` burns quota silently |
+| `caveman` | The caveman plugin's badge, re-dressed in the zen theme (ochre signature kept). It rides at the **tail** and is the first thing dropped when the terminal narrows — a state you set yourself is worth less than a number you'd lose; any other statusline badge passes through untouched |
+| `✦ FABLE 5·max` | Which model is driving the session — and its **live** reasoning effort: yellow from `xhigh` up, because a forgotten `/effort max` burns quota silently |
 | `ctx ▓▓▓░░░░░ 26%/1M` | How full the context window is, as an 8-cell gauge; `/1M` marks an extended 1M-token window (26% of 1M is not 26% of 200k) |
 | `cmp 1` | How many times context was compacted this session (each one dropped history); hidden until the first |
-| `5H 71%→17:30` | Your 5-hour plan quota used, and when it resets |
-| `7D 46%→14 Jul` | Your weekly plan quota used, and when it resets |
+| `5H 71% 17:30` | Your 5-hour plan quota used, and when it resets — the time sits apart in deeper half-light, no arrow: nothing to learn, and `17:30` announces itself as a time by its own shape |
+| `7D 46% 14 Jul` | Your weekly plan quota used, and the day it resets |
 | `bdg ▓░░ 0.7×·high` | Current task spend vs the estimate it declared, as a micro-gauge on the 0–3× checkpoint scale; turns to a full-word alarm at 2× and 3× |
 | `fail ×3` | Bash commands failing in a row — a sign you're grinding; shows from 2, red at 3 where the plugin nudges you to step back |
 | `cache ◕ 47m` | How long the prompt cache stays warm, as a draining quarter-clock — cheap to keep working now, a fresh start costs more |
-| `xf gemini 2/1500→09:00` | Free external calls used vs the provider's daily tier, counted in the **provider's own reset window**, → when it refills (declared per provider; without it, plain `×N` and no invented time). Lights up while a call is in flight |
+| `xf gemini 2/1500 09:00` | Free external calls used vs the provider's daily tier, counted in the **provider's own reset window**, then when it refills (declared per provider; without it, plain `×N` and no invented time). Lights up while a call is in flight |
 | `dlg ⟲2 ≡ 41k` | Work handed to cheaper models this session, and how much (`≡` = same model as the main loop); `⟲N` = delegations **in flight right now**, counted by the harness as they start — nested ones included |
 | `✦≤26%` | Ceiling on your premium model's weekly window (declared fraction of the 7D quota, e.g. Fable = 50%); shown only while that model drives the session — always a bound, never invented telemetry |
 | `pr #42` | Open PR for the branch, colour = review state; Ctrl+click opens it (links are opt-in) |
 
 Segments can become clickable (opt-in, off by default — some webview terminals open links in-place and would kill the session; the legend ships a safe test): quotas link to your plan's usage page, `xf` to the AI Studio dashboard, `pr` to the pull request, the model to the Anthropic status page.
 
-When something breaks, the quiet form turns into full words — and at 3× (or broken enforcement) the alarm **takes over**: a solid-red block at the head of the line while everything else falls to half-light. On narrow screens (real terminal width via `COLUMNS`) row 2 trims the least urgent segments first (`cache`, then `dlg`, then `xf`) and never drops the budget; row 1 never degrades.
+When something breaks, the quiet form turns into full words — and at 3× (or broken enforcement) the alarm **takes over**: a solid-red block at the head of the line while everything else falls to half-light. On narrow screens (real terminal width via `COLUMNS`) both rows trim by the same rule — **decoration goes, data stays**. Row 1 drops the `caveman` badge, then the `ctx` gauge, then the reset times; the model, every percentage and every alarm survive at any width. Row 2 drops `cache`, then `dlg`, then `xf`, and never the budget.
 
 **Turn it on:** `/fable-director:statusline`, then restart Claude Code. Idempotent, backs up `settings.json`, won't touch a third-party statusLine already there; `--remove` takes it out.
 
@@ -225,11 +225,11 @@ Works on its own. These optional companions save further tokens, degrading grace
 
 ## 🆕 What's new
 
+- **1.30.0** — Row 1 degrades by decoration (badge → ctx gauge → reset times), never by data; cache row only when actionable; OSC 8 width bug fixed
 - **1.29.0** — Delegation meter (`SubagentStart`/`SubagentStop`): nested spawns counted, effort degradation measured; statusline `refreshInterval`
 - **1.28.0** — Clickable segments (opt-in OSC 8), `pr #N` segment, premium-window ceiling (`✦≤26%`) conditional on the live model, unknown-bucket sentinel
 - **1.27.0** — Cache quarter-clock (`● ◕ ◑ ◔ ○`), box-drawn `/status` bulletin with quota bars + burn sparkline, lazy timezone cost fix
 - **1.26.0** — Statusline two-row HUD: on-demand activity row, red takeover at 3×, free-tier residue in the provider's reset window, real-width degradation
-- **1.25.0** — Statusline zen: half-light when healthy, ctx gauge + budget micro-gauge, live effort (`·max`), `/1M` window flag, caveman badge adopted
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 

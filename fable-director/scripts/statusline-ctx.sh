@@ -2,13 +2,14 @@
 # fable-director — statusline:
 #   [MODEL]         modello attivo (model.display_name)
 #   [CTX %]         riempimento context window della conversazione
-#   [5H %→HH:MM]    quota piano finestra 5 ore + orario reset locale
+#   [5H % HH:MM]    quota piano finestra 5 ore + orario reset locale (staccato, in 239)
 #   [7D %]          quota piano settimanale (se il campo esiste)
 #   [BDG r×·eff]    pre-budget fable-director: ratio live output consumato/atteso
 #                   (stessa contabilità dello Stop hook, incrementale) + effort
 #                   dichiarato; verde <2×, giallo ≥2×, rosso ≥3× (flagged: 3×).
 #                   Senza transcript degrada a ok|2×|3× dal solo budget file.
-# Antepone il badge caveman se il plugin è presente nel profilo attivo.
+# Posticipa il badge caveman (se il plugin è presente nel profilo attivo) in
+# coda a riga 1, e lo lascia cadere per primo quando la larghezza non basta.
 #
 # Setup in settings.json:
 #   "statusLine": { "type": "command", "command": "bash \"<path>/scripts/statusline-ctx.sh\"" }
@@ -47,7 +48,9 @@ def fmt_reset(ts):
 try:
     d=json.load(sys.stdin)
     m=d.get("model",{}).get("display_name")
-    if m: model=str(m).replace(" ","")[:12].upper()
+    # lo spazio del display_name si CONSERVA (OPUS 5, non OPUS5): viaggia
+    # come virgola nel read shell, che lo ripristina — leggibilita a costo 1 char
+    if m: model=str(m)[:12].upper().strip()
     p=d.get("context_window",{}).get("used_percentage")
     if p is not None:
         pct=f"{p:.0f}"
@@ -434,7 +437,8 @@ try:
         n=xcounts.get(prov,0)
         if prov in xmeta and n>0:
             rpd,_,nxt=xmeta[prov]
-            xparts.append(f"{label}{star} {n}/{rpd}→{nxt}")
+            # stesso principio delle quote: orario staccato, nessun glifo
+            xparts.append(f"{label}{star} {n}/{rpd} {nxt}")
             xratio=max(xratio,n/rpd)
         elif n>0: xparts.append(f"{label}{star}×{n}")
         elif star: xparts.append(label+star)
@@ -446,6 +450,8 @@ except Exception:
 # bdg puo contenere spazi (allarmi a parole intere) ma la shell fa read
 # word-split: gli spazi viaggiano come virgole, la shell li ripristina
 bdg=str(bdg).replace(" ",",")
+# model conserva lo spazio del display_name: stessa disciplina virgola
+model=str(model).replace(" ",",")
 # dlg ha spazi interni ("SONNET-5 12k"): non è più ultimo campo del read
 # shell, quindi stessa disciplina di bdg (virgole, la shell le ripristina)
 dlg=str(dlg).replace(" ",",")
@@ -499,56 +505,69 @@ osc8() { # $1=url $2=testo-gia-colorato
   else printf '%s' "$2"; fi
 }
 SEP=$(printf '\033[38;5;239m · \033[0m')
-pre=""
-[ -n "$badge" ] && pre="$badge$(printf '\033[38;5;239m │ \033[0m')"
 out=""
 app() { [ -n "$out" ] && out="$out$SEP"; out="$out$1"; }
-
-# ✦ MODELLO in penombra + effort LIVE attaccato (giallo da xhigh: brucia quota)
-if [ "$model" != "-" ]; then
-  seg="$(printf '\033[38;5;245m\342\234\246 %s\033[0m' "$model")"
-  case "$eff" in
-    y:*) seg="$seg$(printf '\033[38;5;220m%s\033[0m' "${eff#y:}")" ;;
-    d:*) seg="$seg$(printf '\033[38;5;245m%s\033[0m' "${eff#d:}")" ;;
-  esac
-  app "$(osc8 "https://status.anthropic.com" "$seg")"
-fi
-# ctx: gauge 8 celle + /1M se window estesa
-if [ "$pct" != "-" ]; then
-  gb=""; [ "$bar" != "-" ] && gb="$bar "
-  gw=""; [ "$win" != "-" ] && gw="$win"
-  app "$(printf "$(color_for "$pct")ctx %s%s%%%s\033[0m" "$gb" "$pct" "$gw")"
-fi
-# cmp solo se ≥1 compattazione: contesto perso, deviazione per natura
-[ "$cmp" != "-" ] && [ -n "$cmp" ] && app "$(printf '\033[38;5;220mcmp %s\033[0m' "$cmp")"
 USAGE_URL="https://claude.ai/settings/usage"
-if [ "$rl" != "-" ]; then
-  seg="5H ${rl}%"
-  [ "$rlt" != "-" ] && seg="${seg}→${rlt}"
-  app "$(osc8 "$USAGE_URL" "$(printf "$(color_for "$rl")%s\033[0m" "$seg")")"
-fi
-if [ "$wk" != "-" ]; then
-  seg="7D ${wk}%"
-  [ "$wkt" != "-" ] && seg="${seg}→${wkt}"
-  app "$(osc8 "$USAGE_URL" "$(printf "$(color_for "$wk")%s\033[0m" "$seg")")"
-fi
-# Bound finestra premium (✦≤N% / ✦? a bound saturo) — vive accanto al 7D
-# da cui deriva; stesso link usage: li c e il valore vero per-modello.
-case "$fw" in
-  g:*) app "$(osc8 "$USAGE_URL" "$(printf '\033[38;5;245m%s\033[0m' "${fw#g:}")")" ;;
-  y:*) app "$(osc8 "$USAGE_URL" "$(printf '\033[38;5;220m%s\033[0m' "${fw#y:}")")" ;;
-  r:*) app "$(osc8 "$USAGE_URL" "$(printf '\033[38;5;196m%s\033[0m' "${fw#r:}")")" ;;
-esac
-# fail ×N grinding: stato PROTETTO, resta in riga 1 accanto alle quote —
-# uno streak esiste anche senza budget/deleghe e non deve dipendere dalla
-# riga 2. Giallo a 2 (early warning), rosso da 3 (il nudge e scattato).
-if [ "$grind" != "-" ] && [ -n "$grind" ]; then
-  if [ "$grind" -ge 3 ] 2>/dev/null; then
-    app "$(printf '\033[38;5;196mfail \303\227%s\033[0m' "$grind")"
-  else
-    app "$(printf '\033[38;5;220mfail \303\227%s\033[0m' "$grind")"
+
+# Riga 1 — IDENTITA e QUOTE. Degrada solo nella DECORAZIONE, mai nel dato:
+#   liv 2 = completa · liv 1 = senza gauge ctx · liv 0 = anche senza orari reset
+# La gauge e ridondante (la percentuale le sta accanto e il colore porta gia
+# l allarme); gli orari di reset sono il dato di comodo che cede per ultimo.
+# Numeri, sigle e colori restano a qualunque larghezza.
+compose1() {
+  out=""
+  # ✦ MODELLO in penombra + effort LIVE attaccato (giallo da xhigh: brucia quota)
+  if [ "$model" != "-" ]; then
+    seg="$(printf '\033[38;5;245m\342\234\246 %s\033[0m' "$(printf '%s' "$model" | tr ',' ' ')")"
+    case "$eff" in
+      y:*) seg="$seg$(printf '\033[38;5;220m%s\033[0m' "${eff#y:}")" ;;
+      d:*) seg="$seg$(printf '\033[38;5;245m%s\033[0m' "${eff#d:}")" ;;
+    esac
+    app "$(osc8 "https://status.anthropic.com" "$seg")"
   fi
-fi
+  # ctx: gauge 8 celle (solo liv 2) + /1M se window estesa
+  if [ "$pct" != "-" ]; then
+    gb=""; [ "$1" -ge 2 ] && [ "$bar" != "-" ] && gb="$bar "
+    gw=""; [ "$win" != "-" ] && gw="$win"
+    app "$(printf "$(color_for "$pct")ctx %s%s%%%s\033[0m" "$gb" "$pct" "$gw")"
+  fi
+  # cmp solo se ≥1 compattazione: contesto perso, deviazione per natura
+  [ "$cmp" != "-" ] && [ -n "$cmp" ] && app "$(printf '\033[38;5;220mcmp %s\033[0m' "$cmp")"
+  # Orario di azzeramento SENZA glifo: staccato da uno spazio e in 239, la
+  # penombra dei separatori. Nessun simbolo da imparare e nessuna freccia che
+  # suggerisca una tendenza. Senza colore resta comunque distinguibile: la
+  # FORMA lo dichiara (17:10 ha i due punti, "30 Jul" il mese) — il marcatore
+  # che sopravvive al monocromatico e il formato stesso, non il colore.
+  if [ "$rl" != "-" ]; then
+    seg="$(printf "$(color_for "$rl")5H %s%%\033[0m" "$rl")"
+    [ "$rlt" != "-" ] && [ "$1" -ge 1 ] && seg="$seg$(printf '\033[38;5;239m %s\033[0m' "$rlt")"
+    app "$(osc8 "$USAGE_URL" "$seg")"
+  fi
+  if [ "$wk" != "-" ]; then
+    seg="$(printf "$(color_for "$wk")7D %s%%\033[0m" "$wk")"
+    [ "$wkt" != "-" ] && [ "$1" -ge 1 ] && seg="$seg$(printf '\033[38;5;239m %s\033[0m' "$wkt")"
+    app "$(osc8 "$USAGE_URL" "$seg")"
+  fi
+  # Bound finestra premium (✦≤N% / ✦? a bound saturo) — vive accanto al 7D
+  # da cui deriva; stesso link usage: li c e il valore vero per-modello.
+  case "$fw" in
+    g:*) app "$(osc8 "$USAGE_URL" "$(printf '\033[38;5;245m%s\033[0m' "${fw#g:}")")" ;;
+    y:*) app "$(osc8 "$USAGE_URL" "$(printf '\033[38;5;220m%s\033[0m' "${fw#y:}")")" ;;
+    r:*) app "$(osc8 "$USAGE_URL" "$(printf '\033[38;5;196m%s\033[0m' "${fw#r:}")")" ;;
+  esac
+  # fail ×N grinding: stato PROTETTO, resta in riga 1 accanto alle quote —
+  # uno streak esiste anche senza budget/deleghe e non deve dipendere dalla
+  # riga 2. Giallo a 2 (early warning), rosso da 3 (il nudge e scattato).
+  # Non degrada MAI: e un dato, e quello che ti sta costando di piu.
+  if [ "$grind" != "-" ] && [ -n "$grind" ]; then
+    if [ "$grind" -ge 3 ] 2>/dev/null; then
+      app "$(printf '\033[38;5;196mfail \303\227%s\033[0m' "$grind")"
+    else
+      app "$(printf '\033[38;5;220mfail \303\227%s\033[0m' "$grind")"
+    fi
+  fi
+  printf '%s' "$out"
+}
 # Takeover: budget flagged / enforcement off (classe r:) va IN TESTA alla
 # riga 1 a sfondo pieno — la gerarchia visiva si inverte con la priorita.
 # Le classi g:/y: del budget vivono invece nella riga 2 (attivita).
@@ -592,14 +611,17 @@ fi
   seg_dlg="$(printf '\033[38;5;245mdlg %s\033[0m' "$(printf '%s' "$dlg" | tr ',' ' ')")"
 # Larghezza in CARATTERI (glifi zen multibyte; wc -c li conterebbe tripli).
 # COLUMNS lo fornisce Claude Code ≥2.1.153; assente → 120 conservativo.
-strip_esc() { sed -e 's/\x1b][^\x07\x1b]*\x07//g' -e 's/\x1b][^\x1b]*\x1b\\\\//g' -e 's/\x1b\[[0-9;]*m//g'; }
+# NB il terminatore OSC 8 e ESC + UN backslash: in sed va scritto \\ (due
+# backslash = due letterali, non matcha mai → le URL finivano contate nella
+# larghezza e la riga 2 degradava troppo presto).
+strip_esc() { sed -e 's/\x1b][^\x07\x1b]*\x07//g' -e 's/\x1b][^\x1b]*\x1b\\//g' -e 's/\x1b\[[0-9;]*m//g'; }
 plain_len() { printf '%s' "$1" | strip_esc | LC_ALL=C.UTF-8 wc -m 2>/dev/null || printf '%s' "$1" | strip_esc | wc -c; }
 W="${COLUMNS:-120}"
 case "$W" in (*[!0-9]*|"") W=120 ;; esac
 # Riga 2 on-demand — l ATTIVITA (budget, deleghe, esterni, cache): esiste
 # solo quando succede qualcosa; a riposo la statusline resta a una riga.
 # Degradazione deterministica dentro la riga 2: cade cache, poi dlg, poi
-# xf — MAI il budget. La riga 1 (identita e quote) non degrada mai.
+# xf — MAI il budget. Riga 1 degrada solo nella decorazione (vedi compose1).
 L2P="$(printf '\033[38;5;239m\342\224\224 \033[0m')"
 compose2() {
   c=""
@@ -608,12 +630,30 @@ compose2() {
   [ -n "$seg_pr" ] && a2 "$seg_pr"
   [ "$1" -ge 2 ] && [ -n "$seg_dlg" ] && a2 "$seg_dlg"
   [ "$1" -ge 1 ] && [ -n "$seg_xf" ] && a2 "$seg_xf"
-  # cache SCADUTA non giustifica da sola la riga 2 (sessione fredda =
-  # rumore permanente); un countdown vivo si — serve al timing deleghe
-  [ "$1" -ge 3 ] && [ -n "$seg_cache" ] && { [ "$cache" != "y:○,exp" ] || [ -n "$c" ]; } && a2 "$seg_cache"
+  # cache: non CREA mai la riga 2 se non e azionabile. Piena (g:, TTL >10m)
+  # o scaduta da freddo non cambiano nessuna decisione e a riposo rendevano
+  # la seconda riga permanente — contro la sua stessa regola. Restano visibili
+  # quando la riga 2 esiste gia (informazione gratis, zero righe in piu).
+  # Agli sgoccioli (y:/r:, TTL ≤10m) si mostra da sola: li il timing di una
+  # delega cambia davvero — dopo la scadenza il turno dopo ripaga il prefisso.
+  if [ "$1" -ge 3 ] && [ -n "$seg_cache" ]; then
+    case "$cache" in
+      g:*|y:○,exp) [ -n "$c" ] && a2 "$seg_cache" ;;
+      *)           a2 "$seg_cache" ;;
+    esac
+  fi
   [ -n "$c" ] && printf '%s%s' "$L2P" "$c"
 }
-line1="$tko$pre$out"
+line1="$tko$(compose1 2)"
+# Badge caveman in CODA e non piu in testa: e l unico elemento sacrificabile
+# di riga 1 — non e un dato, e uno stato che l utente ha impostato lui e che
+# ogni risposta gli riconferma. Entra solo se ci sta: mai a costo di un numero.
+if [ -n "$badge" ]; then
+  cand="$line1$(printf '\033[38;5;239m │ \033[0m')$badge"
+  [ "$(plain_len "$cand")" -le "$W" ] && line1="$cand"
+fi
+[ "$(plain_len "$line1")" -gt "$W" ] && line1="$tko$(compose1 1)"  # cade la gauge ctx
+[ "$(plain_len "$line1")" -gt "$W" ] && line1="$tko$(compose1 0)"  # cadono gli orari reset
 line2="$(compose2 3)"
 [ -n "$line2" ] && [ "$(plain_len "$line2")" -gt "$W" ] && line2="$(compose2 2)"  # cade cache
 [ -n "$line2" ] && [ "$(plain_len "$line2")" -gt "$W" ] && line2="$(compose2 1)"  # cade dlg
