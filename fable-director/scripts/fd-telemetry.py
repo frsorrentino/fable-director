@@ -87,6 +87,10 @@ USAGE_KEYS = ("input_tokens", "output_tokens",
 # Tier di effort ammessi (allineati al frontmatter agent di Claude Code).
 EFFORT_LEVELS = {"low", "medium", "high", "xhigh", "max"}
 SENTINEL_MIN_RECORDS = 20  # sotto: transcript troppo corto per giudicare lo schema
+# Riaperture da cui il rework smette di essere un fatto e diventa una diagnosi
+# (contesto incompleto): sotto questa soglia si riporta il numero e basta —
+# suggerire "spec incompleta" su 1-2 riaperture sarebbe overclaim.
+REWORK_DIAG_MIN = 4
 
 
 def now_iso():
@@ -208,15 +212,65 @@ WRITE_TOOLS = {"Edit", "Write", "NotebookEdit"}  # prima azione irreversibile
 
 
 def find_tool_uses(obj, in_subagent=False):
-    """Nomi dei tool_use nel main loop (i sottoalberi toolUseResult sono esclusi)."""
+    """(nome, input) dei tool_use nel main loop (sottoalberi toolUseResult
+    esclusi). L'input serve al conteggio rework: file_path dei write-tool."""
     if isinstance(obj, dict):
         if not in_subagent and obj.get("type") == "tool_use" and obj.get("name"):
-            yield obj["name"]
+            tin = obj.get("input")
+            yield obj["name"], (tin if isinstance(tin, dict) else {})
         for k, v in obj.items():
             yield from find_tool_uses(v, in_subagent or k == "toolUseResult")
     elif isinstance(obj, list):
         for v in obj:
             yield from find_tool_uses(v, in_subagent)
+
+
+def path_tail(p):
+    """Ultimi 2 componenti del path: abbastanza per riconoscere il file,
+    niente alberi di clienti nel DB (stessa disciplina di fail-streak, che
+    salva il binario e mai la riga di comando)."""
+    parts = [x for x in str(p).replace("\\", "/").split("/") if x]
+    return "/".join(parts[-2:]) if parts else str(p)
+
+
+def rework_update(rw, name, tool_input):
+    """Fold di un tool_use nei contatori di rework (in place). `rw` =
+    {"last": str|None, "touch": {path: n}, "bouts": {path: n}} — chiavi path
+    PIENE (l'identità serve al conteggio; il troncamento avviene solo
+    all'esposizione, in rework_stats). Un "bout" = run massimale di tocchi
+    consecutivi allo stesso file: modifiche consecutive sono iterazione
+    normale, è il RITORNO su un file dopo averne toccati altri che segnala
+    informazione arrivata dopo la scrittura (metrica InsForge/Chawla:
+    re-edit = contesto incompleto al momento della scrittura)."""
+    if name not in WRITE_TOOLS:
+        return
+    fp = tool_input.get("file_path") or tool_input.get("notebook_path")
+    if not isinstance(fp, str) or not fp:
+        return
+    rw["touch"][fp] = rw["touch"].get(fp, 0) + 1
+    if fp != rw.get("last"):
+        rw["bouts"][fp] = rw["bouts"].get(fp, 0) + 1
+    rw["last"] = fp
+
+
+def rework_new():
+    return {"last": None, "touch": {}, "bouts": {}}
+
+
+def rework_stats(rw):
+    """Contatori → payload esponibile (path troncati), None se zero write.
+    reopens(file) = bouts − 1; worst = top 3 file per riaperture."""
+    touch = (rw or {}).get("touch") or {}
+    if not touch:
+        return None
+    bouts = rw.get("bouts") or {}
+    reo = {f: n - 1 for f, n in bouts.items() if n > 1}
+    worst = sorted(reo.items(), key=lambda x: (-x[1], x[0]))[:3]
+    return {"write_touches": sum(touch.values()),
+            "files_written": len(touch),
+            "files_reopened": len(reo),
+            "reopens": sum(reo.values()),
+            "worst": [[path_tail(f), n] for f, n in worst]}
 
 
 def sum_transcript(path):
@@ -239,6 +293,7 @@ def sum_transcript(path):
     last_tool = None
     run_len = 0
     max_run = (None, 0)
+    rw = rework_new()
     try:
         fh = open(path, errors="replace")
     except OSError:
@@ -257,7 +312,7 @@ def sum_transcript(path):
             if ts:
                 first_ts = first_ts or ts
                 last_ts = ts
-            for name in find_tool_uses(rec):
+            for name, tin in find_tool_uses(rec):
                 tool_counts[name] = tool_counts.get(name, 0) + 1
                 run_len = run_len + 1 if name == last_tool else 1
                 last_tool = name
@@ -266,6 +321,7 @@ def sum_transcript(path):
                 if first_write_turn is None and name in WRITE_TOOLS:
                     first_write_turn = turns
                     tokens_before_first_write = main["output_tokens"]
+                rework_update(rw, name, tin)
             rec_had_usage = False
             for usage, in_sub in find_usage(rec):
                 rec_had_usage = True
@@ -292,6 +348,12 @@ def sum_transcript(path):
         "tool_counts": tool_counts,
         "max_tool_run": {"tool": max_run[0], "len": max_run[1]} if max_run[0] else None,
     }
+    # Rework: riaperture di file già scritti (informazione arrivata DOPO la
+    # scrittura = contesto incompleto). Chiave presente solo se la sessione
+    # ha scritto: l'assenza è "nessuna scrittura", non zero rework.
+    rew = rework_stats(rw)
+    if rew:
+        stats["rework"] = rew
     return main, sub, n_sub, cache_resets, first_ts, last_ts, stats
 
 
@@ -546,6 +608,14 @@ def cmd_budget_close(args):
                                   int(st.get("out") or 0) + int(st.get("wf_out") or 0))
                 budget.setdefault("actual_input_tokens",
                                   int(st.get("inp") or 0) + int(st.get("wf_inp") or 0))
+                # Rework del task (contato dallo Stop hook nello stesso scan):
+                # nel task_close alimenta la vista per-tipo del report — un
+                # tipo che riapre sempre = contratto/contesto sistematicamente
+                # incompleto, non esecutore scarso.
+                rew = rework_stats(st.get("rw") or {})
+                if rew:
+                    budget.setdefault("reopens", rew["reopens"])
+                    budget.setdefault("rework_worst", rew["worst"])
         except (json.JSONDecodeError, OSError, ValueError):
             pass
     write_json_atomic(bfile, budget)
@@ -567,7 +637,8 @@ def cmd_budget_close(args):
             "task", "type", "route", "effort", "expected_output_tokens",
             "expected_input_tokens", "actual_output_tokens",
             "actual_input_tokens", "outcome", "verify", "data_class",
-            "paths", "amendments", "declared_at", "closed_at", "owner_sid")}
+            "paths", "amendments", "declared_at", "closed_at", "owner_sid",
+            "reopens", "rework_worst")}
         receipt["cwd"] = cwd
         try:
             receipt["plugin_version"] = json.loads(
@@ -804,17 +875,25 @@ def cmd_report(args):
     days = int(opts["--days"])
     cutoff = datetime.now(timezone.utc).timestamp() - days * 86400
     con = open_db()
-    rows = con.execute("SELECT ts, event, payload FROM events ORDER BY ts").fetchall()
+    rows = con.execute("SELECT ts, session_id, event, payload "
+                       "FROM events ORDER BY ts").fetchall()
     con.close()
     events = []
-    for ts, event, payload in rows:
+    mcp_sid = []  # (sid, event, payload) dei soli eventi MCP attribuiti a una
+    #               sessione: servono al join caricati/chiamati della sezione
+    #               STOCK. Le righe storiche senza session_id restano fuori:
+    #               dato assente, non zero.
+    for ts, sid, event, payload in rows:
         dt = parse_ts(ts)
         if dt and dt.timestamp() < cutoff:
             continue
         try:
-            events.append((event, json.loads(payload or "{}")))
+            p = json.loads(payload or "{}")
         except json.JSONDecodeError:
             continue
+        events.append((event, p))
+        if sid and event in ("mcp_schema_load", "mcp_meter"):
+            mcp_sid.append((sid, event, p))
     if not events:
         print(f"No events in the last {days} days.")
         return
@@ -1051,6 +1130,41 @@ def cmd_report(args):
             by_q[k][1] += p.get("bytes") or 0
         for k, (n, byt) in sorted(by_q.items(), key=lambda x: -x[1][1])[:8]:
             print(f"  {n}× \"{k}\" — ~{fmt(byt // 4)} tokens")
+        # Caricati vs chiamati, per sessione: una query `select:A,B,…` enumera
+        # gli schemi entrati nel prefisso; il join con i mcp_meter della STESSA
+        # sessione dice quanti sono poi stati chiamati davvero. Solo tool
+        # mcp__* (i tool nativi caricati via select: non passano dal meter) e
+        # solo righe attribuite (session_id presente). La query è troncata a
+        # 120 char alla scrittura: se piena, l'ultimo nome può essere un
+        # frammento e viene scartato — meglio un conteggio più corto che uno
+        # falso.
+        sel_loaded, called = {}, {}
+        for sid, ev, p in mcp_sid:
+            if ev == "mcp_meter":
+                if p.get("tool"):
+                    called.setdefault(sid, set()).add(p["tool"])
+                continue
+            q = str(p.get("query") or "")
+            if not q.startswith("select:"):
+                continue
+            names = [t.strip() for t in q[len("select:"):].split(",")
+                     if t.strip()]
+            if len(q) >= 120 and names:
+                names.pop()  # possibile frammento da troncamento
+            names = {t for t in names if t.startswith("mcp__")}
+            if names:
+                sel_loaded.setdefault(sid, set()).update(names)
+        if sel_loaded:
+            n_loaded = sum(len(v) for v in sel_loaded.values())
+            n_unused = sum(len(v - called.get(sid, set()))
+                           for sid, v in sel_loaded.items())
+            line = (f"  select: loads attributed to a session: {n_loaded} "
+                    f"mcp tools loaded, {n_unused} never called in that "
+                    f"session")
+            if n_unused:
+                line += (" — schema re-paid every turn for tools never used: "
+                         "load fewer tools per select")
+            print(line)
 
     # Grinding: streak auto-rilevati dall'hook PostToolUse su Bash. Da leggere
     # INSIEME a escalation: molti fail_streak e zero escalation = il modello
@@ -1070,6 +1184,51 @@ def cmd_report(args):
         if not n_esc:
             print("  ⚠ zero `escalation` logged against them: the streaks were "
                   "detected but never diagnosed — rule-of-3 is not being applied")
+
+    # Rework: file riaperti dopo la prima scrittura (bout non consecutivi).
+    # La firma dell'informazione arrivata DOPO la scrittura: il costo non sta
+    # nelle tool call ma nei re-edit, perché ogni ritorno su un file già
+    # scritto rispedisce la conversazione cresciuta. Metrica auto-scritta
+    # da session-summary/Stop hook — mai autostima del modello.
+    rew = [p.get("rework") for e, p in events if e == "session_summary"]
+    rew = [r for r in rew if isinstance(r, dict) and r.get("write_touches")]
+    if rew:
+        tot = sum(r.get("reopens") or 0 for r in rew)
+        n_aff = sum(1 for r in rew if (r.get("reopens") or 0) > 0)
+        per = sorted((r.get("reopens") or 0) for r in rew)
+        med = per[len(per) // 2]
+        print(f"\nRework — files reopened after first write (late-arriving "
+              f"info): {len(rew)} sessions with writes, {tot} reopens total, "
+              f"median {med}/session, {n_aff} sessions affected")
+        worst_all = {}
+        for r in rew:
+            for pair in (r.get("worst") or []):
+                try:
+                    tail, n = pair[0], int(pair[1])
+                except (IndexError, TypeError, ValueError):
+                    continue
+                worst_all[tail] = worst_all.get(tail, 0) + n
+        for tail, n in sorted(worst_all.items(), key=lambda x: -x[1])[:5]:
+            print(f"  {tail}: {n} reopens")
+        # Per-tipo dal task_close: un tipo che riapre SEMPRE = il contratto
+        # consegna un contesto sistematicamente incompleto → candidato a un
+        # "context pack" (script deterministico che raccoglie file/stato/schemi
+        # PRIMA della delega) — speculare agli script-promotion candidates.
+        by_type = {}
+        for e2, p2 in events:
+            if (e2 == "task_close" and p2.get("type")
+                    and isinstance(p2.get("reopens"), int)):
+                by_type.setdefault(p2["type"], []).append(p2["reopens"])
+        cands = {t: v for t, v in by_type.items()
+                 if len(v) >= 2 and sorted(v)[len(v) // 2] >= REWORK_DIAG_MIN}
+        if cands:
+            print("  Context-pack candidates (recurring type, median reopens "
+                  f"≥ {REWORK_DIAG_MIN} — the spec ships incomplete context; "
+                  "the executor is not the problem):")
+            for t, v in sorted(cands.items(),
+                               key=lambda x: -sorted(x[1])[len(x[1]) // 2]):
+                print(f"    {t}: {len(v)} tasks, median "
+                      f"{sorted(v)[len(v) // 2]} reopens")
 
     promos = [p for e, p in events if e == "script_promotion"]
     if promos:

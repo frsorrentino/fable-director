@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.30.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.31.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need to do.**
 
@@ -225,11 +225,11 @@ Works on its own. These optional companions save further tokens, degrading grace
 
 ## 🆕 What's new
 
+- **1.31.0** — Rework metric: file reopens counted live (2× checkpoint, report, hindsight); MCP `select:` loads joined against real calls per session
 - **1.30.0** — Row 1 degrades by decoration (badge → ctx gauge → reset times), never by data; cache row only when actionable; OSC 8 width bug fixed
 - **1.29.0** — Delegation meter (`SubagentStart`/`SubagentStop`): nested spawns counted, effort degradation measured; statusline `refreshInterval`
 - **1.28.0** — Clickable segments (opt-in OSC 8), `pr #N` segment, premium-window ceiling (`✦≤26%`) conditional on the live model, unknown-bucket sentinel
 - **1.27.0** — Cache quarter-clock (`● ◕ ◑ ◔ ○`), box-drawn `/status` bulletin with quota bars + burn sparkline, lazy timezone cost fix
-- **1.26.0** — Statusline two-row HUD: on-demand activity row, red takeover at 3×, free-tier residue in the provider's reset window, real-width degradation
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 

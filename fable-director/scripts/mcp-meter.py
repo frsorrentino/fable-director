@@ -39,6 +39,10 @@ def main():
     data = json.load(sys.stdin)
     tool = str(data.get("tool_name") or "")
     resp = data.get("tool_response")
+    # Attribuzione: senza session_id il report non può fare il join
+    # caricati/chiamati (chi carica 30 schemi e ne usa 2) — le righe storiche
+    # senza sid restano valide per i totali, escluse dal ratio.
+    sid, cwd = data.get("session_id"), data.get("cwd")
 
     if tool == "ToolSearch":
         # I byte restituiti SONO gli schemi iniettati nel prefisso: misuro la
@@ -50,7 +54,7 @@ def main():
         query = str((data.get("tool_input") or {}).get("query") or "")[:120]
         write_event("mcp_schema_load",
                     {"query": query, "bytes": size,
-                     "est_tokens": size // 4})
+                     "est_tokens": size // 4}, sid, cwd)
         return
 
     if not tool.startswith("mcp__"):
@@ -58,10 +62,11 @@ def main():
     size = measure(resp)
     parts = tool.split("__")
     server = parts[1] if len(parts) > 1 else "?"
-    write_event("mcp_meter", {"server": server, "tool": tool, "bytes": size})
+    write_event("mcp_meter", {"server": server, "tool": tool, "bytes": size},
+                sid, cwd)
 
 
-def write_event(event, payload):
+def write_event(event, payload, session_id=None, cwd=None):
     import random
     import sqlite3
     import time
@@ -69,7 +74,7 @@ def write_event(event, payload):
     base = Path.home() / ".claude" / "fable-director"
     base.mkdir(parents=True, exist_ok=True)  # install fresca: dir assente
     row = (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-           event, json.dumps(payload))
+           session_id, str(cwd or ""), event, json.dumps(payload))
     # retry+backoff: le chiamate MCP arrivano a raffica (browser automation)
     # e un busy_timeout scaduto perderebbe l'evento in silenzio
     for attempt in range(4):
@@ -80,8 +85,8 @@ def write_event(event, payload):
                         "id INTEGER PRIMARY KEY, ts TEXT NOT NULL, "
                         "session_id TEXT, cwd TEXT, event TEXT NOT NULL, "
                         "payload TEXT)")
-            con.execute("INSERT INTO events(ts, event, payload) "
-                        "VALUES(?,?,?)", row)
+            con.execute("INSERT INTO events(ts, session_id, cwd, event, payload) "
+                        "VALUES(?,?,?,?,?)", row)
             con.commit()
             con.close()
             return

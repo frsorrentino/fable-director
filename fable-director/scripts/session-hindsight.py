@@ -71,7 +71,15 @@ def fmt(ts, event, payload):
         dim = p.get("dim", "?")
         exp, act = p.get("expected"), p.get("actual")
         r = f"{ratio:.1f}x" if isinstance(ratio, (int, float)) else "?"
-        return (f"  {day}  BUST {r} ({dim}: stimati {exp}, spesi {act})"
+        # Rework allo sfondamento (se lo Stop hook l'ha registrato): dice al
+        # post-mortem SE il contesto arrivava dopo la scrittura — la causa
+        # tipica dello sforamento non e' l'esecutore, e' lo spec incompleto.
+        rew = ""
+        if isinstance(p.get("reopens"), int) and p["reopens"] > 0:
+            wf = p.get("worst_file")
+            rew = (f", {p['reopens']} riaperture"
+                   + (f" ({wf})" if wf else ""))
+        return (f"  {day}  BUST {r} ({dim}: stimati {exp}, spesi {act}{rew})"
                 f" — \"{task}\"")
     if event == "reversal":
         return (f"  {day}  REVERSAL {p.get('from', '?')} -> {p.get('to', '?')}"

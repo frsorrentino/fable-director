@@ -58,6 +58,27 @@ USAGE_KEYS = ("input_tokens", "output_tokens",
 SENTINEL_MIN_RECORDS = 20  # sotto: transcript troppo corto per giudicare lo schema
 
 
+_FDT = None
+
+
+def _fdt():
+    """fd-telemetry.py caricato una volta per processo (log_event, walker dei
+    tool_use e helper di rework single-sourced lì). None su qualunque errore:
+    la telemetria e il rework degradano in silenzio, l'enforcement — il
+    lavoro primario di questo hook — non dipende mai dal modulo."""
+    global _FDT
+    if _FDT is None:
+        try:
+            spec = importlib.util.spec_from_file_location(
+                "fd_telemetry", Path(__file__).with_name("fd-telemetry.py"))
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            _FDT = mod
+        except Exception:
+            _FDT = False
+    return _FDT or None
+
+
 def log_telemetry(event, payload, cwd):
     """Persist an objective event to telemetry deterministically, reusing
     fd-telemetry's log_event so the DB schema stays single-sourced.
@@ -66,11 +87,9 @@ def log_telemetry(event, payload, cwd):
     on the model remembering to log it — the exact discipline-gap this
     plugin exists to close."""
     try:
-        spec = importlib.util.spec_from_file_location(
-            "fd_telemetry", Path(__file__).with_name("fd-telemetry.py"))
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        mod.log_event(event, payload, cwd=cwd)
+        mod = _fdt()
+        if mod:
+            mod.log_event(event, payload, cwd=cwd)
     except Exception:
         pass
 
@@ -120,6 +139,8 @@ def scan_jsonl(path, sub, since):
             if k in sub:
                 sub[k] = 0
         sub["last_ts"] = None
+        if "rw" in sub:
+            sub["rw"] = {"last": None, "touch": {}, "bouts": {}}
     if size <= int(sub.get("off", 0)):
         return
     try:
@@ -157,6 +178,16 @@ def scan_jsonl(path, sub, since):
             sub["n_usage"] += 1
         if pre_since:
             continue
+        # Rework (solo lo state del MAIN porta "rw"; i file agente Workflow
+        # restano fuori in v1 — la metrica misura il main loop): fold dei
+        # write-tool post-since. Helper single-sourced in fd-telemetry;
+        # modulo assente → il rework degrada, l'enforcement no.
+        rw = sub.get("rw")
+        if rw is not None:
+            mod = _fdt()
+            if mod:
+                for name, tin in mod.find_tool_uses(rec):
+                    mod.rework_update(rw, name, tin)
         for usage in usages:
             sub["out"] += usage.get("output_tokens") or 0
             sub["inp"] += (usage.get("input_tokens") or 0) + \
@@ -193,13 +224,15 @@ def sum_session_incremental(transcript, since, state_file, declared_iso):
     sull'intero main (il primo giro parte da offset 0)."""
     state = {"declared": declared_iso, "path": str(transcript), "off": 0,
              "out": 0, "inp": 0, "n_rec": 0, "n_usage": 0, "n_ts": 0,
-             "last_ts": None}
+             "last_ts": None, "rw": {"last": None, "touch": {}, "bouts": {}}}
     if state_file.is_file():
         try:
             prev = json.loads(state_file.read_text())
             if (prev.get("declared") == declared_iso
                     and prev.get("path") == str(transcript)):
                 state = prev
+                # state scritto da una versione senza rework: si parte da qui
+                state.setdefault("rw", {"last": None, "touch": {}, "bouts": {}})
         except (json.JSONDecodeError, OSError):
             pass
     scan_jsonl(transcript, state, since)
@@ -209,7 +242,7 @@ def sum_session_incremental(transcript, since, state_file, declared_iso):
     except OSError:
         pass  # stato non persistito: il prossimo giro riparte dal vecchio offset
     return (state["out"] + wf_out, state["inp"] + wf_inp,
-            (state["n_rec"], state["n_usage"], state["n_ts"]))
+            (state["n_rec"], state["n_usage"], state["n_ts"]), state)
 
 
 def main():
@@ -252,8 +285,12 @@ def main():
     # Main transcript (usage Agent tool incluso via toolUseResult) + file
     # agente del Workflow tool: vedi docstring di modulo per l'attribuzione.
     state_file = bfile.with_name(bfile.stem + ".state.json")
-    actual_out, actual_in, (n_rec, n_usage, n_ts) = sum_session_incremental(
-        Path(transcript), declared, state_file, budget.get("declared_at"))
+    actual_out, actual_in, (n_rec, n_usage, n_ts), state = \
+        sum_session_incremental(
+            Path(transcript), declared, state_file, budget.get("declared_at"))
+    # Rework del task finora (None se zero write o modulo assente).
+    mod = _fdt()
+    rw_stats = mod.rework_stats(state.get("rw")) if mod else None
 
     # Sentinella di schema: molti record validi ma zero usage o zero timestamp
     # riconosciuti = formato transcript probabilmente cambiato. I conteggi
@@ -286,10 +323,27 @@ def main():
         if warn and not budget.get("warned"):
             budget["warned"] = True
             write_json_atomic(bfile, budget)
+            # Riga rework al checkpoint: il fatto sempre (se c'è), la diagnosi
+            # solo sopra soglia — 1-2 riaperture non provano niente, un file
+            # riaperto 2+ volte o 4+ totali sì (REWORK_DIAG_MIN in fd-telemetry).
+            rework_note = ""
+            if rw_stats and rw_stats.get("reopens"):
+                w = (rw_stats.get("worst") or [["?", 0]])[0]
+                rework_note = (
+                    f"\nRework so far: {rw_stats['reopens']} reopens across "
+                    f"{rw_stats['files_reopened']} files (worst: {w[0]} ×{w[1]}).")
+                diag_min = getattr(mod, "REWORK_DIAG_MIN", 4)
+                if w[1] >= 2 or rw_stats["reopens"] >= diag_min:
+                    rework_note += (
+                        " Information keeps landing AFTER files are written: "
+                        "the task context was incomplete — complete the "
+                        "picture (files/state/schema in the spec) before "
+                        "resuming; it costs less than another reopen cycle.")
             print(json.dumps({"decision": "block", "reason": (
                 f"⚠ FABLE-DIRECTOR 2× checkpoint — actual spend (output "
                 f"{actual_out}, fresh input {actual_in}) passed TWICE the "
-                f"pre-budget for task '{budget.get('task')}'.\n"
+                f"pre-budget for task '{budget.get('task')}'."
+                f"{rework_note}\n"
                 f"This is not the 3× block: reassess the route NOW — "
                 f"switching here costs less than a post-mortem at 3×.\n"
                 f"If you switch: fd-telemetry.py log reversal --json "
@@ -312,9 +366,16 @@ def main():
     # Deterministic capture of the objective bust: the model no longer has to
     # remember to log it (below, step-3 removed). Runs exactly once — the next
     # turn returns early on status != "open".
-    log_telemetry("budget_flag",
-                  {"task": budget.get("task"), "ratio": ratio, "dim": dim,
-                   "actual": actual, "expected": expected, "auto": True}, cwd)
+    flag_payload = {"task": budget.get("task"), "ratio": ratio, "dim": dim,
+                    "actual": actual, "expected": expected, "auto": True}
+    # Il rework viaggia con lo sfondamento: hindsight lo ripesca sul cwd e il
+    # post-mortem parte già sapendo SE l'informazione arrivava dopo la scrittura.
+    if rw_stats and rw_stats.get("reopens"):
+        flag_payload["reopens"] = rw_stats["reopens"]
+        worst = rw_stats.get("worst") or []
+        if worst:
+            flag_payload["worst_file"] = worst[0][0]
+    log_telemetry("budget_flag", flag_payload, cwd)
 
     reason = (
         f"✕ FABLE-DIRECTOR 3× block — actual {dim} {actual} tokens ≥ 3× the "

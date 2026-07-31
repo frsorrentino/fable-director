@@ -22,7 +22,8 @@ Analyze ONLY these signals (each is a report alarm or a playbook counter):
 - flag-rate per declared effort tier (low flagging often = tier insufficient for that type) and recurring `effort_mismatch` (declared route ≠ real executor)
 - external executors: ok-rate per provider/type (promotion to stable route only on DENSE cells, N≥10)
 - perimeter: many `perimeter_amend` = declared perimeters systematically too narrow; recurring `perimeter_deny` on never_write = tasks aiming where they must not
-- MCP weight per server (results bloating context → filter/pattern/script)
+- MCP weight per server (results bloating context → filter/pattern/script) and select: loads never called in their session (schema re-paid every turn for nothing → load fewer tools per select)
+- rework per session/type (files reopened after first write = context delivered incomplete, info landed late; recurring type → context-pack script in the spec, not more discovery)
 - script-promotion candidates (recurring types on model routes — evidence for crystallization)
 - `schema_anomaly` (unreliable accounting → update the plugin)
 - playbook: dead heuristics (never used), stagnant candidates, cap approaching
