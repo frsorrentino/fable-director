@@ -1,11 +1,15 @@
 {
   "name": "fsorrentino",
-  "owner": { "name": "Francesco Sorrentino", "email": "info@francescosorrentino.com" },
+  "description": "Francesco Sorrentino's Claude Code plugins - currently fable-director, a delegation-efficiency director with deterministic budget enforcement.",
+  "owner": {
+    "name": "Francesco Sorrentino",
+    "email": "info@francescosorrentino.com"
+  },
   "plugins": [
     {
       "name": "fable-director",
       "source": "./fable-director",
-      "description": "Policy di delega efficiente: il top model dirige, l'esecuzione va al mezzo più economico adeguato. Kernel always-on, corpo on-demand, playbook di apprendimento, telemetria token."
+      "description": "Keeps Claude Code from spending your quota on work the top model didn't need to do: declared pre-budgets with deterministic 2x/3x enforcement, cheap-executor routing, objective token telemetry. Small one-offs pay ~5% overhead - built for sessions that delegate."
     }
   ]
 }

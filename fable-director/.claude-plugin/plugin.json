@@ -1,10 +1,19 @@
 {
   "name": "fable-director",
-  "description": "Delega efficiente: il top model pianifica, giudica e verifica; l'esecuzione va al mezzo più economico adeguato. Kernel always-on a SessionStart, policy completa on-demand, playbook di apprendimento, enforcement pre-budget via gate PreToolUse + hook Stop, telemetria token.",
+  "description": "Keeps Claude Code from spending your quota on work the top model didn't need to do: declared pre-budgets with deterministic 2x/3x enforcement, cheap-executor routing, objective token telemetry. Small one-offs pay ~5% overhead - built for sessions that delegate.",
   "version": "1.31.0",
   "author": {
     "name": "Francesco Sorrentino",
     "email": "info@francescosorrentino.com"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "keywords": [
+    "delegation",
+    "budget",
+    "cost-control",
+    "token-savings",
+    "telemetry",
+    "statusline",
+    "subagents"
+  ]
 }
