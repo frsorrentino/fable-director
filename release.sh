@@ -157,16 +157,26 @@ for base in [os.path.expanduser("~/.claude"), os.path.expanduser("~/.claude-pixe
     ipj = f"{base}/plugins/installed_plugins.json"
     if not os.path.exists(ipj):
         print(f"[skip] {base}: no installed_plugins.json"); continue
-    cache = f"{base}/plugins/cache/pixelfarm/fable-director/{VER}"
+    d = json.load(open(ipj))
+    # Chiave e marketplace DAL REGISTRO, mai hardcoded: la chiave e' gia'
+    # cambiata una volta (pixelfarm -> fsorrentino, rinomina marketplace) e
+    # l'hardcode ha rotto questa 6/6 alla release 1.31.0 lasciando entrambi
+    # gli account alla versione precedente. Il suffisso @<mkt> della chiave
+    # e' anche il nome della cartella cache (convenzione di Claude Code).
+    key = next((k for k in d.get("plugins", {})
+                if k.startswith("fable-director@")), None)
+    if not key:
+        print(f"[skip] {base}: no fable-director entry in {ipj}"); continue
+    mkt = key.split("@", 1)[1]
+    cache = f"{base}/plugins/cache/{mkt}/fable-director/{VER}"
     if os.path.exists(cache): shutil.rmtree(cache)
     shutil.copytree(SRC, cache, ignore=shutil.ignore_patterns('__pycache__','*.pyc','*.bak*'))
     shutil.copy2(ipj, ipj + f".bak-pre-{VER}")
-    d = json.load(open(ipj))
-    e = d["plugins"]["fable-director@pixelfarm"][0]
+    e = d["plugins"][key][0]
     e.update(installPath=cache, version=VER, gitCommitSha=SHA, lastUpdated=NOW)
     json.dump(d, open(ipj, "w"), indent=2)
-    print(f"[installed] {base} -> {VER} ({SHA[:7]})")
-    dropped, failed = prune(f"{base}/plugins/cache/pixelfarm/fable-director", VER)
+    print(f"[installed] {base} ({key}) -> {VER} ({SHA[:7]})")
+    dropped, failed = prune(f"{base}/plugins/cache/{mkt}/fable-director", VER)
     if dropped:
         print(f"[pruned]    {base} -> rimosse {len(dropped)} voci vecchie, "
               f"tenute le ultime {KEEP} versioni")
