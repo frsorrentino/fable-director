@@ -84,8 +84,23 @@ DB_PATH = BASE / "telemetry.db"
 BUDGETS = BASE / "budgets"
 USAGE_KEYS = ("input_tokens", "output_tokens",
               "cache_read_input_tokens", "cache_creation_input_tokens")
+# Input-equivalenti: rapporti di listino standard per rendere confrontabili le
+# quattro componenti di usage (audit 2026-08 su 2.389 sessioni: cache_read =
+# ~72% del costo main in eq, output = ~10% — i soli output token misurano un
+# decimo della spesa reale; numeri e script in context-audit/DISTILLATO.md del
+# workspace fable-director). FASE DI TARATURA: l'eq viene misurato e riportato
+# ovunque, l'enforcement 2×/3× resta sui token dichiarati finché una taratura
+# su budget reali non fissa le soglie eq.
+EQ_MULT = {"input": 1.0, "output": 5.0, "cache_read": 0.1, "cache_create": 1.25}
 # Tier di effort ammessi (allineati al frontmatter agent di Claude Code).
 EFFORT_LEVELS = {"low", "medium", "high", "xhigh", "max"}
+
+
+def eq_tokens(inp, out, cr, cc):
+    """Costo in input-equivalenti dalle quattro componenti pure di usage
+    (inp = input_tokens puri, NON input+cache_create)."""
+    return int(inp * EQ_MULT["input"] + out * EQ_MULT["output"]
+               + cr * EQ_MULT["cache_read"] + cc * EQ_MULT["cache_create"])
 SENTINEL_MIN_RECORDS = 20  # sotto: transcript troppo corto per giudicare lo schema
 # Riaperture da cui il rework smette di essere un fatto e diventa una diagnosi
 # (contesto incompleto): sotto questa soglia si riporta il numero e basta —
@@ -293,6 +308,13 @@ def sum_transcript(path):
     last_tool = None
     run_len = 0
     max_run = (None, 0)
+    # Batching main-thread: tool call per turno-messaggio. Raggruppare per
+    # message.id è obbligatorio — il 65% dei messaggi occupa più righe jsonl
+    # (audit 2026-08): contare per riga darebbe sempre 1.0. Baseline misurata
+    # 1.20; ogni call read-only solitaria paga un turno intero (~37k eq) di
+    # ripresentazione contesto.
+    batch_calls = 0
+    batch_turn_ids = set()
     rw = rework_new()
     try:
         fh = open(path, errors="replace")
@@ -312,7 +334,9 @@ def sum_transcript(path):
             if ts:
                 first_ts = first_ts or ts
                 last_ts = ts
+            n_calls_rec = 0
             for name, tin in find_tool_uses(rec):
+                n_calls_rec += 1
                 tool_counts[name] = tool_counts.get(name, 0) + 1
                 run_len = run_len + 1 if name == last_tool else 1
                 last_tool = name
@@ -322,6 +346,12 @@ def sum_transcript(path):
                     first_write_turn = turns
                     tokens_before_first_write = main["output_tokens"]
                 rework_update(rw, name, tin)
+            if n_calls_rec and rec.get("type") == "assistant" \
+                    and not rec.get("isSidechain"):
+                mid = (rec.get("message") or {}).get("id")
+                if mid:
+                    batch_calls += n_calls_rec
+                    batch_turn_ids.add(mid)
             rec_had_usage = False
             for usage, in_sub in find_usage(rec):
                 rec_had_usage = True
@@ -348,6 +378,9 @@ def sum_transcript(path):
         "tool_counts": tool_counts,
         "max_tool_run": {"tool": max_run[0], "len": max_run[1]} if max_run[0] else None,
     }
+    if batch_turn_ids:
+        stats["tool_calls_per_turn"] = round(
+            batch_calls / len(batch_turn_ids), 2)
     # Rework: riaperture di file già scritti (informazione arrivata DOPO la
     # scrittura = contesto incompleto). Chiave presente solo se la sessione
     # ha scritto: l'assenza è "nessuna scrittura", non zero rework.
@@ -397,6 +430,7 @@ def sum_workflow_agents(path):
 def derived_metrics(inp, out, cr, cc, main_out, sub_out, n_sub):
     """Metriche derivate; None dove il denominatore è zero."""
     total_in = inp + cr + cc
+    eq = eq_tokens(inp, out, cr, cc)
     return {
         "cache_hit_ratio": cr / (cr + cc) if (cr + cc) else None,
         "cache_efficiency": cr / total_in if total_in else None,
@@ -404,6 +438,10 @@ def derived_metrics(inp, out, cr, cc, main_out, sub_out, n_sub):
         "delegation_overhead": sub_out / out if out else None,
         "coordination_cost": main_out / sub_out if sub_out else None,
         "n_subagent_files": n_sub,
+        # Costo vero della sessione (vedi EQ_MULT): output/eq dice quanto del
+        # costo il righello "output token" sta effettivamente vedendo.
+        "eq_tokens": eq,
+        "output_cost_share": (out * EQ_MULT["output"]) / eq if eq else None,
     }
 
 
@@ -608,6 +646,14 @@ def cmd_budget_close(args):
                                   int(st.get("out") or 0) + int(st.get("wf_out") or 0))
                 budget.setdefault("actual_input_tokens",
                                   int(st.get("inp") or 0) + int(st.get("wf_inp") or 0))
+                # Consuntivo in eq (taratura soglie: vedi EQ_MULT). inp dello
+                # state include cache_create → si scorpora coi campi cc/cr.
+                _cr = int(st.get("cr") or 0) + int(st.get("wf_cr") or 0)
+                _cc = int(st.get("cc") or 0) + int(st.get("wf_cc") or 0)
+                _in = int(st.get("inp") or 0) + int(st.get("wf_inp") or 0)
+                _out = int(st.get("out") or 0) + int(st.get("wf_out") or 0)
+                budget.setdefault("actual_eq_tokens",
+                                  eq_tokens(max(_in - _cc, 0), _out, _cr, _cc))
                 # Rework del task (contato dallo Stop hook nello stesso scan):
                 # nel task_close alimenta la vista per-tipo del report — un
                 # tipo che riapre sempre = contratto/contesto sistematicamente

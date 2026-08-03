@@ -135,7 +135,7 @@ def scan_jsonl(path, sub, since):
     except OSError:
         return
     if size < int(sub.get("off", 0)):  # transcript ruotato/troncato
-        for k in ("off", "out", "inp", "n_rec", "n_usage", "n_ts"):
+        for k in ("off", "out", "inp", "cr", "cc", "n_rec", "n_usage", "n_ts"):
             if k in sub:
                 sub[k] = 0
         sub["last_ts"] = None
@@ -192,6 +192,14 @@ def scan_jsonl(path, sub, since):
             sub["out"] += usage.get("output_tokens") or 0
             sub["inp"] += (usage.get("input_tokens") or 0) + \
                           (usage.get("cache_creation_input_tokens") or 0)
+            # Componenti pure per il costo in eq (misura, non enforcement:
+            # cache_read = ~72% del costo reale ma resta fuori da inp/out —
+            # vedi EQ_MULT in fd-telemetry.py). Stato di versioni precedenti
+            # senza le chiavi: si parte da 0 dall'offset corrente.
+            sub["cr"] = (sub.get("cr") or 0) + \
+                (usage.get("cache_read_input_tokens") or 0)
+            sub["cc"] = (sub.get("cc") or 0) + \
+                (usage.get("cache_creation_input_tokens") or 0)
     sub["last_ts"] = last_ts.isoformat() if last_ts else None
 
 
@@ -214,6 +222,8 @@ def scan_workflow_agents(transcript, since, state):
         scan_jsonl(path, sub, since)
     state["wf_out"] = sum(s.get("out") or 0 for s in wf.values())
     state["wf_inp"] = sum(s.get("inp") or 0 for s in wf.values())
+    state["wf_cr"] = sum(s.get("cr") or 0 for s in wf.values())
+    state["wf_cc"] = sum(s.get("cc") or 0 for s in wf.values())
     return state["wf_out"], state["wf_inp"]
 
 
@@ -223,7 +233,8 @@ def sum_session_incremental(transcript, since, state_file, declared_iso):
     accanto al budget; i contatori della sentinella restano cumulativi
     sull'intero main (il primo giro parte da offset 0)."""
     state = {"declared": declared_iso, "path": str(transcript), "off": 0,
-             "out": 0, "inp": 0, "n_rec": 0, "n_usage": 0, "n_ts": 0,
+             "out": 0, "inp": 0, "cr": 0, "cc": 0,
+             "n_rec": 0, "n_usage": 0, "n_ts": 0,
              "last_ts": None, "rw": {"last": None, "touch": {}, "bouts": {}}}
     if state_file.is_file():
         try:
@@ -291,6 +302,13 @@ def main():
     # Rework del task finora (None se zero write o modulo assente).
     mod = _fdt()
     rw_stats = mod.rework_stats(state.get("rw")) if mod else None
+    # Costo in eq del task finora (misura in fase di taratura, MAI enforcement:
+    # le soglie 2×/3× restano sui token dichiarati — vedi EQ_MULT).
+    actual_eq = None
+    if mod and hasattr(mod, "eq_tokens"):
+        cr = (state.get("cr") or 0) + (state.get("wf_cr") or 0)
+        cc = (state.get("cc") or 0) + (state.get("wf_cc") or 0)
+        actual_eq = mod.eq_tokens(max(actual_in - cc, 0), actual_out, cr, cc)
 
     # Sentinella di schema: molti record validi ma zero usage o zero timestamp
     # riconosciuti = formato transcript probabilmente cambiato. I conteggi
@@ -356,6 +374,8 @@ def main():
     budget["status"] = "flagged"
     budget["actual_output_tokens"] = actual_out
     budget["actual_input_tokens"] = actual_in
+    if actual_eq is not None:
+        budget["actual_eq_tokens"] = actual_eq
     budget["flagged_at"] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
     write_json_atomic(bfile, budget)
 
@@ -368,6 +388,8 @@ def main():
     # turn returns early on status != "open".
     flag_payload = {"task": budget.get("task"), "ratio": ratio, "dim": dim,
                     "actual": actual, "expected": expected, "auto": True}
+    if actual_eq is not None:
+        flag_payload["actual_eq"] = actual_eq  # dato di taratura per le soglie eq
     # Il rework viaggia con lo sfondamento: hindsight lo ripesca sul cwd e il
     # post-mortem parte già sapendo SE l'informazione arrivava dopo la scrittura.
     if rw_stats and rw_stats.get("reopens"):
