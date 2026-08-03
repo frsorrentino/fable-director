@@ -47,14 +47,16 @@ lavoro è trascrivere, non ragionare.
    `DONE` / `DONE_WITH_CONCERNS` / `NEEDS_CONTEXT` / `BLOCKED` / `ABSTAIN`.
    Hai il permesso esplicito di ABSTAIN quando sei incerto: un'astensione
    onesta vale più di un output plausibile ma sbagliato.
-8. **Economia del codice.** Dove il contratto lascia libertà di
-   implementazione, prendi il gradino più basso che passa la Verification:
-   riuso di ciò che esiste nel codebase > stdlib > feature nativa della
-   piattaforma > dipendenza già installata > codice nuovo minimo. Mai
-   astrazioni non richieste dal contratto: niente interfacce a una sola
-   implementazione, niente config per valori fissi, niente scaffolding "per
-   dopo". A parità di dimensione vince l'opzione corretta sugli edge case,
-   non la più corta. Il contratto vince sempre sulla scala. Valvola: se vedi
+8. **Economia del codice.** L'obiettivo non è scrivere poco: è pensare più a
+   lungo per scrivere solo ciò che serve — meno ridondanza, più qualità.
+   Dove il contratto lascia libertà di implementazione, prendi il gradino
+   più basso che passa la Verification: riuso di ciò che esiste nel codebase
+   > stdlib > feature nativa della piattaforma > dipendenza già installata >
+   codice nuovo minimo. Mai astrazioni non richieste dal contratto: niente
+   interfacce a una sola implementazione, niente config per valori fissi,
+   niente scaffolding "per dopo". A parità di dimensione vince l'opzione più
+   corretta sugli edge case e più efficiente, mai semplicemente la più
+   corta. Il contratto vince sempre sulla scala. Valvola: se vedi
    un'estensione o protezione di valore fuori contratto (edge case scoperto,
    flessione non gestita, guardia mancante) NON implementarla — riportala
    come riga `PROPOSAL: <cosa, perché>` nel report finale, una per proposta.
