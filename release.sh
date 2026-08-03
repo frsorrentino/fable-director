@@ -4,7 +4,7 @@
 #   bash release.sh 1.17.0
 #
 # Does, in order (fails loudly at the first broken step):
-#   1. preflight   — version consistent in plugin.json / CHANGELOG / README What's new
+#   1. preflight   — version consistent in plugin.json / CHANGELOG / README badge
 #   2. tests       — every suite must be green BEFORE the commit (house rule)
 #   3. zip         — ../fable-director-plugin-<v>.zip (same layout as previous releases)
 #   4. commit+push — "release: <v>" with everything staged
@@ -25,18 +25,10 @@ grep -q "\"version\": \"$VER\"" fable-director/.claude-plugin/plugin.json \
   || { echo "FAIL: plugin.json is not at $VER — bump it first"; exit 1; }
 grep -q "\*\*$VER" CHANGELOG.md \
   || { echo "FAIL: CHANGELOG.md has no $VER entry"; exit 1; }
-grep -q "\*\*$VER\*\*" README.md \
-  || { echo "FAIL: README What's new has no $VER line (plain simple title!)"; exit 1; }
 grep -q "version-$VER-blue" README.md \
   || { echo "FAIL: README version badge is not at $VER (line 5: shields.io version-<v>-blue)"; exit 1; }
-# What's new: telegrafico, MAX 5 voci (regola autore 2026-07-20 — la storia
-# completa vive nel CHANGELOG; il README degenera se si appende senza potare).
-WN_COUNT=$(sed -n "/## 🆕 What's new/,/^Full history/p" README.md | grep -c '^- \*\*')
-[ "$WN_COUNT" -le 5 ] \
-  || { echo "FAIL: README What's new has $WN_COUNT entries (max 5) — prune the oldest"; exit 1; }
-WN_LONG=$(sed -n "/## 🆕 What's new/,/^Full history/p" README.md | grep '^- \*\*' | awk 'length > 160' | wc -l)
-[ "$WN_LONG" -eq 0 ] \
-  || { echo "FAIL: README What's new has $WN_LONG entries over 160 chars — telegraphic, not narrative"; exit 1; }
+# What's new nel README: rimosso in bd94d84 (la storia vive nel CHANGELOG,
+# due liste = allineamento a mano) — il preflight non lo richiede più.
 git rev-parse "v$VER" >/dev/null 2>&1 \
   && { echo "FAIL: tag v$VER already exists"; exit 1; }
 
