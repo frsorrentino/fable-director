@@ -49,6 +49,8 @@ respected forever). No-CLI alternative and zip migration:
   external routes refuse to run, deterministically.
 - **The same mistake doesn't cost twice** — a job that already blew its estimate
   says so at session start, on the project where it happened.
+- **You see what you actually spend** — the telemetry counts the real cost
+  of every turn, not just the tokens that are easy to see.
 
 ## How much does it save?
 
@@ -73,7 +75,10 @@ route externally**, not to your Claude usage as a whole. The 20-25% is what a
 single-shot benchmark can see; the last two rows are where the design aims, and
 they compound over weeks.
 
-Two findings worth more than the percentages:
+*(These numbers count tokens — the visible part. The real bill is dominated
+by context re-sending: measured and managed since 1.33.0.)*
+
+Three findings worth more than the percentages:
 
 - **The top model already delegates on its own — chaotically.** Even with no
   plugin it hands work to cheaper models. The value isn't *making delegation
@@ -83,6 +88,10 @@ Two findings worth more than the percentages:
 - **It knows when NOT to hand work around.** On a task of 40 tiny items it
   correctly refused to delegate: splitting work that small costs more than it
   saves.
+- **Most of your bill is invisible.** We audited 2,389 real sessions: ~72%
+  of the cost is your context being re-sent on every turn — output tokens
+  are just 10%. Since 1.33.0 the plugin measures and optimizes the cost you
+  actually pay, not the one that's easy to count.
 
 **Don't take our word for it — measure your own work:**
 
