@@ -38,6 +38,15 @@
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/perimeter-gate.py\""
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/perimeter-gate.py\""
+          }
+        ]
       }
     ],
     "PostToolUse": [

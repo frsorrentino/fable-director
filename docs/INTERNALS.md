@@ -43,7 +43,13 @@ wording, production writes without a backup.
 - 🚧 **`PreToolUse` (perimeter)** — the budget can declare *where* the task may
   write (`--paths`); `Write` / `Edit` outside it are **denied** until an explicit
   amendment. Your own `never_write` patterns (`.fd-perimeter.json` — e.g.
-  `migrations/*`, `.env*`) are denied unconditionally, budget or not.
+  `migrations/*`, `.env*`) are denied unconditionally, budget or not. Same
+  config, opt-in `deny_git` key: destructive git commands (`reset --hard`,
+  `clean -f`, `branch -D`, …) are **denied** on the `Bash` tool too — the file
+  perimeter can't see them. Plain `git push` is deliberately not in the
+  recommended set. Match is coarse by design (substring on the
+  whitespace-normalized command): a false positive costs one explained retry, a
+  missed `reset --hard` in a compound command costs your work tree.
 - ⚖️ **`PostToolUse` (MCP meter)** — measures context weight along two distinct
   axes: *flow* (bytes each MCP server pushes into context, paid once per call)
   and *stock* (schema bytes a `ToolSearch` load injects into the prefix, re-paid

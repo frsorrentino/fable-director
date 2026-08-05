@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.33.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.34.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need
 to do.** It makes your agent declare what a job should cost before it delegates,
@@ -111,8 +111,8 @@ advises.**
 
 Enforced deterministically, on your machine: delegation without an open budget
 is denied; spend past 3× blocks the turn until a post-mortem is written; writes
-outside the declared paths are denied; `--data-class restricted` blocks the
-external routes. Advisory: the routing axes themselves, the never-delegate
+outside the declared paths are denied, and so are the destructive git commands
+you deny-list; `--data-class restricted` blocks the external routes. Advisory: the routing axes themselves, the never-delegate
 rules, script promotion and the playbook — they guide the model's decisions
 without forcing a route.
 

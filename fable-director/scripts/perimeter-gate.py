@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Hook PreToolUse (Write|Edit|NotebookEdit): perimetro scritture.
+"""Hook PreToolUse (Write|Edit|NotebookEdit + Bash): perimetro impatto.
 
 Il pre-budget vincola la SPESA dichiarata; questo hook vincola l'IMPATTO
-dichiarato — dove il task può scrivere. Due livelli indipendenti:
+dichiarato — dove il task può scrivere. Tre livelli indipendenti:
 
 1. never_write (utente, permanente): pattern in `.fd-perimeter.json` nel
    progetto e/o `~/.claude/fable-director/perimeter.json`
@@ -14,6 +14,19 @@ dichiarato — dove il task può scrivere. Due livelli indipendenti:
    progetto fuori dal perimetro → deny con il comando di emendamento
    esplicito (`budget-amend --add-paths ... --reason ...`). Nessun --paths
    dichiarato → nessun vincolo (opt-in, come --verify).
+3. deny_git (utente, permanente, opt-in): il perimetro sui file non vede i
+   comandi Bash — `git reset --hard` distrugge senza toccare Write/Edit.
+   Stessi file di config, chiave `deny_git`: lista di frammenti di
+   sottocomando git (`{"deny_git": ["reset --hard", "clean -f",
+   "branch -D", "checkout .", "restore .", "push --force", "push -f"]}`
+   è il set consigliato — `push` semplice NON incluso di proposito).
+   Comando Bash che contiene `git` E un frammento (match su comando
+   normalizzato a spazi singoli) → deny, budget o no. Il match è
+   volutamente grezzo: meglio un falso positivo spiegato — il messaggio
+   dice all'utente di eseguire lui il comando o togliere il pattern — che
+   un reset passato in un compound command. Ispirato a
+   git-guardrails-claude-code (mattpocock/skills, MIT), reso opt-in e
+   config-driven invece di lista fissa.
 
 File FUORI dal progetto (scratchpad, /tmp, stato in HOME) non sono mai
 vincolati dal livello 2: gli script di appoggio restano liberi. Il livello
@@ -83,8 +96,48 @@ def log_deny(kind, payload):
         pass
 
 
+def load_configs(cwd):
+    """Config perimetro: progetto prima, globale poi (merge additivo)."""
+    out = []
+    for cf in (Path(cwd) / ".fd-perimeter.json",
+               Path.home() / ".claude" / "fable-director" / "perimeter.json"):
+        if cf.is_file():
+            try:
+                out.append(json.loads(cf.read_text()))
+            except (json.JSONDecodeError, OSError):
+                pass
+    return out
+
+
+def check_git_guard(data):
+    """Livello 3: comandi git distruttivi (tool Bash)."""
+    cmd = (data.get("tool_input") or {}).get("command") or ""
+    if "git" not in cmd:
+        return
+    cwd = data.get("cwd") or os.getcwd()
+    frags = []
+    for cfg in load_configs(cwd):
+        frags += [str(f) for f in (cfg.get("deny_git") or [])]
+    if not frags:
+        return
+    flat = " ".join(cmd.split())
+    for frag in frags:
+        if " ".join(frag.split()) in flat:
+            log_deny("perimeter_deny", {"level": "deny_git", "fragment": frag})
+            deny(f"✕ FABLE-DIRECTOR git command DENIED — matches deny_git "
+                 f"fragment '{frag}' (permanent user protection in "
+                 f".fd-perimeter.json).\n"
+                 f"No AI task may run it: if it is truly needed, the USER "
+                 f"runs the command themselves or removes the fragment from "
+                 f"the config — do not work around this.")
+            return
+
+
 def main():
     data = json.load(sys.stdin)
+    if data.get("tool_name") == "Bash":
+        check_git_guard(data)
+        return
     ti = data.get("tool_input") or {}
     fp = ti.get("file_path") or ti.get("notebook_path")
     if not fp:
@@ -104,13 +157,8 @@ def main():
 
     # Livello 1 — never_write: progetto prima, globale poi.
     nw = []
-    for cf in (Path(cwd) / ".fd-perimeter.json",
-               Path.home() / ".claude" / "fable-director" / "perimeter.json"):
-        if cf.is_file():
-            try:
-                nw += list(json.loads(cf.read_text()).get("never_write") or [])
-            except (json.JSONDecodeError, OSError):
-                pass
+    for cfg in load_configs(cwd):
+        nw += list(cfg.get("never_write") or [])
     if nw and matches(abs_path, rel_path, nw):
         log_deny("perimeter_deny", {"path": rel_path, "level": "never_write"})
         deny(f"✕ FABLE-DIRECTOR write DENIED — '{rel_path}' matches a "
