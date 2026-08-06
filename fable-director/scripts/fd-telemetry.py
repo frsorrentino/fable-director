@@ -630,6 +630,7 @@ def cmd_budget_close(args):
     budget["status"] = "closed"
     budget["outcome"] = opts["--outcome"]
     budget["closed_at"] = now_iso()
+    close_sid = None  # dallo state dello Stop hook: attribuzione di sessione
     if opts["--actual-output"]:
         budget["actual_output_tokens"] = int(opts["--actual-output"])
     # Consuntivo dallo state file dello Stop hook (stessa contabilità
@@ -640,6 +641,7 @@ def cmd_budget_close(args):
         try:
             st = json.loads(sfile.read_text())
             if st.get("declared") == budget.get("declared_at"):
+                close_sid = st.get("sid") or None
                 # out/inp = main transcript; wf_out/wf_inp = agenti Workflow
                 # (stessa contabilità dell'enforcement Stop, che li somma).
                 budget.setdefault("actual_output_tokens",
@@ -671,7 +673,7 @@ def cmd_budget_close(args):
         sfile.unlink()
     except OSError:
         pass
-    log_event("task_close", budget, cwd=cwd)
+    log_event("task_close", budget, session_id=close_sid, cwd=cwd)
     # Ricevuta locale (provenance): snapshot machine-readable del task chiuso
     # — stima vs consuntivo, contratto verify, perimetro, emendamenti, esito.
     # Zero token modello: la scrive questo script, nessuno la rilegge se non
@@ -929,6 +931,7 @@ def cmd_report(args):
     #               sessione: servono al join caricati/chiamati della sezione
     #               STOCK. Le righe storiche senza session_id restano fuori:
     #               dato assente, non zero.
+    hint_sid = []  # (sid, event, payload) per il join control-arm hint→esito
     for ts, sid, event, payload in rows:
         dt = parse_ts(ts)
         if dt and dt.timestamp() < cutoff:
@@ -940,6 +943,8 @@ def cmd_report(args):
         events.append((event, p))
         if sid and event in ("mcp_schema_load", "mcp_meter"):
             mcp_sid.append((sid, event, p))
+        if sid and event in ("route_hint", "task_close"):
+            hint_sid.append((sid, event, p))
     if not events:
         print(f"No events in the last {days} days.")
         return
@@ -1095,6 +1100,48 @@ def cmd_report(args):
         print(f"  estimated external volume: ~{fmt(tin)} tokens in, ~{fmt(tout)} "
               f"tokens out — SEPARATE LEDGER, off the Claude quota (the "
               f"2×/3× budget counts Claude transcript tokens only)")
+
+    # Control arm dell'hint di rotta: il 10% dei prompt con match non riceve
+    # l'hint (holdout deterministico per sessione+giorno); qui si confrontano
+    # i due bracci. Numeri SOLO sopra soglia di sufficienza — sotto, medie di
+    # braccio sono rumore e un rapporto sarebbe teatro (soglia e principio
+    # dal control arm di ooples/token-optimizer-mcp, MIT).
+    hints = [p for e, p in events if e == "route_hint"]
+    armed = [p for p in hints if "holdout" in p]
+    if armed:
+        treated = [p for p in armed if not p.get("holdout")]
+        withheld = [p for p in armed if p.get("holdout")]
+        print(f"\nRoute-hint control arm: {len(treated)} shown, "
+              f"{len(withheld)} withheld "
+              f"({len(hints) - len(armed)} legacy events pre-arm excluded)")
+        if len(treated) >= 20 and len(withheld) >= 5:
+            hint_arm = {}    # sid -> holdout dell'ULTIMO hint della sessione
+            sid_routes = {}  # sid -> set di route dei task_close
+            for s, e, p in hint_sid:
+                if e == "route_hint" and "holdout" in p:
+                    hint_arm[s] = bool(p.get("holdout"))
+                elif e == "task_close":
+                    sid_routes.setdefault(s, set()).add(p.get("route") or "?")
+            NON_INLINE = {"external", "script", "workflow", "agent"}
+            arm_n = {True: 0, False: 0}
+            arm_adopted = {True: 0, False: 0}
+            for s, hold in hint_arm.items():
+                arm_n[hold] += 1
+                if sid_routes.get(s, set()) & NON_INLINE:
+                    arm_adopted[hold] += 1
+            if arm_n[True] and arm_n[False]:
+                r_t = arm_adopted[False] / arm_n[False]
+                r_w = arm_adopted[True] / arm_n[True]
+                print(f"  cheap-route adoption: shown {r_t:.2f} "
+                      f"({arm_adopted[False]}/{arm_n[False]} sessions) vs "
+                      f"withheld {r_w:.2f} ({arm_adopted[True]}/{arm_n[True]}) "
+                      f"— if equal, the hint changes nothing and can die")
+            else:
+                print("  outcome join: no attributed task_close in one arm "
+                      "yet — counts only")
+        else:
+            print("  insufficient data (need ≥20 shown, ≥5 withheld) — "
+                  "numbers below this would be theatre")
 
     # Calibrazione stime: rapporto actual/expected per tipo — l'errore di
     # stima è un dato, non una colpa. N<5 = indicativo, non direttivo.

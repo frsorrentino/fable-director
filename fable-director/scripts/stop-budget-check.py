@@ -227,7 +227,8 @@ def scan_workflow_agents(transcript, since, state):
     return state["wf_out"], state["wf_inp"]
 
 
-def sum_session_incremental(transcript, since, state_file, declared_iso):
+def sum_session_incremental(transcript, since, state_file, declared_iso,
+                            sid=None):
     """Totali della sessione dopo `since`: main transcript + agenti Workflow.
     Lo stato (chiavato su declared_at: budget nuovo → rescan) vive in un file
     accanto al budget; i contatori della sentinella restano cumulativi
@@ -246,6 +247,10 @@ def sum_session_incremental(transcript, since, state_file, declared_iso):
                 state.setdefault("rw", {"last": None, "touch": {}, "bouts": {}})
         except (json.JSONDecodeError, OSError):
             pass
+    if sid and not state.get("sid"):
+        # session_id nello state: budget-close lo propaga al task_close così
+        # il report può fare il join hint→esito per sessione.
+        state["sid"] = str(sid)
     scan_jsonl(transcript, state, since)
     wf_out, wf_inp = scan_workflow_agents(transcript, since, state)
     try:
@@ -298,7 +303,8 @@ def main():
     state_file = bfile.with_name(bfile.stem + ".state.json")
     actual_out, actual_in, (n_rec, n_usage, n_ts), state = \
         sum_session_incremental(
-            Path(transcript), declared, state_file, budget.get("declared_at"))
+            Path(transcript), declared, state_file, budget.get("declared_at"),
+            sid=data.get("session_id"))
     # Rework del task finora (None se zero write o modulo assente).
     mod = _fdt()
     rw_stats = mod.rework_stats(state.get("rw")) if mod else None

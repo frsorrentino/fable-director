@@ -16,6 +16,16 @@ Opt-in per entry: solo le voci di soft-deps.json con `hint_keywords` (lista di
 parole singole — match a confine di parola — o frasi — match substring)
 partecipano. Fail-silent by design: mai bloccare o sporcare il prompt per un
 errore di config.
+
+Control arm (misura, non feature): una frazione dei prompt con match
+(default 10%, `FD_HINT_HOLDOUT` 0..1) NON riceve l'hint ma l'evento viene
+loggato con `holdout:true` e i match che AVREBBE mostrato. La scelta è
+deterministica per (session_id, giorno UTC): stessa sessione = stesso
+braccio per tutto il giorno, niente flicker intra-task. Il confronto
+trattato/trattenuto vive in `fd-telemetry.py report` e stampa numeri solo
+sopra soglia di sufficienza — sotto, un rapporto sarebbe teatro. Idea dal
+control arm di ooples/token-optimizer-mcp (MIT), implementazione nostra:
+misura se l'hint CAUSA rotte migliori invece di assumerlo.
 """
 import json
 import re
@@ -87,7 +97,29 @@ def cardinality_candidate(prompt_lower):
             f"pre-budget obbligatorio")
 
 
-def write_event(payload):
+def in_holdout(session_id):
+    """Braccio di controllo deterministico per (sessione, giorno UTC).
+
+    Senza session_id niente holdout: un braccio non attribuibile non è
+    misurabile, e l'hint resta utile.
+    """
+    import hashlib
+    import os
+    from datetime import datetime, timezone
+    if not session_id:
+        return False
+    try:
+        frac = float(os.environ.get("FD_HINT_HOLDOUT", "0.1"))
+    except ValueError:
+        frac = 0.1
+    if not (0.0 <= frac <= 1.0):
+        frac = 0.1
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    h = hashlib.sha256(f"{session_id}:{day}".encode()).hexdigest()
+    return (int(h[:8], 16) / 0xFFFFFFFF) < frac
+
+
+def write_event(payload, session_id=None, cwd=None):
     import random
     import sqlite3
     import time
@@ -95,7 +127,7 @@ def write_event(payload):
     base = base_dir()
     base.mkdir(parents=True, exist_ok=True)
     row = (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-           "route_hint", json.dumps(payload))
+           session_id, cwd, "route_hint", json.dumps(payload))
     for attempt in range(4):
         try:
             con = sqlite3.connect(base / "telemetry.db", timeout=1.0)
@@ -104,8 +136,8 @@ def write_event(payload):
                         "id INTEGER PRIMARY KEY, ts TEXT NOT NULL, "
                         "session_id TEXT, cwd TEXT, event TEXT NOT NULL, "
                         "payload TEXT)")
-            con.execute("INSERT INTO events(ts, event, payload) "
-                        "VALUES(?,?,?)", row)
+            con.execute("INSERT INTO events(ts, session_id, cwd, event, "
+                        "payload) VALUES(?,?,?,?,?)", row)
             con.commit()
             con.close()
             return
@@ -129,12 +161,18 @@ def main():
         return
     candidates = candidates[:MAX_CANDIDATES]
 
-    print("[fd-route-hint] candidati deterministici — da VALUTARE, non seguire "
-          "ciecamente; verdetto di rotta in una riga (asse permittente E vietante):")
-    for _, line in candidates:
-        print(line)
+    session_id = str(data.get("session_id") or "") or None
+    cwd = str(data.get("cwd") or "") or None
+    holdout = in_holdout(session_id)
+    if not holdout:
+        print("[fd-route-hint] candidati deterministici — da VALUTARE, non "
+              "seguire ciecamente; verdetto di rotta in una riga (asse "
+              "permittente E vietante):")
+        for _, line in candidates:
+            print(line)
     write_event({"matches": [n for n, _ in candidates],
-                 "prompt_len": len(prompt)})
+                 "prompt_len": len(prompt), "holdout": holdout},
+                session_id=session_id, cwd=cwd)
 
 
 if __name__ == "__main__":
