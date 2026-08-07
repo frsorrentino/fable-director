@@ -56,7 +56,7 @@ respected forever). No-CLI alternative and zip migration:
 
 ## How much does it save?
 
-![Most of your AI bill is invisible: measured on 2,389 real sessions, only 10% is the answers you read — 72% is your context re-sent on every single turn. fable-director measures all of it.](assets/readme/card1-iceberg.png)
+![Most of your AI bill is invisible: measured on 2,389 real sessions, only 10% is the answers you read — 18% is new context being cached, and 72% is your context re-sent on every single turn. fable-director measures all of it.](assets/readme/card1-iceberg.png)
 
 **The honest one-sentence answer:** it doesn't save tokens on every task — it
 makes spend predictable, verified and disciplined, and on read-heavy loads it

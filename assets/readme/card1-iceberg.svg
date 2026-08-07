@@ -36,9 +36,12 @@
   <text x="690" y="185" fill="#ffffff" font-size="30" font-weight="700" text-anchor="end">10%</text>
   <text x="690" y="215" fill="#cfc2f2" font-size="20" text-anchor="end">the answers you read</text>
 
-  <text x="700" y="380" fill="#ffffff" font-size="64" font-weight="800" text-anchor="end">72%</text>
-  <text x="700" y="416" fill="#9db7f5" font-size="22" text-anchor="end">your context, re-sent</text>
-  <text x="700" y="442" fill="#9db7f5" font-size="22" text-anchor="end">on every single turn</text>
+  <text x="700" y="308" fill="#ffffff" font-size="34" font-weight="700" text-anchor="end">18%</text>
+  <text x="700" y="336" fill="#9db7f5" font-size="21" text-anchor="end">new context, cached just below</text>
+
+  <text x="700" y="430" fill="#ffffff" font-size="64" font-weight="800" text-anchor="end">72%</text>
+  <text x="700" y="466" fill="#9db7f5" font-size="22" text-anchor="end">your context, re-sent</text>
+  <text x="700" y="492" fill="#9db7f5" font-size="22" text-anchor="end">on every single turn</text>
 
   <!-- tagline -->
   <rect x="70" y="520" width="560" height="60" rx="30" fill="#8A5CF6"/>
