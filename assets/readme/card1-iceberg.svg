@@ -39,11 +39,12 @@
   <text x="700" y="308" fill="#ffffff" font-size="34" font-weight="700" text-anchor="end">18%</text>
   <text x="700" y="336" fill="#9db7f5" font-size="21" text-anchor="end">new context, cached just below</text>
 
-  <text x="700" y="430" fill="#ffffff" font-size="64" font-weight="800" text-anchor="end">72%</text>
-  <text x="700" y="466" fill="#9db7f5" font-size="22" text-anchor="end">your context, re-sent</text>
-  <text x="700" y="492" fill="#9db7f5" font-size="22" text-anchor="end">on every single turn</text>
+  <text x="700" y="408" fill="#ffffff" font-size="64" font-weight="800" text-anchor="end">72%</text>
+  <text x="700" y="444" fill="#9db7f5" font-size="22" text-anchor="end">your context, re-sent</text>
+  <text x="700" y="470" fill="#9db7f5" font-size="22" text-anchor="end">on every single turn</text>
 
   <!-- tagline -->
+  <text x="70" y="505" fill="#b9a7e8" font-size="24" font-style="italic">Most token-saving tools only chip at the visible tip.</text>
   <rect x="70" y="520" width="560" height="60" rx="30" fill="#8A5CF6"/>
-  <text x="350" y="559" fill="#ffffff" font-size="26" font-weight="700" text-anchor="middle">fable-director measures all of it</text>
+  <text x="350" y="559" fill="#ffffff" font-size="26" font-weight="700" text-anchor="middle">fable-director works the whole iceberg</text>
 </svg>
