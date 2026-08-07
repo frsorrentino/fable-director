@@ -245,6 +245,13 @@ def sum_session_incremental(transcript, since, state_file, declared_iso,
                 state = prev
                 # state scritto da una versione senza rework: si parte da qui
                 state.setdefault("rw", {"last": None, "touch": {}, "bouts": {}})
+            elif prev.get("declared") == declared_iso and prev.get("sid"):
+                # Reset per transcript diverso (seconda sessione stesso cwd):
+                # il sid del PRIMO Stop dopo declared_at resta — è il più
+                # vicino alla sessione che ha aperto il budget; senza questo
+                # budget-close attribuiva il task_close all'ultima sessione
+                # che ha stoppato (review 1.35.1).
+                state["sid"] = prev["sid"]
         except (json.JSONDecodeError, OSError):
             pass
     if sid and not state.get("sid"):

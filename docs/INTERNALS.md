@@ -47,9 +47,13 @@ wording, production writes without a backup.
   config, opt-in `deny_git` key: destructive git commands (`reset --hard`,
   `clean -f`, `branch -D`, …) are **denied** on the `Bash` tool too — the file
   perimeter can't see them. Plain `git push` is deliberately not in the
-  recommended set. Match is coarse by design (substring on the
-  whitespace-normalized command): a false positive costs one explained retry, a
-  missed `reset --hard` in a compound command costs your work tree.
+  recommended set. Matching is token-based (1.35.1): a fragment fires when all
+  its tokens appear in a git invocation, regardless of argument order, quoting
+  or combined short flags (`git push origin main --force` and `git clean -fd`
+  are caught; `gitbook` paths and fragments quoted inside a grep are not).
+  `git -C <dir>` also loads the TARGET project's config. Known limit: a `cd`
+  persisted in the Bash shell is invisible to the hook. A perimeter config
+  that stops parsing warns instead of going silent (throttled per mtime).
 - ⚖️ **`PostToolUse` (MCP meter)** — measures context weight along two distinct
   axes: *flow* (bytes each MCP server pushes into context, paid once per call)
   and *stock* (schema bytes a `ToolSearch` load injects into the prefix, re-paid

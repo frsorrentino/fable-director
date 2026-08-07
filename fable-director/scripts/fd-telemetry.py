@@ -944,7 +944,7 @@ def cmd_report(args):
         if sid and event in ("mcp_schema_load", "mcp_meter"):
             mcp_sid.append((sid, event, p))
         if sid and event in ("route_hint", "task_close"):
-            hint_sid.append((sid, event, p))
+            hint_sid.append((ts, sid, event, p))
     if not events:
         print(f"No events in the last {days} days.")
         return
@@ -1111,37 +1111,49 @@ def cmd_report(args):
     if armed:
         treated = [p for p in armed if not p.get("holdout")]
         withheld = [p for p in armed if p.get("holdout")]
-        print(f"\nRoute-hint control arm: {len(treated)} shown, "
-              f"{len(withheld)} withheld "
-              f"({len(hints) - len(armed)} legacy events pre-arm excluded)")
-        if len(treated) >= 20 and len(withheld) >= 5:
-            hint_arm = {}    # sid -> holdout dell'ULTIMO hint della sessione
-            sid_routes = {}  # sid -> set di route dei task_close
-            for s, e, p in hint_sid:
-                if e == "route_hint" and "holdout" in p:
-                    hint_arm[s] = bool(p.get("holdout"))
-                elif e == "task_close":
-                    sid_routes.setdefault(s, set()).add(p.get("route") or "?")
-            NON_INLINE = {"external", "script", "workflow", "agent"}
-            arm_n = {True: 0, False: 0}
-            arm_adopted = {True: 0, False: 0}
-            for s, hold in hint_arm.items():
-                arm_n[hold] += 1
-                if sid_routes.get(s, set()) & NON_INLINE:
-                    arm_adopted[hold] += 1
-            if arm_n[True] and arm_n[False]:
-                r_t = arm_adopted[False] / arm_n[False]
-                r_w = arm_adopted[True] / arm_n[True]
-                print(f"  cheap-route adoption: shown {r_t:.2f} "
-                      f"({arm_adopted[False]}/{arm_n[False]} sessions) vs "
-                      f"withheld {r_w:.2f} ({arm_adopted[True]}/{arm_n[True]}) "
-                      f"— if equal, the hint changes nothing and can die")
-            else:
-                print("  outcome join: no attributed task_close in one arm "
-                      "yet — counts only")
+        # Per-SESSIONE (review 1.35.1): braccio della sessione = braccio del
+        # suo PRIMO hint armato; sessioni con hint in entrambi i bracci
+        # (eventi legacy pre-fix) sono contaminate e si escludono; un
+        # task_close conta come adozione solo se chiuso DOPO il primo hint
+        # della sessione (un budget aperto prima non può essere effetto
+        # dell'hint). Soglia di sufficienza sulle stesse unità del
+        # confronto: sessioni, non eventi.
+        first_hint = {}   # sid -> (ts, holdout) del primo hint armato
+        arms_seen = {}    # sid -> set dei bracci visti
+        closes = {}       # sid -> [(ts, route)]
+        for ts, s, e, p in hint_sid:
+            if e == "route_hint" and "holdout" in p:
+                arms_seen.setdefault(s, set()).add(bool(p.get("holdout")))
+                if s not in first_hint:
+                    first_hint[s] = (ts, bool(p.get("holdout")))
+            elif e == "task_close":
+                closes.setdefault(s, []).append((ts, p.get("route") or "?"))
+        mixed = {s for s, a in arms_seen.items() if len(a) > 1}
+        NON_INLINE = {"external", "script", "workflow", "agent"}
+        arm_n = {True: 0, False: 0}
+        arm_adopted = {True: 0, False: 0}
+        for s, (hts, hold) in first_hint.items():
+            if s in mixed:
+                continue
+            arm_n[hold] += 1
+            if any(cts >= hts and r in NON_INLINE
+                   for cts, r in closes.get(s, [])):
+                arm_adopted[hold] += 1
+        print(f"\nRoute-hint control arm: {len(treated)} shown / "
+              f"{len(withheld)} withheld events — "
+              f"{arm_n[False]} shown / {arm_n[True]} withheld sessions"
+              + (f", {len(mixed)} mixed-arm sessions excluded" if mixed
+                 else ""))
+        if arm_n[False] >= 20 and arm_n[True] >= 5:
+            r_t = arm_adopted[False] / arm_n[False]
+            r_w = arm_adopted[True] / arm_n[True]
+            print(f"  cheap-route adoption (task_close after first hint): "
+                  f"shown {r_t:.2f} ({arm_adopted[False]}/{arm_n[False]}) vs "
+                  f"withheld {r_w:.2f} ({arm_adopted[True]}/{arm_n[True]}) "
+                  f"— if equal, the hint changes nothing and can die")
         else:
-            print("  insufficient data (need ≥20 shown, ≥5 withheld) — "
-                  "numbers below this would be theatre")
+            print("  insufficient data (need ≥20 shown and ≥5 withheld "
+                  "SESSIONS) — numbers below this would be theatre")
 
     # Calibrazione stime: rapporto actual/expected per tipo — l'errore di
     # stima è un dato, non una colpa. N<5 = indicativo, non direttivo.

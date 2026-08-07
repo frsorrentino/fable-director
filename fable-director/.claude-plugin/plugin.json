@@ -1,7 +1,7 @@
 {
   "name": "fable-director",
   "description": "Keeps Claude Code from spending your quota on work the top model didn't need to do: declared pre-budgets with deterministic 2x/3x enforcement, cheap-executor routing, objective token telemetry. Small one-offs pay ~5% overhead - built for sessions that delegate.",
-  "version": "1.35.0",
+  "version": "1.35.1",
   "author": {
     "name": "Francesco Sorrentino",
     "email": "info@francescosorrentino.com"

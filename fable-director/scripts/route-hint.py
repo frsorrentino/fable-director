@@ -20,8 +20,8 @@ errore di config.
 Control arm (misura, non feature): una frazione dei prompt con match
 (default 10%, `FD_HINT_HOLDOUT` 0..1) NON riceve l'hint ma l'evento viene
 loggato con `holdout:true` e i match che AVREBBE mostrato. La scelta è
-deterministica per (session_id, giorno UTC): stessa sessione = stesso
-braccio per tutto il giorno, niente flicker intra-task. Il confronto
+deterministica sul solo session_id: una sessione = un braccio, sempre
+(niente flip a mezzanotte UTC — review 1.35.1). Il confronto
 trattato/trattenuto vive in `fd-telemetry.py report` e stampa numeri solo
 sopra soglia di sufficienza — sotto, un rapporto sarebbe teatro. Idea dal
 control arm di ooples/token-optimizer-mcp (MIT), implementazione nostra:
@@ -98,14 +98,16 @@ def cardinality_candidate(prompt_lower):
 
 
 def in_holdout(session_id):
-    """Braccio di controllo deterministico per (sessione, giorno UTC).
+    """Braccio di controllo deterministico per sessione — SOLO session_id
+    (review 1.35.1: la componente giorno faceva cambiare braccio a
+    mezzanotte UTC a metà sessione, contaminando il confronto; una
+    sessione = un braccio, per sempre).
 
     Senza session_id niente holdout: un braccio non attribuibile non è
     misurabile, e l'hint resta utile.
     """
     import hashlib
     import os
-    from datetime import datetime, timezone
     if not session_id:
         return False
     try:
@@ -114,8 +116,7 @@ def in_holdout(session_id):
         frac = 0.1
     if not (0.0 <= frac <= 1.0):
         frac = 0.1
-    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    h = hashlib.sha256(f"{session_id}:{day}".encode()).hexdigest()
+    h = hashlib.sha256(f"fd-hint-arm:{session_id}".encode()).hexdigest()
     return (int(h[:8], 16) / 0xFFFFFFFF) < frac
 
 

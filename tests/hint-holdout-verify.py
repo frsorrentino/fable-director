@@ -107,26 +107,58 @@ with tempfile.TemporaryDirectory() as td:
     check("H7 sotto soglia: conteggi + teatro",
           "Route-hint control arm" in rep and "theatre" in rep, rep[-400:])
 
-    # H8: sopra soglia con esiti attribuiti
+    # H8: sopra soglia (in SESSIONI: ≥20 shown, ≥5 withheld) con esiti
+    # attribuiti; il vincolo temporale ammette solo task_close >= primo hint
     con = sqlite3.connect(fd / "telemetry.db")
-    from datetime import datetime, timezone
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    for i in range(25):
+    from datetime import datetime, timedelta, timezone
+    t0 = datetime.now(timezone.utc)
+
+    def iso(dt):
+        return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    for i in range(30):
         sid = f"s{i}"
         con.execute("INSERT INTO events(ts,session_id,cwd,event,payload) "
-                    "VALUES(?,?,?,?,?)", (now, sid, "/x", "route_hint",
-                    json.dumps({"matches": ["m"], "holdout": i < 6})))
-        # i<6 withheld; i pari con task_close route external
-        if i % 2 == 0:
+                    "VALUES(?,?,?,?,?)",
+                    (iso(t0), sid, "/x", "route_hint",
+                     json.dumps({"matches": ["m"], "holdout": i < 6})))
+        if i % 2 == 0:  # task_close DOPO l'hint → conta
             con.execute("INSERT INTO events(ts,session_id,cwd,event,payload) "
-                        "VALUES(?,?,?,?,?)", (now, sid, "/x", "task_close",
-                        json.dumps({"route": "external", "outcome": "ok"})))
+                        "VALUES(?,?,?,?,?)",
+                        (iso(t0 + timedelta(minutes=5)), sid, "/x",
+                         "task_close",
+                         json.dumps({"route": "external", "outcome": "ok"})))
+    # H10: sessione col task_close PRIMA dell'hint → non deve contare come
+    # adozione (s_pre: hint a t0, close a t0-10min)
+    con.execute("INSERT INTO events(ts,session_id,cwd,event,payload) "
+                "VALUES(?,?,?,?,?)",
+                (iso(t0), "s_pre", "/x", "route_hint",
+                 json.dumps({"matches": ["m"], "holdout": False})))
+    con.execute("INSERT INTO events(ts,session_id,cwd,event,payload) "
+                "VALUES(?,?,?,?,?)",
+                (iso(t0 - timedelta(minutes=10)), "s_pre", "/x", "task_close",
+                 json.dumps({"route": "external", "outcome": "ok"})))
+    # H9: sessione con hint in ENTRAMBI i bracci (legacy) → esclusa come mixed
+    for hold in (False, True):
+        con.execute("INSERT INTO events(ts,session_id,cwd,event,payload) "
+                    "VALUES(?,?,?,?,?)",
+                    (iso(t0), "s_mixed", "/x", "route_hint",
+                     json.dumps({"matches": ["m"], "holdout": hold})))
     con.commit()
     con.close()
     rep = subprocess.run([sys.executable, str(FDT), "report"],
                          capture_output=True, text=True, env=e).stdout
-    check("H8 sopra soglia: adoption per braccio",
-          "cheap-route adoption" in rep, rep[-600:])
+    check("H8 sopra soglia sessioni: adoption per braccio",
+          "cheap-route adoption" in rep, rep[-800:])
+    # shown sessions: 24 (i>=6) + s_pre = 25; withheld 6; mixed esclusa
+    # 2 miste: s_mixed (fixture) + sess-aaaa (H2/H3 la mettono in entrambi
+    # i bracci forzando la frazione — mista a buon diritto)
+    check("H9 sessione mista esclusa e dichiarata",
+          "2 mixed-arm sessions excluded" in rep, rep[-800:])
+    # adozione shown: i pari con i>=6 → 12 su 25 (s_pre NON conta: close
+    # precedente all'hint). Se contasse, sarebbe 13/25.
+    check("H10 task_close pre-hint non conta come adozione",
+          "12/25" in rep and "13/25" not in rep, rep[-800:])
 
 print()
 if FAILS:

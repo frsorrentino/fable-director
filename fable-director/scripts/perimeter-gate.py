@@ -20,13 +20,26 @@ dichiarato — dove il task può scrivere. Tre livelli indipendenti:
    sottocomando git (`{"deny_git": ["reset --hard", "clean -f",
    "branch -D", "checkout .", "restore .", "push --force", "push -f"]}`
    è il set consigliato — `push` semplice NON incluso di proposito).
-   Comando Bash che contiene `git` E un frammento (match su comando
-   normalizzato a spazi singoli) → deny, budget o no. Il match è
-   volutamente grezzo: meglio un falso positivo spiegato — il messaggio
-   dice all'utente di eseguire lui il comando o togliere il pattern — che
-   un reset passato in un compound command. Ispirato a
+   Match A TOKEN, non substring (review 1.35.1: il substring era
+   bypassato da riordino argomenti e quoting): il comando viene diviso
+   in invocazioni git (token `git` ovunque nel comando: copre compound,
+   xargs, $(...) appiattito da shlex), ogni frammento matcha se TUTTI i
+   suoi token sono presenti nell'invocazione — subcommand e long-flag
+   per uguaglianza, flag corta anche combinata POSIX (`-f` matcha
+   `-fd`). Ordine e argomenti frapposti irrilevanti: `git push origin
+   main --force` e `git reset -q "--hard"` sono presi. `gitbook` o un
+   frammento citato in un grep NON scattano (nessun token `git`);
+   `echo git reset --hard` è un falso positivo accettato e spiegato —
+   meglio di un reset passato. Quoting rotto (shlex fallisce) →
+   fallback substring prudente sull'intero comando. Ispirato a
    git-guardrails-claude-code (mattpocock/skills, MIT), reso opt-in e
    config-driven invece di lista fissa.
+
+Una config presente ma rotta (JSON invalido, deny_git non-lista) NON è
+più silenzio (review 1.35.1): il muro che si spegne lo dice — warning
+via systemMessage, throttled per mtime, mai bloccante. I frammenti
+vuoti vengono scartati (un frammento vuoto matchava tutto: fail-open
+invertito in fail-closed da un errore di tipo).
 
 File FUORI dal progetto (scratchpad, /tmp, stato in HOME) non sono mai
 vincolati dal livello 2: gli script di appoggio restano liberi. Il livello
@@ -97,40 +110,173 @@ def log_deny(kind, payload):
 
 
 def load_configs(cwd):
-    """Config perimetro: progetto prima, globale poi (merge additivo)."""
-    out = []
+    """Config perimetro: progetto prima, globale poi (merge additivo).
+
+    Ritorna (configs, broken): broken elenca i file presenti ma non
+    parsabili — il chiamante DEVE avvisare, un muro spento in silenzio è
+    il failure mode peggiore (review 1.35.1)."""
+    out, broken = [], []
     for cf in (Path(cwd) / ".fd-perimeter.json",
                Path.home() / ".claude" / "fable-director" / "perimeter.json"):
         if cf.is_file():
             try:
                 out.append(json.loads(cf.read_text()))
             except (json.JSONDecodeError, OSError):
-                pass
+                broken.append(cf)
+    return out, broken
+
+
+def warn_broken(broken):
+    """Avviso non bloccante per config rotta, throttled per (path, mtime):
+    stesso file rotto = un solo avviso finché non viene toccato."""
+    if not broken:
+        return None
+    import hashlib as _h
+    lines = []
+    marker_dir = Path.home() / ".claude" / "fable-director" / "grinding"
+    for cf in broken:
+        try:
+            mt = int(cf.stat().st_mtime)
+        except OSError:
+            mt = 0
+        key = _h.sha256(f"{cf}:{mt}".encode()).hexdigest()[:16]
+        marker = marker_dir / f"perimeter-warn-{key}"
+        if marker.exists():
+            continue
+        try:
+            marker_dir.mkdir(parents=True, exist_ok=True)
+            marker.touch()
+        except OSError:
+            pass
+        lines.append(str(cf))
+    if not lines:
+        return None
+    return ("⚠ FABLE-DIRECTOR: perimeter config file NOT parseable — its "
+            "never_write/deny_git protections are OFF until fixed: "
+            + ", ".join(lines))
+
+
+def norm_token(tok):
+    """Token senza quote residue (shlex le toglie già) e spazi."""
+    return tok.strip()
+
+
+def frag_matches(frag_tokens, cmd_tokens):
+    """Ogni token del frammento deve essere presente nell'invocazione:
+    subcommand/long-flag per uguaglianza, flag corta anche combinata
+    POSIX (-f matcha -fd ma non --force né -file… solo lettere)."""
+    cset = list(cmd_tokens)
+    for ft in frag_tokens:
+        hit = False
+        for ct in cset:
+            if ct == ft:
+                hit = True
+                break
+            if (len(ft) == 2 and ft.startswith("-") and not ft.startswith("--")
+                    and ct.startswith("-") and not ct.startswith("--")
+                    and ft[1] in ct[1:] and ct[1:].isalpha()):
+                hit = True  # flag corta combinata: -f dentro -fd
+                break
+        if not hit:
+            return False
+    return True
+
+
+def git_invocations(cmd):
+    """Tutte le finestre di token che seguono un token `git` (comando,
+    compound, xargs, subshell appiattita). shlex gestisce il quoting:
+    'git reset "--hard"' produce il token --hard pulito. Quoting rotto →
+    None (il chiamante fa fallback substring, prudente)."""
+    import shlex
+    try:
+        tokens = shlex.split(cmd)
+    except ValueError:
+        return None
+    out = []
+    for i, t in enumerate(tokens):
+        base = t.rsplit("/", 1)[-1]
+        if base == "git":
+            out.append([norm_token(x) for x in tokens[i + 1:]])
+    return out
+
+
+def dash_c_targets(invocations):
+    """Path passati a `git -C <dir>`: la protezione del progetto COLPITO
+    vale anche se la sessione gira altrove (review 1.35.1). Il `cd`
+    persistito nella shell resta un limite dichiarato: lo stato della
+    shell non è visibile all'hook."""
+    out = []
+    for inv in invocations or []:
+        for i, t in enumerate(inv):
+            if t == "-C" and i + 1 < len(inv):
+                out.append(inv[i + 1])
+            elif t.startswith("-C") and len(t) > 2:
+                out.append(t[2:])
     return out
 
 
 def check_git_guard(data):
     """Livello 3: comandi git distruttivi (tool Bash)."""
     cmd = (data.get("tool_input") or {}).get("command") or ""
-    if "git" not in cmd:
-        return
     cwd = data.get("cwd") or os.getcwd()
+    configs, broken = load_configs(cwd)
+    if "git" in cmd:
+        for target in dash_c_targets(git_invocations(cmd)):
+            tdir = Path(os.path.expanduser(target))
+            if not tdir.is_absolute():
+                tdir = Path(cwd) / tdir
+            if tdir.is_dir() and os.path.realpath(tdir) != os.path.realpath(cwd):
+                c2, b2 = load_configs(tdir)
+                configs += c2
+                broken += b2
+    warn = warn_broken(broken)
     frags = []
-    for cfg in load_configs(cwd):
-        frags += [str(f) for f in (cfg.get("deny_git") or [])]
-    if not frags:
+    for cfg in configs:
+        dg = cfg.get("deny_git")
+        if dg and not isinstance(dg, list):
+            # stringa al posto della lista: iterarla per caratteri negava
+            # OGNI comando git (fail-closed da errore di tipo) — meglio
+            # ignorare la chiave e dirlo.
+            warn = ((warn + "\n") if warn else "") + (
+                "⚠ FABLE-DIRECTOR: deny_git must be a LIST of fragments — "
+                "key ignored until fixed.")
+            continue
+        for f in (dg or []):
+            ftoks = [norm_token(x) for x in str(f).split() if norm_token(x)]
+            if ftoks:
+                frags.append((str(f), ftoks))
+    if not frags or "git" not in cmd:
+        if warn:
+            print(json.dumps({"systemMessage": warn}, ensure_ascii=False))
         return
-    flat = " ".join(cmd.split())
-    for frag in frags:
-        if " ".join(frag.split()) in flat:
-            log_deny("perimeter_deny", {"level": "deny_git", "fragment": frag})
-            deny(f"✕ FABLE-DIRECTOR git command DENIED — matches deny_git "
-                 f"fragment '{frag}' (permanent user protection in "
-                 f".fd-perimeter.json).\n"
-                 f"No AI task may run it: if it is truly needed, the USER "
-                 f"runs the command themselves or removes the fragment from "
-                 f"the config — do not work around this.")
-            return
+
+    invocations = git_invocations(cmd)
+    hit_frag = None
+    if invocations is None:
+        # quoting rotto: fallback substring prudente sull'intero comando
+        flat = " ".join(cmd.split())
+        for raw, _ in frags:
+            if " ".join(raw.split()) in flat:
+                hit_frag = raw
+                break
+    else:
+        for inv in invocations:
+            for raw, ftoks in frags:
+                if frag_matches(ftoks, inv):
+                    hit_frag = raw
+                    break
+            if hit_frag:
+                break
+    if hit_frag:
+        log_deny("perimeter_deny", {"level": "deny_git", "fragment": hit_frag})
+        deny(f"✕ FABLE-DIRECTOR git command DENIED — matches deny_git "
+             f"fragment '{hit_frag}' (permanent user protection in "
+             f".fd-perimeter.json).\n"
+             f"No AI task may run it: if it is truly needed, the USER "
+             f"runs the command themselves or removes the fragment from "
+             f"the config — do not work around this.")
+    elif warn:
+        print(json.dumps({"systemMessage": warn}, ensure_ascii=False))
 
 
 def main():
@@ -156,8 +302,12 @@ def main():
         inside_project = False
 
     # Livello 1 — never_write: progetto prima, globale poi.
+    configs, broken = load_configs(cwd)
+    warn = warn_broken(broken)
+    if warn:
+        print(json.dumps({"systemMessage": warn}, ensure_ascii=False))
     nw = []
-    for cfg in load_configs(cwd):
+    for cfg in configs:
         nw += list(cfg.get("never_write") or [])
     if nw and matches(abs_path, rel_path, nw):
         log_deny("perimeter_deny", {"path": rel_path, "level": "never_write"})

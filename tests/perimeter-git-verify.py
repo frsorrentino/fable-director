@@ -116,6 +116,73 @@ with tempfile.TemporaryDirectory() as td:
                            "cwd": str(proj)})
     check("G8b Write fuori pattern allow", not denied(out), out)
 
+    # --- Review 1.35.1: bypass chiusi e falsi positivi rimossi ---
+    (proj / ".fd-perimeter.json").write_text(
+        json.dumps({"deny_git": RECOMMENDED}))
+
+    # B1: riordino argomenti → deny
+    out = run(home, proj, bash("git push origin main --force", proj))
+    check("B1 push origin main --force deny", denied(out), out)
+    out = run(home, proj, bash("git reset -q --hard", proj))
+    check("B1b reset -q --hard deny", denied(out), out)
+
+    # B2: quoting → deny
+    out = run(home, proj, bash('git reset "--hard" HEAD~1', proj))
+    check("B2 reset \"--hard\" deny", denied(out), out)
+
+    # B3: flag corta combinata → deny (clean -fd contiene -f)
+    out = run(home, proj, bash("git clean -fd", proj))
+    check("B3 clean -fd deny", denied(out), out)
+
+    # B4: 'gitbook' nel path o frammento citato in grep → allow
+    out = run(home, proj, bash('grep -r "reset --hard" /home/u/gitbook/', proj))
+    check("B4 grep in gitbook allow", not denied(out), out)
+
+    # B5: commit message che cita la policy → allow (token dopo -m sono
+    # un argomento quotato, shlex li tiene ma 'push'+'--force' come token
+    # separati non ci sono)
+    out = run(home, proj, bash('git commit -m "vietato usare push --force"',
+                               proj))
+    check("B5 commit msg con frammento allow", not denied(out), out)
+
+    # B6: git checkout feature (senza '.') → allow; checkout -- . → deny
+    out = run(home, proj, bash("git checkout feature-branch", proj))
+    check("B6 checkout branch allow", not denied(out), out)
+    out = run(home, proj, bash("git checkout -- .", proj))
+    check("B6b checkout -- . deny", denied(out), out)
+
+    # B7: git -C verso progetto protetto da sessione esterna → deny
+    projC = Path(td) / "protetto"
+    projC.mkdir()
+    (projC / ".fd-perimeter.json").write_text(
+        json.dumps({"deny_git": ["reset --hard"]}))
+    neutral = Path(td) / "neutrale"
+    neutral.mkdir()
+    out = run(home, neutral,
+              bash(f"git -C {projC} reset --hard", neutral))
+    check("B7 git -C progetto protetto deny", denied(out), out)
+
+    # B8: deny_git stringa invece di lista → chiave ignorata con warning,
+    # git normale NON negato
+    projS = Path(td) / "projS"
+    projS.mkdir()
+    (projS / ".fd-perimeter.json").write_text(
+        json.dumps({"deny_git": "reset --hard"}))
+    out = run(home, projS, bash("git status", projS))
+    check("B8 config stringa: git status allow", not denied(out), out)
+    check("B8b warning presente", "must be a LIST" in out, out)
+
+    # B9: config JSON rotta → warning systemMessage (non silenzio), throttled
+    projB = Path(td) / "projB"
+    projB.mkdir()
+    (projB / ".fd-perimeter.json").write_text("{broken")
+    out = run(home, projB, bash("git reset --hard", projB))
+    check("B9 config rotta: warning non-bloccante",
+          not denied(out) and "NOT parseable" in out, out)
+    out = run(home, projB, bash("git reset --hard", projB))
+    check("B9b warning throttled al secondo giro",
+          "NOT parseable" not in out, out)
+
 print()
 if FAILS:
     print(f"FAIL: {len(FAILS)} check falliti: {', '.join(FAILS)}")
