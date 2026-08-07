@@ -275,8 +275,46 @@ def check_git_guard(data):
         print(json.dumps({"systemMessage": warn}, ensure_ascii=False))
 
 
+def on_directory_added(data):
+    """Hook DirectoryAdded (CC >=2.1.219): /add-dir estende dove la sessione
+    lavora, ma il perimetro dichiarato (--paths) e il livello 2 valgono solo
+    dentro il progetto — la dir nuova è fuori da entrambi. Avviso informativo
+    con l'emendamento pronto, mai bloccante: estendere lo scope è legittimo,
+    farlo di nascosto dal decision record no."""
+    newdir = (data.get("directory") or data.get("path")
+              or data.get("dir") or "")
+    cwd = data.get("cwd") or os.getcwd()
+    bfile = (Path.home() / ".claude" / "fable-director" / "budgets"
+             / f"{_slug(cwd)}.json")
+    has_perimeter = False
+    if bfile.is_file():
+        try:
+            b = json.loads(bfile.read_text())
+            has_perimeter = b.get("status") == "open" and bool(b.get("paths"))
+        except (json.JSONDecodeError, OSError):
+            pass
+    log_deny("perimeter_dir_added", {"dir": str(newdir),
+                                     "budget_perimeter": has_perimeter})
+    if has_perimeter:
+        print(json.dumps({"systemMessage":
+                          f"FD: directory aggiunta ({newdir}) — è FUORI dal "
+                          f"perimetro dichiarato del budget aperto. Se il "
+                          f"task deve scriverci: fd-telemetry.py budget-amend "
+                          f"--add-paths \"{newdir}/*\" --reason \"...\""},
+                         ensure_ascii=False))
+
+
+def _slug(cwd):
+    s = str(cwd).replace("\\", "/")
+    return (re.sub(r"[^A-Za-z0-9]+", "-", s).strip("-")
+            + "-" + hashlib.sha256(s.encode()).hexdigest()[:8])
+
+
 def main():
     data = json.load(sys.stdin)
+    if data.get("hook_event_name") == "DirectoryAdded":
+        on_directory_added(data)
+        return
     if data.get("tool_name") == "Bash":
         check_git_guard(data)
         return

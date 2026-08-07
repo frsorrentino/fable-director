@@ -315,6 +315,12 @@ def sum_transcript(path):
     # ripresentazione contesto.
     batch_calls = 0
     batch_turn_ids = set()
+    # Effort per messaggio (CC >=2.1.212 lo scrive nel transcript): dedup per
+    # message.id — stessi spezzoni multi-riga del batching. La distribuzione
+    # alimenta la taratura effort×tipo×costo nel report: quale effort serve a
+    # quale lavoro diventa una domanda di dati, non di frontmatter.
+    effort_mix = {}
+    effort_seen = set()
     rw = rework_new()
     try:
         fh = open(path, errors="replace")
@@ -352,6 +358,14 @@ def sum_transcript(path):
                 if mid:
                     batch_calls += n_calls_rec
                     batch_turn_ids.add(mid)
+            if rec.get("type") == "assistant" and not rec.get("isSidechain") \
+                    and rec.get("effort"):
+                mid = (rec.get("message") or {}).get("id")
+                if mid not in effort_seen:
+                    if mid:
+                        effort_seen.add(mid)
+                    lvl = str(rec["effort"])
+                    effort_mix[lvl] = effort_mix.get(lvl, 0) + 1
             rec_had_usage = False
             for usage, in_sub in find_usage(rec):
                 rec_had_usage = True
@@ -381,6 +395,8 @@ def sum_transcript(path):
     if batch_turn_ids:
         stats["tool_calls_per_turn"] = round(
             batch_calls / len(batch_turn_ids), 2)
+    if effort_mix:
+        stats["effort_mix"] = effort_mix
     # Rework: riaperture di file già scritti (informazione arrivata DOPO la
     # scrittura = contesto incompleto). Chiave presente solo se la sessione
     # ha scritto: l'assenza è "nessuna scrittura", non zero rework.
@@ -582,6 +598,21 @@ def cmd_budget_open(args):
     write_json_atomic(bfile, budget)
     log_event("task_open", budget, cwd=cwd)
     print(f"budget open: {bfile}")
+    # Stima in USD (opt-in, mai inventata): solo se l'utente ha dichiarato il
+    # listino in pricing.json ({"input_usd_per_mtok": N}). La stima eq è in
+    # input-equivalenti di listino, quindi USD = eq × prezzo input. Utile per
+    # allineare il paracadute nativo --max-budget-usd delle sessioni headless.
+    try:
+        pricing = json.loads((BASE / "pricing.json").read_text())
+        per_mtok = float(pricing.get("input_usd_per_mtok"))
+        est_eq = eq_tokens(max(exp_in, 0), exp_out, 0, 0)
+        usd = est_eq / 1_000_000 * per_mtok
+        print(f"  estimated ceiling ≈ ${usd:.2f} at declared list price "
+              f"({est_eq:,} eq × ${per_mtok:g}/Mtok input) — for headless "
+              f"batch sessions consider the native belt: "
+              f"claude --max-budget-usd {max(usd * 3, 1):.0f}")
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        pass  # nessun listino dichiarato: niente numeri inventati
 
 
 def cmd_budget_amend(args):
@@ -1021,6 +1052,29 @@ def cmd_report(args):
                       f"for planning/debug/review; an alarm only if code was expected")
         for a in alarms:
             print(f"⚠ ALARM (not a target): {a}")
+
+        # Effort mix (transcript CC >=2.1.212): distribuzione e costo eq per
+        # effort dominante di sessione — dato per tarare effort×tipo, mai
+        # target (spingere l'effort giù per far scendere l'eq è Goodhart).
+        emix = {}
+        for s in sessions:
+            for lvl, n in (s.get("effort_mix") or {}).items():
+                emix[lvl] = emix.get(lvl, 0) + int(n or 0)
+        if emix:
+            tot = sum(emix.values())
+            parts = ", ".join(f"{l} {n} ({n / tot:.0%})"
+                              for l, n in sorted(emix.items(), key=lambda x: -x[1]))
+            print(f"effort mix (main messages): {parts}")
+            by_dom = {}
+            for s in sessions:
+                em = s.get("effort_mix") or {}
+                if em and s.get("eq_tokens"):
+                    dom = max(em.items(), key=lambda x: x[1])[0]
+                    by_dom.setdefault(dom, []).append(s["eq_tokens"])
+            for d, vals in sorted(by_dom.items()):
+                vals.sort()
+                print(f"  sessions dominated by {d}: {len(vals)}, "
+                      f"median {fmt(vals[len(vals) // 2])} eq")
 
     retries = [p for e, p in events if e == "retry"]
     if retries:

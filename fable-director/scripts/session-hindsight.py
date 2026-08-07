@@ -110,8 +110,27 @@ def hook_cwd():
             or os.getcwd())
 
 
+CLAUDE_MD_HEAVY_BYTES = 12_000  # ~3k token pagati OGNI turno, tutta la sessione
+
+
+def claude_md_hygiene(cwd):
+    """Una riga se il CLAUDE.md del progetto è pesante: da CC 2.1.206 /doctor
+    sa proporre il taglio del contenuto derivabile dal codebase. Check
+    statico (dimensione), mai bloccante, tace sotto soglia."""
+    try:
+        f = Path(cwd) / "CLAUDE.md"
+        size = f.stat().st_size
+        if size >= CLAUDE_MD_HEAVY_BYTES:
+            print(f"\nCLAUDE.md pesa {size // 1024}KB (~{size // 4:,} token "
+                  f"pagati a OGNI turno): /doctor sa proporre il taglio del "
+                  f"contenuto che Claude può derivare dal codebase.")
+    except OSError:
+        pass
+
+
 def main():
     cwd = hook_cwd()
+    claude_md_hygiene(cwd)
     db = Path.home() / ".claude" / "fable-director" / "telemetry.db"
     if not db.is_file():
         return

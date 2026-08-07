@@ -63,7 +63,65 @@ def spark(vals, width=12):
     return "".join(glyphs[int((v - lo) / (hi - lo) * 7)] for v in vs)
 
 
+def fleet_view():
+    """--all: la spesa di TUTTA la macchina in un colpo — ogni budget APERTO
+    di ogni account (~/.claude e ~/.claude-pixel), dai file, zero canali.
+    Pensata per la sessione plancia: chi sta spendendo, quanto, da quando."""
+    homes = [Path.home() / d for d in (".claude", ".claude-pixel")]
+    now = datetime.now(timezone.utc)
+    found = 0
+    print("FABLE-DIRECTOR fleet — open budgets on this machine")
+    for home in homes:
+        bdir = home / "fable-director" / "budgets"
+        if not bdir.is_dir():
+            continue
+        for bf in sorted(bdir.glob("*.json")):
+            if bf.name.endswith(".state.json"):
+                continue
+            try:
+                b = json.loads(bf.read_text())
+            except (json.JSONDecodeError, OSError):
+                continue
+            if b.get("status") != "open":
+                continue
+            found += 1
+            exp = int(b.get("expected_output_tokens") or 0)
+            actual = None
+            sf = bf.with_name(bf.stem + ".state.json")
+            if sf.is_file():
+                try:
+                    st = json.loads(sf.read_text())
+                    if st.get("declared") == b.get("declared_at"):
+                        actual = (int(st.get("out") or 0)
+                                  + int(st.get("wf_out") or 0))
+                except (json.JSONDecodeError, OSError):
+                    pass
+            ratio = f"{actual / exp:.1f}×" if actual is not None and exp \
+                else "–"
+            age = ""
+            d = None
+            try:
+                d = datetime.strptime(b.get("declared_at") or "",
+                                      "%Y-%m-%dT%H:%M:%SZ")
+            except ValueError:
+                pass
+            if d:
+                mins = int((now - d.replace(tzinfo=timezone.utc))
+                           .total_seconds() / 60)
+                age = f"{mins // 60}h{mins % 60:02d}m" if mins >= 60 \
+                    else f"{mins}m"
+            cwd_short = "/".join(str(b.get("cwd") or "?").rstrip("/")
+                                 .split("/")[-2:])
+            print(f"  [{home.name}] {cwd_short} — {ratio} of {exp:,} "
+                  f"(open {age}) · {str(b.get('task') or '')[:56]}")
+    if not found:
+        print("  no open budgets — the fleet is not delegating right now")
+
+
 def main():
+    if "--all" in sys.argv[1:]:
+        fleet_view()
+        return
     detail = "--detail" in sys.argv[1:]
     rows = []          # (label, text) → impacchettate nel box a fine corsa
 

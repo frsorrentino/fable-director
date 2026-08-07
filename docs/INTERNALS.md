@@ -159,6 +159,30 @@ and it disables Claude Code's `/remote-control` on ≥2.1.196.
 noncommercial licence) is the other option. fable-director stays
 governance-only: measure first, then decide.
 
+## Native belts (Claude Code ≥ 2.1.212)
+
+Claude Code ships deterministic spend caps of its own. They compose with the
+plugin: the declared budget governs a TASK (2×/3× on what the model promised),
+the native belts cap a SESSION — a parachute, not a policy. Worth turning on:
+
+- `claude --max-budget-usd <n>` — hard dollar ceiling; since 2.1.212 it also
+  halts running background subagents at the cap. `budget-open` prints a
+  suggested value when you declare your list price in
+  `~/.claude/fable-director/pricing.json` (`{"input_usd_per_mtok": 10}`).
+- `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` (default 20),
+  `CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION` (default 200),
+  `CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION` (default 200) — runaway-loop
+  backstops far above any sane fan-out; the gate's pre-budget bites first.
+- `workflowSizeGuideline` in settings — declare the same ~10-15-items-per-agent
+  grouping axis 4 already prescribes, so dynamic workflows inherit it.
+- `CLAUDE_CODE_DISABLE_1M_CONTEXT=1` — holds 1M-window models to 200K via
+  auto-compaction. With cost-per-turn growing ~quadratically with context
+  (13.8k → 50k eq measured), the ceiling is the single biggest lever for
+  sessions that don't genuinely need the million — but tasks that DO benefit
+  from long context pay for it in quality: a per-workload choice, not a
+  default. Planned expiry (kernel) remains the lossless version of the same
+  idea: end at a verified boundary instead of compacting mid-flight.
+
 ## Known limits
 
 - **Claude Code versions.** The statusline needs ≥ 2.1.x for `context_window`
