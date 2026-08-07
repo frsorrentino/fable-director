@@ -159,6 +159,24 @@ and it disables Claude Code's `/remote-control` on ≥2.1.196.
 noncommercial licence) is the other option. fable-director stays
 governance-only: measure first, then decide.
 
+## Auto mode and the plugin's walls
+
+Auto mode (default on Pro/Max/Team since 2026-08-14) replaces per-command
+approval prompts with a permission classifier. Three facts matter here:
+
+- **The plugin's walls stand.** A PreToolUse hook answering `deny` — the
+  pre-budget gate, the write perimeter, `deny_git` — takes precedence over the
+  classifier. Auto mode suspends overly-broad user **allow rules**; it does not
+  suspend hooks.
+- **The classifier judges danger, not cost.** It blocks destructive commands;
+  it has no opinion on how many tokens a delegation should burn or which
+  executor is the cheap one. Budget enforcement and routing stay entirely on
+  this plugin.
+- **In bypass-permissions mode the walls are the only defense.** Sessions run
+  with `--dangerously-skip-permissions` skip the classifier too: there,
+  `never_write`, `deny_git` and the gate are the only deterministic protection
+  left — which is precisely the mode where this plugin earns its keep.
+
 ## Native belts (Claude Code ≥ 2.1.212)
 
 Claude Code ships deterministic spend caps of its own. They compose with the
