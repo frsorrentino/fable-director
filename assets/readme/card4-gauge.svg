@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif">
+  <defs>
+    <linearGradient id="bg4" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a1033"/>
+      <stop offset="1" stop-color="#241645"/>
+    </linearGradient>
+    <linearGradient id="quota" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7ee2a0"/>
+      <stop offset="0.6" stop-color="#ffd28a"/>
+      <stop offset="1" stop-color="#ff7b6b"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg4)"/>
+
+  <text x="70" y="105" fill="#ffffff" font-size="52" font-weight="800">See the limit coming.</text>
+  <text x="70" y="152" fill="#b9a7e8" font-size="26">Plan quotas, live budget and burn-rate — in your statusline, on every turn.</text>
+
+  <!-- mock statusline: barre disegnate, niente glifi -->
+  <rect x="70" y="215" width="1060" height="130" rx="18" fill="#0d1117" stroke="#3d2b73" stroke-width="2"/>
+  <g font-family="ui-monospace,Menlo,monospace" font-size="25">
+    <text x="100" y="266" fill="#e6edf3">FABLE 5 · ctx</text>
+    <rect x="292" y="248" width="120" height="20" rx="5" fill="#2f2159"/>
+    <rect x="292" y="248" width="34" height="20" rx="5" fill="#8A5CF6"/>
+    <text x="428" y="266" fill="#e6edf3">26% · 5H</text>
+    <text x="558" y="266" fill="#ffd28a" font-weight="700">71%</text>
+    <text x="622" y="266" fill="#9198a1">17:30 · 7D</text>
+    <text x="768" y="266" fill="#7ee2a0">46%</text>
+    <text x="100" y="316" fill="#9198a1">budget</text>
+    <rect x="200" y="298" width="90" height="20" rx="5" fill="#2f2159"/>
+    <rect x="200" y="298" width="30" height="20" rx="5" fill="#7ee2a0"/>
+    <text x="306" y="316" fill="#7ee2a0">0.7×</text>
+    <text x="372" y="316" fill="#9198a1">of estimate · delegated 41k · cache warm 47m</text>
+  </g>
+
+  <!-- barra quota grande -->
+  <text x="70" y="435" fill="#d9c9ff" font-size="24" font-weight="700">your weekly quota</text>
+  <rect x="70" y="455" width="1060" height="34" rx="17" fill="#2f2159"/>
+  <rect x="70" y="455" width="740" height="34" rx="17" fill="url(#quota)"/>
+  <!-- indicatore: cerchio con bordo, "tu sei qui" -->
+  <circle cx="810" cy="472" r="24" fill="#ffffff"/>
+  <circle cx="810" cy="472" r="10" fill="#241645"/>
+  <text x="852" y="481" fill="#ffd28a" font-size="24" font-weight="700">you are HERE — warned early</text>
+
+  <text x="70" y="560" fill="#ffffff" font-size="28" font-weight="700">The rate limit stops being a surprise —</text>
+  <text x="70" y="595" fill="#9db7f5" font-size="28">it becomes a dashboard you glance at.</text>
+</svg>

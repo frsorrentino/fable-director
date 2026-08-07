@@ -52,7 +52,11 @@ respected forever). No-CLI alternative and zip migration:
 - **You see what you actually spend** — the telemetry counts the real cost
   of every turn, not just the tokens that are easy to see.
 
+![Every expensive job makes a deal first: it declares a price, the gate checks it, cheap executors do the work, a hook warns at 2x and stops the turn at 3x. Small quick tasks skip all of this.](assets/readme/card5-journey.png)
+
 ## How much does it save?
+
+![Most of your AI bill is invisible: measured on 2,389 real sessions, only 10% is the answers you read — 72% is your context re-sent on every single turn. fable-director measures all of it.](assets/readme/card1-iceberg.png)
 
 **The honest one-sentence answer:** it doesn't save tokens on every task — it
 makes spend predictable, verified and disciplined, and on read-heavy loads it
@@ -109,6 +113,8 @@ of the four shapes came out at **−5.1%**; it's in there too.
 The distinction matters, so it's stated plainly: **hooks enforce, policy
 advises.**
 
+![Some rules are walls, some are advice: hooks on your machine deny — delegating with no declared price, spending past 3x, writing where you said never, sending restricted data outside. Policy guides the model's choices. Walls are deterministic: no model gets to talk its way through one.](assets/readme/card6-walls.png)
+
 Enforced deterministically, on your machine: delegation without an open budget
 is denied; spend past 3× blocks the turn until a post-mortem is written; writes
 outside the declared paths are denied, and so are the destructive git commands
@@ -130,6 +136,8 @@ Model, context, plan quotas and live budget at a glance — so you see the rate
 limit coming **before** it hits. One rule: half-light when healthy, full words
 when broken. `/fable-director:statusline` installs it; on a phone or web client
 `/fable-director:status` prints the same state as text.
+
+![See the limit coming: plan quotas, live budget and burn-rate in your statusline on every turn. The rate limit stops being a surprise — it becomes a dashboard you glance at.](assets/readme/card4-gauge.png)
 
 Every segment explained: **[docs/STATUSLINE.md](docs/STATUSLINE.md)**.
 

@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif">
+  <defs>
+    <linearGradient id="bg6" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a1033"/>
+      <stop offset="1" stop-color="#241645"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg6)"/>
+
+  <text x="70" y="105" fill="#ffffff" font-size="52" font-weight="800">Some rules are walls. Some are advice.</text>
+  <text x="70" y="152" fill="#b9a7e8" font-size="26">Knowing which is which is the whole point.</text>
+
+  <!-- pannello muri -->
+  <rect x="70" y="200" width="510" height="330" rx="24" fill="#2f2159" stroke="#8A5CF6" stroke-width="3"/>
+  <!-- mattoncini decorativi -->
+  <g fill="#8A5CF6">
+    <rect x="100" y="230" width="64" height="26" rx="5"/>
+    <rect x="172" y="230" width="64" height="26" rx="5"/>
+    <rect x="136" y="264" width="64" height="26" rx="5"/>
+    <rect x="100" y="264" width="28" height="26" rx="5"/>
+    <rect x="208" y="264" width="28" height="26" rx="5"/>
+  </g>
+  <text x="270" y="270" fill="#ffffff" font-size="34" font-weight="800">WALLS</text>
+  <text x="100" y="335" fill="#d9c9ff" font-size="23">Hooks on your machine. They deny.</text>
+  <g fill="#ffffff" font-size="23">
+    <text x="100" y="385">× delegating with no declared price</text>
+    <text x="100" y="425">× spending past 3× the estimate</text>
+    <text x="100" y="465">× writing where you said never</text>
+    <text x="100" y="505">× sending restricted data outside</text>
+  </g>
+
+  <!-- pannello consigli -->
+  <rect x="620" y="200" width="510" height="330" rx="24" fill="#1f1a3d" stroke="#5a4a8f" stroke-width="2" stroke-dasharray="10 8"/>
+  <circle cx="680" cy="255" r="30" fill="none" stroke="#7ee2a0" stroke-width="4"/>
+  <path d="M 680 233 L 690 265 L 680 258 L 670 265 Z" fill="#7ee2a0"/>
+  <text x="740" y="270" fill="#ffffff" font-size="34" font-weight="800">ADVICE</text>
+  <text x="650" y="335" fill="#d9c9ff" font-size="23">Policy the model follows. It guides.</text>
+  <g fill="#e6edf3" font-size="23">
+    <text x="650" y="385">» which jobs to hand off, and to whom</text>
+    <text x="650" y="425">» when a script beats any model</text>
+    <text x="650" y="465">» what must never be delegated</text>
+    <text x="650" y="505">» lessons learned from past overruns</text>
+  </g>
+
+  <text x="70" y="585" fill="#ffffff" font-size="28" font-weight="700">Walls are deterministic — <tspan fill="#9db7f5" font-weight="400">no model gets to talk its way through one.</tspan></text>
+</svg>

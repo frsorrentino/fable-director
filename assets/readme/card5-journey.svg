@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif">
+  <defs>
+    <linearGradient id="bg5" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a1033"/>
+      <stop offset="1" stop-color="#241645"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg5)"/>
+
+  <text x="70" y="105" fill="#ffffff" font-size="52" font-weight="800">Every expensive job makes a deal first.</text>
+  <text x="70" y="152" fill="#b9a7e8" font-size="26">Four steps, all automatic — you only read the receipt.</text>
+
+  <!-- linea percorso -->
+  <path d="M 150 330 H 1050" stroke="#3d2b73" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- tappa 1 -->
+  <circle cx="190" cy="330" r="56" fill="#8A5CF6"/>
+  <text x="190" y="343" fill="#ffffff" font-size="40" font-weight="900" text-anchor="middle">1</text>
+  <text x="190" y="430" fill="#ffffff" font-size="26" font-weight="700" text-anchor="middle">declares a price</text>
+  <text x="190" y="460" fill="#9db7f5" font-size="21" text-anchor="middle">"this job should</text>
+  <text x="190" y="484" fill="#9db7f5" font-size="21" text-anchor="middle">cost about X"</text>
+
+  <!-- tappa 2 -->
+  <circle cx="470" cy="330" r="56" fill="#8A5CF6"/>
+  <text x="470" y="343" fill="#ffffff" font-size="40" font-weight="900" text-anchor="middle">2</text>
+  <text x="470" y="430" fill="#ffffff" font-size="26" font-weight="700" text-anchor="middle">the gate checks</text>
+  <text x="470" y="460" fill="#9db7f5" font-size="21" text-anchor="middle">no declared price,</text>
+  <text x="470" y="484" fill="#9db7f5" font-size="21" text-anchor="middle">no delegation</text>
+
+  <!-- tappa 3 -->
+  <circle cx="750" cy="330" r="56" fill="#8A5CF6"/>
+  <text x="750" y="343" fill="#ffffff" font-size="40" font-weight="900" text-anchor="middle">3</text>
+  <text x="750" y="430" fill="#ffffff" font-size="26" font-weight="700" text-anchor="middle">cheap hands work</text>
+  <text x="750" y="460" fill="#9db7f5" font-size="21" text-anchor="middle">scripts, small models,</text>
+  <text x="750" y="484" fill="#9db7f5" font-size="21" text-anchor="middle">free external tiers</text>
+
+  <!-- tappa 4 -->
+  <circle cx="1030" cy="330" r="56" fill="#f0883e"/>
+  <text x="1030" y="343" fill="#ffffff" font-size="40" font-weight="900" text-anchor="middle">4</text>
+  <text x="1030" y="430" fill="#ffffff" font-size="26" font-weight="700" text-anchor="middle">a hook watches</text>
+  <text x="1030" y="460" fill="#ffd28a" font-size="21" text-anchor="middle">2× = you get warned</text>
+  <text x="1030" y="484" fill="#ff9f8a" font-size="21" text-anchor="middle">3× = it stops the turn</text>
+
+  <!-- frecce sulla linea -->
+  <g fill="#b79bff">
+    <polygon points="330,318 330,342 354,330"/>
+    <polygon points="610,318 610,342 634,330"/>
+    <polygon points="890,318 890,342 914,330"/>
+  </g>
+
+  <text x="70" y="580" fill="#ffffff" font-size="28" font-weight="700">Small quick tasks skip all of this — <tspan fill="#9db7f5" font-weight="400">the ritual only exists where the money is.</tspan></text>
+</svg>

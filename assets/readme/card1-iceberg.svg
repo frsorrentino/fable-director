@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a1033"/>
+      <stop offset="1" stop-color="#2d1b52"/>
+    </linearGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b2a5e"/>
+      <stop offset="1" stop-color="#0d1433"/>
+    </linearGradient>
+    <linearGradient id="bergtop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#cfe6ff"/>
+    </linearGradient>
+    <linearGradient id="bergdeep" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7fb2e8"/>
+      <stop offset="1" stop-color="#3a6bd8"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="240" fill="url(#sky)"/>
+  <rect y="240" width="1200" height="390" fill="url(#sea)"/>
+
+  <!-- titolo -->
+  <text x="70" y="105" fill="#ffffff" font-size="52" font-weight="800">Most of your AI bill is invisible.</text>
+  <text x="70" y="152" fill="#b9a7e8" font-size="26">We measured 2,389 real AI coding sessions.</text>
+
+  <!-- iceberg sopra -->
+  <polygon points="810,240 890,120 990,190 1050,240" fill="url(#bergtop)"/>
+  <!-- linea acqua -->
+  <rect y="236" width="1200" height="8" fill="#5aa7ff" opacity="0.55"/>
+  <!-- iceberg sotto -->
+  <polygon points="770,244 1090,244 1010,560 850,500" fill="url(#bergdeep)" opacity="0.92"/>
+
+  <!-- etichette -->
+  <text x="690" y="185" fill="#ffffff" font-size="30" font-weight="700" text-anchor="end">10%</text>
+  <text x="690" y="215" fill="#cfc2f2" font-size="20" text-anchor="end">the answers you read</text>
+
+  <text x="700" y="380" fill="#ffffff" font-size="64" font-weight="800" text-anchor="end">72%</text>
+  <text x="700" y="416" fill="#9db7f5" font-size="22" text-anchor="end">your context, re-sent</text>
+  <text x="700" y="442" fill="#9db7f5" font-size="22" text-anchor="end">on every single turn</text>
+
+  <!-- tagline -->
+  <rect x="70" y="520" width="560" height="60" rx="30" fill="#8A5CF6"/>
+  <text x="350" y="559" fill="#ffffff" font-size="26" font-weight="700" text-anchor="middle">fable-director measures all of it</text>
+</svg>
