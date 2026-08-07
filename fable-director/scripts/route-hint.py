@@ -121,29 +121,19 @@ def in_holdout(session_id):
 
 
 def write_event(payload, session_id=None, cwd=None):
-    import random
-    import sqlite3
-    import time
-    from datetime import datetime, timezone
-    base = base_dir()
-    base.mkdir(parents=True, exist_ok=True)
-    row = (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-           session_id, cwd, "route_hint", json.dumps(payload))
-    for attempt in range(4):
-        try:
-            con = sqlite3.connect(base / "telemetry.db", timeout=1.0)
-            con.execute("PRAGMA busy_timeout=1000")
-            con.execute("CREATE TABLE IF NOT EXISTS events("
-                        "id INTEGER PRIMARY KEY, ts TEXT NOT NULL, "
-                        "session_id TEXT, cwd TEXT, event TEXT NOT NULL, "
-                        "payload TEXT)")
-            con.execute("INSERT INTO events(ts, session_id, cwd, event, "
-                        "payload) VALUES(?,?,?,?,?)", row)
-            con.commit()
-            con.close()
-            return
-        except sqlite3.OperationalError:
-            time.sleep(0.05 * (2 ** attempt) + random.random() * 0.05)
+    """Unica fonte dell'insert-with-retry: log_event di fd-telemetry
+    (review 1.35.1 — tre copie divergevano già). Import fallito o insert
+    fallito dopo i retry → evento perso in silenzio: l'hint è best-effort,
+    mai bloccare il prompt per la telemetria."""
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "fd_telemetry", Path(__file__).with_name("fd-telemetry.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        mod.log_event("route_hint", payload, session_id=session_id, cwd=cwd)
+    except Exception:
+        pass
 
 
 def main():

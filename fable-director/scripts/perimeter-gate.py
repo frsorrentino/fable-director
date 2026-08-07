@@ -92,19 +92,15 @@ def matches(abs_path, rel_path, patterns):
 
 
 def log_deny(kind, payload):
-    """Best-effort: telemetria oggettiva, mai bloccante."""
+    """Best-effort: telemetria oggettiva, mai bloccante. Insert-with-retry
+    single-sourced in fd-telemetry.log_event (review 1.35.1)."""
     try:
-        import sqlite3
-        from datetime import datetime, timezone
-        db = Path.home() / ".claude" / "fable-director" / "telemetry.db"
-        con = sqlite3.connect(db, timeout=0.5)
-        con.execute("PRAGMA busy_timeout=500")
-        con.execute(
-            "INSERT INTO events(ts, event, payload) VALUES(?,?,?)",
-            (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-             kind, json.dumps(payload, ensure_ascii=False)))
-        con.commit()
-        con.close()
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "fd_telemetry", Path(__file__).with_name("fd-telemetry.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        mod.log_event(kind, payload)
     except Exception:
         pass
 
