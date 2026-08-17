@@ -7,6 +7,7 @@ Full release history. The README shows only the latest few entries.
 - **1.37.0**
   - New `tools/skeleton.py`: prints a file's API surface (signatures + first docstring line, with file:line) at a fraction of its tokens. Delegation contracts now ship signatures instead of full files when the executor only consumes an API — fresh input per agent is the dominant delegation cost, and a 430-line file becomes ~15 lines.
   - Planned-expiry distillates now carry their date and what invalidates them — a fresh session knows how much to trust a state file instead of guessing.
+  - SWE-bench Verified on/off results published (`benchmarks/swebench/`, official grader): no issue lost with the plugin, 2 extra resolved, token parity on hard issues, +47% premium on easy ones — the README now states both sides.
 
 ## 1.36.x
 
