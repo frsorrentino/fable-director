@@ -7,9 +7,10 @@ to do.** It makes your agent declare what a job should cost before it delegates,
 routes the cheap parts to cheap executors, and blocks the turn when spend runs
 away — with quality as a constraint, never part of the trade.
 
-**The honest price:** small one-off tasks cost **~5% more** — the fixed premium
-for the always-on checks. If your work is mostly quick one-offs, this plugin is
-not for you.
+**The honest price:** the always-on checks are a premium on small work — **~5%**
+on quick one-off tasks, and up to **+47%** on easy self-contained bug fixes
+(measured on SWE-bench, where the discipline had nothing to protect). If your
+work is mostly small and easy, this plugin is not for you.
 
 ## Quickstart
 
@@ -73,6 +74,7 @@ times each, counting real tokens and real dollars:
 | **Quality of results** | Equal or better everywhere it saves (98% vs 95%); never traded for savings | 🛡️ protected |
 | **Recurring jobs** (the same task every week) | The repeatable core becomes a script: from the second run, **that job** is close to free | ✅ the biggest saving |
 | **Non-code batches** (classify, extract, transform) | The bulk runs on free external models | ✅ off your Claude quota |
+| **Real-world bug fixing** (SWE-bench Verified, official grader) | Easy issues: +47% premium. Hard issues: **same tokens, nothing lost, 2 extra resolved**, zero runaway runs | 🛡️ insurance that pays off on hard work |
 
 To be clear: the deep cuts apply to **specific jobs the plugin can script or
 route externally**, not to your Claude usage as a whole. The 20-25% is what a
@@ -96,6 +98,14 @@ Three findings worth more than the percentages:
   of the cost is your context being re-sent on every turn — output tokens
   are just 10%. Since 1.33.0 the plugin measures and optimizes the cost you
   actually pay, not the one that's easy to count.
+- **The discipline pays exactly where work is hard.** On SWE-bench Verified
+  (official grader, on/off arms) the baseline went into a tailspin twice on hard
+  issues — 100 turns, 384k tokens burned without resolving, 54% of its entire
+  hard-set cost. The plugin arm never touched the guardrails, matched the token
+  count, lost nothing and resolved 2 extra issues. On easy issues the same checks
+  are pure overhead (+47%): it's insurance — you pay a premium on the small stuff
+  so the big stuff can't blow up. Full reports:
+  **[benchmarks/swebench/](benchmarks/swebench/)**.
 
 **Don't take our word for it — measure your own work:**
 

@@ -1,0 +1,48 @@
+{
+  "pilot": [
+    "sympy__sympy-22914",
+    "sympy__sympy-23950",
+    "django__django-16082",
+    "django__django-16429",
+    "psf__requests-1921"
+  ],
+  "riserve": [
+    "sympy__sympy-23534",
+    "django__django-13406",
+    "sympy__sympy-13757",
+    "django__django-14534",
+    "django__django-14915"
+  ],
+  "criteri": "patch gold 1 file <400 char, problem statement <4k, repo pure-python arm-friendly, versioni recenti dove possibile",
+  "full_hard": [
+    "django__django-14631",
+    "django__django-15629",
+    "django__django-16256",
+    "django__django-16263",
+    "django__django-16560",
+    "sympy__sympy-14248",
+    "sympy__sympy-22080",
+    "sympy__sympy-14531",
+    "sympy__sympy-16597",
+    "sympy__sympy-13877",
+    "sympy__sympy-19783",
+    "pytest-dev__pytest-5787",
+    "pytest-dev__pytest-8399",
+    "pytest-dev__pytest-6197",
+    "psf__requests-2317"
+  ],
+  "riserve_hard": [
+    "django__django-14170",
+    "django__django-16631",
+    "django__django-15563",
+    "sympy__sympy-20438",
+    "psf__requests-1766"
+  ],
+  "tranche": {
+    "1": ["django__django-16256", "django__django-14631", "django__django-15629", "django__django-16263", "django__django-16560"],
+    "2": ["sympy__sympy-14248", "sympy__sympy-22080", "sympy__sympy-14531", "sympy__sympy-16597", "sympy__sympy-13877"],
+    "3": ["sympy__sympy-19783", "pytest-dev__pytest-5787", "pytest-dev__pytest-8399", "pytest-dev__pytest-6197", "psf__requests-2317"]
+  },
+  "criteri_hard": "multi-file oppure patch >400 char, spec env solo defaults+pip E python>=3.8 (django<=3.2 richiede py3.6, assente su defaults aarch64 — 4 istanze + 2 riserve sostituite dopo gold-t1), no build C; scartate patch estreme (>15 file); canary tranche 1 = django__django-16256",
+  "sostituite_arm": ["django__django-11400", "django__django-13121", "django__django-13344", "django__django-11532"]
+}

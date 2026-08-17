@@ -120,3 +120,28 @@ on the workers** (shape 04's per-item review qualifies; a light task shows ~noth
 with our N=3 equal-model finding); (2) their run is on Managed Agents infrastructure, **outside**
 fable-director's local hook stack — same topology, different enforcement surface. So ~2.5× is an
 expectation anchor, not a target: we still publish our own measured number on our own stack.
+
+## SWE-bench Verified on/off (2026-08-12)
+
+An external, recognized exam with an official grader — not our harness judging our
+plugin. 15 instances (5 easy + 10 hard) × 2 arms: `claude-sonnet-5` headless without
+the plugin (A) vs with fable-director 1.37.0 (B), identical prompts, sequential runs,
+gold-patch sanity 15/15 before spending model tokens, every verdict from the official
+`swebench` 4.1.0 grader.
+
+- **Quality: protected.** A 10/15, B 12/15; both discordant instances are pro-B — the
+  plugin loses nothing the baseline resolves. At n=10 hard with 2 discordant pairs
+  (McNemar p=0.5) the defensible claim is "quality protected", not "improved".
+- **Tokens: the premium exists only where work is easy.** Easy split: B +47%. Hard
+  split: parity (+1.2%), cost slightly pro-B — the baseline hit the turn-limit twice,
+  burning 384k tokens without resolving (54% of its hard-set cost); the plugin arm
+  never touched the guards.
+- **Cost honesty:** the 1.5M new-token ceiling held, but real spend was ~2× the
+  estimate — cache read (~50M tokens) dominated, which the ceiling didn't count.
+  The project's own thesis biting its own benchmark; future runs cap in dollars.
+- **Limits:** arm64 build constraints exclude django ≤3.2 (sample skews recent), 5
+  planned hard instances never ran (ceiling), one run per pair, one model.
+
+Full reports with per-instance tables and grader verdict files:
+**[swebench/](swebench/)** ([PILOT.md](swebench/PILOT.md) ·
+[FULLRUN.md](swebench/FULLRUN.md)).
