@@ -53,6 +53,10 @@ def project_dirs_for_cwd():
     cwd_slug = "-" + str(Path.cwd()).strip("/").replace("/", "-").replace(".", "-")
     dirs = []
     cfg = os.environ.get("CLAUDE_CONFIG_DIR")
+    # Host con nome custom per la dir transcript (CLAUDE_CODE_PROJECT_DIR_NAME,
+    # CC ≥2.1.234): lo slug derivato dal cwd non esiste su disco — si prova
+    # prima il nome dichiarato; var assente o dir mancante → percorso classico.
+    custom = os.environ.get("CLAUDE_CODE_PROJECT_DIR_NAME")
     bases = [Path(cfg) / "projects"] if cfg else []
     default = Path.home() / ".claude" / "projects"
     # CLAUDE_CONFIG_DIR può puntare a ~/.claude: senza dedup la stessa dir
@@ -61,6 +65,9 @@ def project_dirs_for_cwd():
         bases.append(default)
     for base in bases:
         if not base.is_dir():
+            continue
+        if custom and (base / custom).is_dir():
+            dirs.append(base / custom)
             continue
         exact = base / cwd_slug
         if exact.is_dir():

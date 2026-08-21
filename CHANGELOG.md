@@ -2,6 +2,13 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.38.x
+
+- **1.38.0**
+  - Axis 6 is now fork-aware (kernel + skill): a `subagent_type: "fork"` inherits conversation and prompt cache — no ~17k cold start (measured, n=3: 106-696 tok created per turn) — but re-pays the whole parent context every turn as cache_read, always on the parent's model. Policy states when a fork pays off (~3-5 turns at 100-140k CTX, 1-2 beyond 200k) and that batch/spec-able work stays on fresh pinned executors.
+  - `budget-close` and `budget-amend` resolve the budget session-first: your open budget is found by session id even when the shell sits in another directory (a stray `cd` used to close the wrong cwd's budget silently). Another session's fresh budget is refused without an explicit `--cwd`; >24h it's an orphan and closes normally. New suite: `tests/budget-close-session-verify.py` (7 checks).
+  - `session-cost-report.py` honors `CLAUDE_CODE_PROJECT_DIR_NAME` (hosts with custom transcript dir names, CC ≥2.1.234) — unset, behavior unchanged.
+
 ## 1.37.x
 
 - **1.37.0**

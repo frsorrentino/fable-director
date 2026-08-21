@@ -615,6 +615,71 @@ def cmd_budget_open(args):
         pass  # nessun listino dichiarato: niente numeri inventati
 
 
+def resolve_budget_file(cwd_opt):
+    """Risoluzione SESSION-FIRST del budget file per close/amend (incidente
+    2026-08-21: un cd residuo nella shell ha fatto chiudere con outcome ok il
+    budget stantio di un ALTRO cwd). Regole:
+    - --cwd esplicito = intento dichiarato: slug diretto, nessun filtro;
+    - senza --cwd, con CLAUDE_CODE_SESSION_ID nell'env: il budget open/flagged
+      di QUESTA sessione vince sul cwd del processo (avviso se differiscono;
+      più d'uno → ambiguo, si chiede --cwd);
+    - fallback slug del cwd corrente, ma il budget FRESCO (<24h, stessa soglia
+      orfano del lease di budget-open) di un'altra sessione si rifiuta:
+      chiuderlo distruggerebbe il suo enforcement/post-mortem;
+    - env senza session id → comportamento legacy, identico a prima.
+    Ritorna (cwd, bfile): il cwd del budget risolto, così log_event e ricevuta
+    portano il cwd giusto anche quando il processo sta altrove."""
+    if cwd_opt:
+        return cwd_opt, BUDGETS / f"{cwd_slug(cwd_opt)}.json"
+    cwd = os.getcwd()
+    sid = safe_sid(os.environ.get("CLAUDE_CODE_SESSION_ID"))
+    if sid and BUDGETS.is_dir():
+        mine = []
+        for p in sorted(BUDGETS.glob("*.json")):
+            if p.name.endswith(".state.json"):
+                continue
+            try:
+                b = json.loads(p.read_text())
+            except (json.JSONDecodeError, OSError):
+                continue
+            if b.get("status") in ("open", "flagged") \
+                    and b.get("owner_sid") == sid:
+                mine.append((p, b))
+        if len(mine) == 1:
+            p, b = mine[0]
+            bcwd = b.get("cwd")
+            if bcwd and str(bcwd) != str(cwd):
+                print(f"FD nota: budget di questa sessione dichiarato in "
+                      f"{bcwd} (processo in {cwd}) — risolto per sessione")
+                return str(bcwd), p
+            return cwd, p
+        if len(mine) > 1:
+            tasks = ", ".join(f"'{(b.get('task') or '?')[:40]}'"
+                              for _, b in mine)
+            sys.exit(f"budget ambiguo: questa sessione ha "
+                     f"{len(mine)} budget aperti ({tasks}) — "
+                     f"usa --cwd per indicare quale")
+    bfile = BUDGETS / f"{cwd_slug(cwd)}.json"
+    if sid and bfile.is_file():
+        try:
+            b = json.loads(bfile.read_text())
+            other = b.get("owner_sid")
+            declared = parse_ts(b.get("declared_at"))
+            fresh = (declared is not None and
+                     (datetime.now(timezone.utc) - declared)
+                     .total_seconds() < 86400)
+            if other and other != sid and fresh \
+                    and b.get("status") in ("open", "flagged"):
+                sys.exit(f"refused: il budget di questo cwd appartiene a "
+                         f"un'altra sessione ({other[:8]}…, task "
+                         f"'{b.get('task')}') ed è fresco (<24h) — "
+                         f"--cwd esplicito solo se sai che è morta; "
+                         f">24h diventa orfano e si chiude senza flag")
+        except (json.JSONDecodeError, OSError):
+            pass
+    return cwd, bfile
+
+
 def cmd_budget_amend(args):
     """Emendamento ESPLICITO del perimetro del budget aperto: il deny del
     perimeter-gate non si aggira, si emenda — e l'emendamento resta nel
@@ -624,8 +689,7 @@ def cmd_budget_amend(args):
                              "--cwd": None})
     if not opts["--add-paths"]:
         sys.exit("budget-amend requires --add-paths \"glob[,glob]\"")
-    cwd = opts["--cwd"] or os.getcwd()
-    bfile = BUDGETS / f"{cwd_slug(cwd)}.json"
+    cwd, bfile = resolve_budget_file(opts["--cwd"])
     if not bfile.is_file():
         sys.exit(f"nessun budget file: {bfile}")
     budget = json.loads(bfile.read_text())
@@ -653,8 +717,7 @@ def cmd_budget_amend(args):
 def cmd_budget_close(args):
     opts = parse_opts(args, {"--outcome": "ok", "--cwd": None,
                              "--actual-output": None})
-    cwd = opts["--cwd"] or os.getcwd()
-    bfile = BUDGETS / f"{cwd_slug(cwd)}.json"
+    cwd, bfile = resolve_budget_file(opts["--cwd"])
     if not bfile.is_file():
         sys.exit(f"nessun budget file: {bfile}")
     budget = json.loads(bfile.read_text())
