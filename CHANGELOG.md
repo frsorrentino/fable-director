@@ -2,6 +2,11 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.39.x
+
+- **1.39.0**
+  - Economics per model: `model-economics.json` (shipped, user override in `~/.claude/fable-director/`) holds the eq multipliers that change with a model's price list — cache reads at 0.025× on Claude Fable 5.1, 0.1× elsewhere. `fd-telemetry.py`, the Stop hook and `session-cost-report.py` weigh every cache read at the rate of the model that made it, record by record (`message.model`), so a `/model` switch mid-session is priced from that turn on. A new model is one line in the file, never a policy change. New suite: `tests/model-economics-verify.py` (11 checks).
+
 ## 1.38.x
 
 - **1.38.0**

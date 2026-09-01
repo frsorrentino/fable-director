@@ -1,0 +1,14 @@
+{
+  "_doc": [
+    "Parametri ECONOMICI per modello: moltiplicatori input-equivalenti (eq) delle quattro componenti di usage.",
+    "La policy (assi, regole strutturali) e' universale; qui vive solo cio' che cambia con il listino.",
+    "Lookup: prefisso piu' lungo dell'id modello (es. 'claude-fable-5-1' copre anche varianti datate); nessun match -> 'default'.",
+    "Override utente: ~/.claude/fable-director/model-economics.json (stessa forma; 'models' si fonde, 'default' si sovrascrive per chiave).",
+    "Modello nuovo = una riga in 'models'; la policy non si tocca.",
+    "Fonte tariffe: listino Anthropic 2026-08 — cache read 0.1x input su tutti i modelli, 0.025x su Claude Fable 5.1 ($0.25/MTok su $10)."
+  ],
+  "default": {"input": 1.0, "output": 5.0, "cache_read": 0.1, "cache_create": 1.25},
+  "models": {
+    "claude-fable-5-1": {"cache_read": 0.025}
+  }
+}

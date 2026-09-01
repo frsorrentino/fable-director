@@ -92,15 +92,70 @@ USAGE_KEYS = ("input_tokens", "output_tokens",
 # ovunque, l'enforcement 2×/3× resta sui token dichiarati finché una taratura
 # su budget reali non fissa le soglie eq.
 EQ_MULT = {"input": 1.0, "output": 5.0, "cache_read": 0.1, "cache_create": 1.25}
+# I moltiplicatori sopra sono il DEFAULT universale; le parti che cambiano
+# col listino di un modello (oggi: cache_read 0.025x su claude-fable-5-1)
+# vivono in model-economics.json — shipped con il plugin, override utente in
+# ~/.claude/fable-director/model-economics.json. Un modello nuovo e' una
+# riga in 'models', mai un cambio di policy. Il modello va letto dal record
+# che si sta contando (message.model), mai cachato a inizio sessione:
+# /model puo' cambiarlo a meta' sessione.
+ECON_SHIPPED = Path(__file__).resolve().parent.parent / "model-economics.json"
+ECON_USER = BASE / "model-economics.json"
+_ECON = None
 # Tier di effort ammessi (allineati al frontmatter agent di Claude Code).
 EFFORT_LEVELS = {"low", "medium", "high", "xhigh", "max"}
 
 
-def eq_tokens(inp, out, cr, cc):
+def model_economics():
+    """{'default': {...}, 'models': {prefix: {...}}} — shipped + override
+    utente fusi ('models' per chiave, 'default' per campo). File assenti o
+    illeggibili → EQ_MULT puro: la contabilita' non dipende mai dal file."""
+    global _ECON
+    if _ECON is None:
+        econ = {"default": dict(EQ_MULT), "models": {}}
+        for path in (ECON_SHIPPED, ECON_USER):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            econ["default"].update(
+                {k: float(v) for k, v in (data.get("default") or {}).items()
+                 if k in EQ_MULT})
+            for name, mult in (data.get("models") or {}).items():
+                if isinstance(mult, dict):
+                    econ["models"].setdefault(name, {}).update(
+                        {k: float(v) for k, v in mult.items() if k in EQ_MULT})
+        _ECON = econ
+    return _ECON
+
+
+def eq_mult(model=None):
+    """Moltiplicatori eq per un id modello: match sul prefisso piu' lungo in
+    'models' (cosi' 'claude-fable-5-1' copre anche varianti datate), altrimenti
+    'default'. model None/unknown → default."""
+    econ = model_economics()
+    mult = dict(econ["default"])
+    if model:
+        best = max((k for k in econ["models"] if str(model).startswith(k)),
+                   key=len, default=None)
+        if best:
+            mult.update(econ["models"][best])
+    return mult
+
+
+def eq_tokens(inp, out, cr, cc, model=None, cr_by_model=None):
     """Costo in input-equivalenti dalle quattro componenti pure di usage
-    (inp = input_tokens puri, NON input+cache_create)."""
-    return int(inp * EQ_MULT["input"] + out * EQ_MULT["output"]
-               + cr * EQ_MULT["cache_read"] + cc * EQ_MULT["cache_create"])
+    (inp = input_tokens puri, NON input+cache_create). `model` sceglie i
+    moltiplicatori; `cr_by_model` ({id: cache_read}) sostituisce `cr` quando
+    la sessione ha letto cache su piu' modelli (ogni quota alla SUA tariffa)."""
+    m = eq_mult(model)
+    if cr_by_model:
+        cr_term = sum((v or 0) * eq_mult(k)["cache_read"]
+                      for k, v in cr_by_model.items())
+    else:
+        cr_term = cr * m["cache_read"]
+    return int(inp * m["input"] + out * m["output"]
+               + cr_term + cc * m["cache_create"])
 SENTINEL_MIN_RECORDS = 20  # sotto: transcript troppo corto per giudicare lo schema
 # Riaperture da cui il rework smette di essere un fatto e diventa una diagnosi
 # (contesto incompleto): sotto questa soglia si riporta il numero e basta —
@@ -207,19 +262,23 @@ def log_event(event, payload, session_id=None, cwd=None):
     raise last
 
 
-def find_usage(obj, in_subagent=False):
-    """Yield (usage, in_subagent): usage annidati sotto toolUseResult sono
-    l'aggregato di un subagent completato — il main transcript basta per la
-    contabilità completa senza scansionare i file agent (né double counting)."""
+def find_usage(obj, in_subagent=False, model=None):
+    """Yield (usage, in_subagent, model): usage annidati sotto toolUseResult
+    sono l'aggregato di un subagent completato — il main transcript basta per
+    la contabilità completa senza scansionare i file agent (né double
+    counting). `model` = message.model piu' vicino nell'albero (None se
+    assente): serve alla tariffa cache_read per modello, letta record per
+    record — un /model a meta' sessione cambia la tariffa da li' in poi."""
     if isinstance(obj, dict):
+        model = obj.get("model") if isinstance(obj.get("model"), str) else model
         usage = obj.get("usage")
         if isinstance(usage, dict) and any(k in usage for k in USAGE_KEYS):
-            yield (usage, in_subagent)
+            yield (usage, in_subagent, model)
         for k, v in obj.items():
-            yield from find_usage(v, in_subagent or k == "toolUseResult")
+            yield from find_usage(v, in_subagent or k == "toolUseResult", model)
     elif isinstance(obj, list):
         for v in obj:
-            yield from find_usage(v, in_subagent)
+            yield from find_usage(v, in_subagent, model)
 
 
 CACHE_RESET_THRESHOLD = 10_000  # cache_read "alto" prima di un reset sospetto
@@ -297,6 +356,7 @@ def sum_transcript(path):
     main = dict.fromkeys(USAGE_KEYS, 0)
     sub = dict.fromkeys(USAGE_KEYS, 0)
     n_sub = 0
+    cr_by_model = {}  # cache_read per modello (main+sub): tariffa eq per modello
     n_records = n_usage_recs = 0
     cache_resets = 0
     had_high_read = False
@@ -367,11 +427,15 @@ def sum_transcript(path):
                     lvl = str(rec["effort"])
                     effort_mix[lvl] = effort_mix.get(lvl, 0) + 1
             rec_had_usage = False
-            for usage, in_sub in find_usage(rec):
+            for usage, in_sub, model in find_usage(rec):
                 rec_had_usage = True
                 bucket = sub if in_sub else main
                 for k in USAGE_KEYS:
                     bucket[k] += usage.get(k) or 0
+                _cr = usage.get("cache_read_input_tokens") or 0
+                if _cr:
+                    cr_by_model[model or "unknown"] = \
+                        cr_by_model.get(model or "unknown", 0) + _cr
                 if in_sub:
                     n_sub += 1
                 else:
@@ -397,6 +461,8 @@ def sum_transcript(path):
             batch_calls / len(batch_turn_ids), 2)
     if effort_mix:
         stats["effort_mix"] = effort_mix
+    if cr_by_model:
+        stats["cache_read_by_model"] = cr_by_model
     # Rework: riaperture di file già scritti (informazione arrivata DOPO la
     # scrittura = contesto incompleto). Chiave presente solo se la sessione
     # ha scritto: l'assenza è "nessuna scrittura", non zero rework.
@@ -437,16 +503,23 @@ def sum_workflow_agents(path):
                     rec = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                for usage, _ in find_usage(rec):
+                for usage, _, model in find_usage(rec):
                     for k in USAGE_KEYS:
                         tot[k] += usage.get(k) or 0
+                    _cr = usage.get("cache_read_input_tokens") or 0
+                    if _cr:
+                        tot.setdefault("cache_read_by_model", {})
+                        tot["cache_read_by_model"][model or "unknown"] = \
+                            tot["cache_read_by_model"].get(model or "unknown", 0) + _cr
     return tot, n_files
 
 
-def derived_metrics(inp, out, cr, cc, main_out, sub_out, n_sub):
-    """Metriche derivate; None dove il denominatore è zero."""
+def derived_metrics(inp, out, cr, cc, main_out, sub_out, n_sub,
+                    cr_by_model=None):
+    """Metriche derivate; None dove il denominatore è zero. `cr_by_model`
+    applica a ogni quota di cache_read la tariffa del SUO modello."""
     total_in = inp + cr + cc
-    eq = eq_tokens(inp, out, cr, cc)
+    eq = eq_tokens(inp, out, cr, cc, cr_by_model=cr_by_model)
     return {
         "cache_hit_ratio": cr / (cr + cc) if (cr + cc) else None,
         "cache_efficiency": cr / total_in if total_in else None,
@@ -748,8 +821,15 @@ def cmd_budget_close(args):
                 _cc = int(st.get("cc") or 0) + int(st.get("wf_cc") or 0)
                 _in = int(st.get("inp") or 0) + int(st.get("wf_inp") or 0)
                 _out = int(st.get("out") or 0) + int(st.get("wf_out") or 0)
+                _crm = {}
+                for key in ("cr_by_model", "wf_cr_by_model"):
+                    for m, v in (st.get(key) or {}).items():
+                        _crm[m] = _crm.get(m, 0) + int(v or 0)
                 budget.setdefault("actual_eq_tokens",
-                                  eq_tokens(max(_in - _cc, 0), _out, _cr, _cc))
+                                  eq_tokens(max(_in - _cc, 0), _out, _cr, _cc,
+                                            cr_by_model=_crm or None))
+                if _crm:
+                    budget.setdefault("cache_read_by_model", _crm)
                 # Rework del task (contato dallo Stop hook nello stesso scan):
                 # nel task_close alimenta la vista per-tipo del report — un
                 # tipo che riapre sempre = contratto/contesto sistematicamente

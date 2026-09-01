@@ -108,16 +108,21 @@ def parse_ts(s):
         return None
 
 
-def find_usage(obj):
+def find_usage(obj, model=None):
+    """Yield (usage, model): il modello e' message.model piu' vicino nell'albero
+    — serve alla tariffa cache_read per modello (model-economics.json), letta
+    record per record perche' /model puo' cambiare a meta' sessione."""
     if isinstance(obj, dict):
+        if isinstance(obj.get("model"), str):
+            model = obj["model"]
         usage = obj.get("usage")
         if isinstance(usage, dict) and any(k in usage for k in USAGE_KEYS):
-            yield usage
+            yield (usage, model)
         for v in obj.values():
-            yield from find_usage(v)
+            yield from find_usage(v, model)
     elif isinstance(obj, list):
         for v in obj:
-            yield from find_usage(v)
+            yield from find_usage(v, model)
 
 
 def scan_jsonl(path, sub, since):
@@ -188,7 +193,7 @@ def scan_jsonl(path, sub, since):
             if mod:
                 for name, tin in mod.find_tool_uses(rec):
                     mod.rework_update(rw, name, tin)
-        for usage in usages:
+        for usage, model in usages:
             sub["out"] += usage.get("output_tokens") or 0
             sub["inp"] += (usage.get("input_tokens") or 0) + \
                           (usage.get("cache_creation_input_tokens") or 0)
@@ -200,7 +205,24 @@ def scan_jsonl(path, sub, since):
                 (usage.get("cache_read_input_tokens") or 0)
             sub["cc"] = (sub.get("cc") or 0) + \
                 (usage.get("cache_creation_input_tokens") or 0)
+            # cache_read PER MODELLO: ogni quota alla sua tariffa in eq
+            # (Fable 5.1 0,025× contro 0,1×). Chiave = id modello del record.
+            _cr = usage.get("cache_read_input_tokens") or 0
+            if _cr:
+                crm = sub.setdefault("cr_by_model", {})
+                key = model or "unknown"
+                crm[key] = int(crm.get(key) or 0) + _cr
     sub["last_ts"] = last_ts.isoformat() if last_ts else None
+
+
+def _merge_cr_by_model(state):
+    """Somma main + agenti Workflow per modello; {} se nessuno dei due ha la
+    mappa (state di versioni precedenti → eq alla tariffa default)."""
+    out = {}
+    for key in ("cr_by_model", "wf_cr_by_model"):
+        for m, v in (state.get(key) or {}).items():
+            out[m] = out.get(m, 0) + int(v or 0)
+    return out
 
 
 def scan_workflow_agents(transcript, since, state):
@@ -224,6 +246,11 @@ def scan_workflow_agents(transcript, since, state):
     state["wf_inp"] = sum(s.get("inp") or 0 for s in wf.values())
     state["wf_cr"] = sum(s.get("cr") or 0 for s in wf.values())
     state["wf_cc"] = sum(s.get("cc") or 0 for s in wf.values())
+    wf_crm = {}
+    for s in wf.values():
+        for m, v in (s.get("cr_by_model") or {}).items():
+            wf_crm[m] = wf_crm.get(m, 0) + int(v or 0)
+    state["wf_cr_by_model"] = wf_crm
     return state["wf_out"], state["wf_inp"]
 
 
@@ -321,7 +348,9 @@ def main():
     if mod and hasattr(mod, "eq_tokens"):
         cr = (state.get("cr") or 0) + (state.get("wf_cr") or 0)
         cc = (state.get("cc") or 0) + (state.get("wf_cc") or 0)
-        actual_eq = mod.eq_tokens(max(actual_in - cc, 0), actual_out, cr, cc)
+        crm = _merge_cr_by_model(state)
+        actual_eq = mod.eq_tokens(max(actual_in - cc, 0), actual_out, cr, cc,
+                                  cr_by_model=crm or None)
 
     # Sentinella di schema: molti record validi ma zero usage o zero timestamp
     # riconosciuti = formato transcript probabilmente cambiato. I conteggi

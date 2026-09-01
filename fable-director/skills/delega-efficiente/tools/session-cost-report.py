@@ -30,6 +30,23 @@ USAGE_KEYS = ("input_tokens", "output_tokens",
               "cache_read_input_tokens", "cache_creation_input_tokens")
 
 
+def _fdt():
+    """fd-telemetry.py del plugin (stessa installazione): fonte unica dei
+    moltiplicatori eq per modello (model-economics.json). None se assente:
+    il report resta in token puri, senza inventare tariffe."""
+    import importlib.util
+    cand = Path(__file__).resolve().parents[3] / "scripts" / "fd-telemetry.py"
+    if not cand.is_file():
+        return None
+    try:
+        spec = importlib.util.spec_from_file_location("fdt", cand)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+    except Exception:
+        return None
+
+
 def find_usage(obj, model_hint=None, in_tool_result=False):
     """Cerca ricorsivamente blocchi usage con i campi token; yield (model, usage).
 
@@ -188,15 +205,31 @@ def main():
 
     print(f"# Report token — {len(files)} transcript, "
           f"{bad_lines} righe illeggibili (ignorate)\n")
-    print(f"{'modello':<40} {'input':>12} {'output':>12} {'cache_read':>12} {'cache_new':>12}")
+    fdt = _fdt()
+    eq_col = f" {'eq':>12} {'cr×':>5}" if fdt else ""
+    print(f"{'modello':<40} {'input':>12} {'output':>12} {'cache_read':>12} {'cache_new':>12}{eq_col}")
     tot = defaultdict(int)
+    tot_eq = 0
     for model, u in sorted(per_model.items()):
-        print(f"{model:<40} {fmt(u['input_tokens']):>12} {fmt(u['output_tokens']):>12} "
-              f"{fmt(u['cache_read_input_tokens']):>12} {fmt(u['cache_creation_input_tokens']):>12}")
+        line = (f"{model:<40} {fmt(u['input_tokens']):>12} {fmt(u['output_tokens']):>12} "
+                f"{fmt(u['cache_read_input_tokens']):>12} {fmt(u['cache_creation_input_tokens']):>12}")
+        if fdt:
+            # eq alla tariffa DEL modello della riga (cache_read 0,025× su
+            # Fable 5.1, 0,1× altrove — model-economics.json): il totale in
+            # eq è la somma delle righe, mai una tariffa unica sul totale.
+            eq = fdt.eq_tokens(u["input_tokens"], u["output_tokens"],
+                               u["cache_read_input_tokens"],
+                               u["cache_creation_input_tokens"], model=model)
+            tot_eq += eq
+            line += f" {fmt(eq):>12} {fdt.eq_mult(model)['cache_read']:>5.3f}"
+        print(line)
         for k in USAGE_KEYS:
             tot[k] += u[k]
-    print(f"{'TOTALE':<40} {fmt(tot['input_tokens']):>12} {fmt(tot['output_tokens']):>12} "
-          f"{fmt(tot['cache_read_input_tokens']):>12} {fmt(tot['cache_creation_input_tokens']):>12}")
+    line = (f"{'TOTALE':<40} {fmt(tot['input_tokens']):>12} {fmt(tot['output_tokens']):>12} "
+            f"{fmt(tot['cache_read_input_tokens']):>12} {fmt(tot['cache_creation_input_tokens']):>12}")
+    if fdt:
+        line += f" {fmt(tot_eq):>12}"
+    print(line)
 
     main_out = sum(u["output_tokens"] for (k, _), u in per_file.items() if k == "main")
     sub_out = sum(u["output_tokens"] for (k, _), u in per_file.items() if k == "subagent")
