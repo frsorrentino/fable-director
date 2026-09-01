@@ -201,6 +201,43 @@ the native belts cap a SESSION — a parachute, not a policy. Worth turning on:
   default. Planned expiry (kernel) remains the lossless version of the same
   idea: end at a verified boundary instead of compacting mid-flight.
 
+## Claude Fable 5.1 and Claude Code 2.1.257 — what changed, what didn't (2026-09)
+
+Only the ECONOMIC parts of the plugin are conditional on the model; every
+structural rule stays universal. The model is read from the record being
+counted (`message.model` in the transcript), never cached at session start —
+`/model` can change it mid-session, and only `SessionStart` carries a `model`
+field on hook stdin.
+
+- **Cache reads at 0.025×** (vs 0.1× elsewhere): `model-economics.json`
+  (shipped) / `~/.claude/fable-director/model-economics.json` (override).
+  Consequence, measured on 21 days of traffic: the share of cost that is
+  cache_read drops from 52% to 22%, cache WRITES rise to 60% — on 5.1 what
+  hurts is losing the cache (resume after >1h idle: 76% of resets; model
+  switch: 15%), not re-reading it. Axis 6 and the turn-economy paragraph of
+  the kernel say both.
+- **Fork vs fresh, re-measured** (n=3 each, CTX ≈150k, CC 2.1.257 keeps the
+  cache in a fork): fork turn 3.7-5.4k eq at 0.025× against a 17-37k eq cold
+  start — parity at ~7-12 turns on 5.1, ~2 turns on 0.1× models. The fork
+  penalty collapsed on 5.1; the policy states it per model.
+- **Executor on 5.1 at low effort** (n=3 real items): same eq (11.0k vs
+  10.5k), same correctness (3/3 both), 5.5× the USD ($0.110 vs $0.020 per
+  item). `fd-executor` stays on sonnet. `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`
+  (2.1.257) can override every agent's model from the environment: that is
+  the user's lever, not the plugin's default.
+- **Forced tool choice returns 400 on 5.1** (`tool_choice` any/tool). The
+  plugin never sets it: batch schemas travel in the contract's Interfaces
+  block and, for workflows, in `agent({schema})`, which the host handles.
+  Nothing to change.
+- **Implicit tool-call batching**: 5.1 batches less; Claude Code 2.1.257
+  already appends "First privately list what you need next…" to tool results
+  (verified in-session: string absent from the plugin, present in the
+  results). The plugin adds no nudge — duplicating it makes the model answer
+  the reminder instead of the user.
+- **`experimental.cacheTtl: 1h` on `fd-verifier`**: not adopted. 24
+  verifications lifetime give no measurement, and the host documents the 1h
+  TTL as ignored on usage-credit plans.
+
 ## Known limits
 
 - **Claude Code versions.** The statusline needs ≥ 2.1.x for `context_window`
