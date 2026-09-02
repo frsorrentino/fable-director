@@ -97,6 +97,20 @@ def hook_cwd():
     restare aperto senza dati — leggerlo alla cieca appenderebbe l'avvio della
     sessione. select() con timeout corto: nel dubbio si degrada, non si blocca.
     Ordine: payload > CLAUDE_PROJECT_DIR > getcwd()."""
+    payload = hook_payload()
+    return (payload.get("cwd")
+            or os.environ.get("CLAUDE_PROJECT_DIR")
+            or os.getcwd())
+
+
+_PAYLOAD = None
+
+
+def hook_payload():
+    """Payload stdin letto UNA volta (cwd, source, session_id)."""
+    global _PAYLOAD
+    if _PAYLOAD is not None:
+        return _PAYLOAD
     payload = {}
     try:
         if sys.stdin is not None and not sys.stdin.isatty():
@@ -105,9 +119,63 @@ def hook_cwd():
                 payload = json.loads(sys.stdin.read() or "{}")
     except Exception:
         payload = {}
-    return (payload.get("cwd")
-            or os.environ.get("CLAUDE_PROJECT_DIR")
-            or os.getcwd())
+    _PAYLOAD = payload if isinstance(payload, dict) else {}
+    return _PAYLOAD
+
+
+def days_ago(ts):
+    """'3 days ago' / 'yesterday' / 'today' da un timestamp ISO UTC."""
+    try:
+        from datetime import datetime, timezone
+        t = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+        d = (datetime.now(timezone.utc) - t).days
+    except (ValueError, TypeError):
+        return None
+    return "today" if d <= 0 else "yesterday" if d == 1 else f"{d} days ago"
+
+
+def last_session_line(con, cwd, session_id=None):
+    """E1 (1.39): 'Last session in this folder: 3 days ago, 212 turns; last
+    task budget: closed fine (design-review), 5 days ago.' Dati: session_summary
+    e task_close dello stesso cwd (match esatto). Nessuna sessione → None.
+    Esclude la sessione corrente (una summary puo' esistere per un resume)."""
+    row = None
+    for r in con.execute(
+            "SELECT ts, session_id, payload FROM events WHERE cwd = ? AND "
+            "event = 'session_summary' ORDER BY ts DESC LIMIT 3", (str(cwd),)):
+        if session_id and r[1] == session_id:
+            continue
+        row = r
+        break
+    if not row:
+        return None
+    ts, _, payload = row
+    try:
+        p = json.loads(payload)
+    except (json.JSONDecodeError, TypeError):
+        p = {}
+    ago = days_ago(ts) or "?"
+    turns = p.get("n_usage_records")
+    line = f"Last session in this folder: {ago}"
+    if turns:
+        line += f", {turns} turns"
+    tc = con.execute(
+        "SELECT ts, payload FROM events WHERE cwd = ? AND event = 'task_close' "
+        "ORDER BY ts DESC LIMIT 1", (str(cwd),)).fetchone()
+    if tc:
+        try:
+            t = json.loads(tc[1])
+        except (json.JSONDecodeError, TypeError):
+            t = {}
+        word = {"ok": "closed fine", "flagged": "blew the budget",
+                "abandoned": "abandoned"}.get(t.get("outcome"), t.get("outcome") or "?")
+        typ = f" ({t['type']})" if t.get("type") else ""
+        line += f"; last task budget: {word}{typ}, {days_ago(tc[0]) or '?'}"
+    else:
+        line += "; no task budget was used here"
+    return line + "."
 
 
 CLAUDE_MD_HEAVY_BYTES = 12_000  # ~3k token pagati OGNI turno, tutta la sessione
@@ -136,6 +204,16 @@ def main():
         return
     con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=1.0)
     rows = cwd_slug_match(con, cwd)
+    pl = hook_payload()
+    # E1: solo all'avvio vero (startup/resume); compact/clear/fork sono la
+    # stessa sessione.
+    if (pl.get("source") or "startup") in ("startup", "resume"):
+        try:
+            ls = last_session_line(con, cwd, pl.get("session_id"))
+        except Exception:
+            ls = None
+        if ls:
+            print("\n" + ls)
     con.close()
     lines, seen = [], set()
     for ts, event, payload in rows:          # gia' ORDER BY ts DESC: tengo il piu' recente

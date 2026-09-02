@@ -536,6 +536,56 @@ def derived_metrics(inp, out, cr, cc, main_out, sub_out, n_sub,
 
 # ---------- sottocomandi ----------
 
+def similar_tasks_line(task_type, exclude_declared_at=None):
+    """E3 / C1.2 (1.39): precedenti dello stesso tipo, in parole, al momento
+    della rotta — non nel report che nessuno apre prima di stimare.
+    '3 similar tasks before (design-review): they cost about a third of what
+    was estimated; 2 closed fine, 1 blew the budget.' None sotto 1 precedente
+    o senza tipo. Mostra fatti: non cambia rotte (override resta a N≥10)."""
+    if not task_type or not DB_PATH.is_file():
+        return None
+    try:
+        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, timeout=1.0)
+        rows = con.execute("SELECT payload FROM events WHERE event='task_close' "
+                           "ORDER BY ts DESC LIMIT 400").fetchall()
+        con.close()
+    except sqlite3.Error:
+        return None
+    ratios, outcomes, n = [], {}, 0
+    for (pl,) in rows:
+        try:
+            t = json.loads(pl)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if t.get("type") != task_type:
+            continue
+        if exclude_declared_at and t.get("declared_at") == exclude_declared_at:
+            continue
+        n += 1
+        outcomes[t.get("outcome") or "?"] = outcomes.get(t.get("outcome") or "?", 0) + 1
+        exp, act = t.get("expected_output_tokens"), t.get("actual_output_tokens")
+        if exp and act is not None:
+            ratios.append(act / exp)
+        if n >= 20:
+            break
+    if not n:
+        return None
+    head = f"{n} similar task{'s' if n != 1 else ''} before ({task_type})"
+    parts = []
+    if ratios:
+        med = sorted(ratios)[len(ratios) // 2]
+        words = ratio_words(med, 1.0).replace("the estimate", "what was estimated")
+        parts.append(("they " if n != 1 else "it ") + words)
+    oc = []
+    for k, label in (("ok", "closed fine"), ("flagged", "blew the budget"),
+                     ("abandoned", "abandoned")):
+        if outcomes.get(k):
+            oc.append(f"{outcomes[k]} {label}")
+    if oc:
+        parts.append(", ".join(oc))
+    return head + (": " + "; ".join(parts) if parts else "") + "."
+
+
 def cmd_budget_open(args):
     cost_ack = "--cost-ack" in args
     if cost_ack:
@@ -671,6 +721,10 @@ def cmd_budget_open(args):
     write_json_atomic(bfile, budget)
     log_event("task_open", budget, cwd=cwd)
     print(f"budget open: {bfile}")
+    # E3: memoria dei precedenti dello stesso tipo, al momento giusto.
+    sim = similar_tasks_line(budget.get("type"), budget.get("declared_at"))
+    if sim:
+        print("FD ≈ " + sim)
     # Stima in USD (opt-in, mai inventata): solo se l'utente ha dichiarato il
     # listino in pricing.json ({"input_usd_per_mtok": N}). La stima eq è in
     # input-equivalenti di listino, quindi USD = eq × prezzo input. Utile per

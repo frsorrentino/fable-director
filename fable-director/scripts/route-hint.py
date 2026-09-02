@@ -136,6 +136,67 @@ def write_event(payload, session_id=None, cwd=None):
         pass
 
 
+STOP = set("""about after again against all also and are because been before being
+between both but can could della delle dello degli delle dalla dalle dalla nella nelle
+nello negli come questo questa questi queste quello quella sono essere fare fatto
+have having here into just like more most much must only other over same should
+some such than that their them then there these they this those through under
+until very were what when where which while with would your anche ancora avere
+dove ogni ogni perche' perché prima poi quando quindi senza sopra sotto tutto
+tutti tutte verso file files script scripts python tests test task tasks claude
+fable director sessione session budget budgets prompt prompts modello modelli
+model models agent agents subagent subagents workflow report repo project
+progetto cartella folder directory""".split())
+
+
+def rare_terms(text):
+    """Termini 'rari' per il match: alfanumerici lunghi ≥5, non stopword."""
+    out = set()
+    for w in re.findall(r"[a-zà-ú0-9_\-]{5,}", str(text).lower()):
+        if w not in STOP and not w.isdigit():
+            out.add(w)
+    return out
+
+
+def solved_elsewhere(prompt_lower, cwd):
+    """D.3.2 (1.39): memoria cross-progetto delle soluzioni VERIFICATE. Cerca
+    nelle ricevute (budget-close) di ALTRE cartelle, solo esito ok, ≥2 termini
+    rari in comune con il prompt. Una riga sola, la piu' somigliante; nessun
+    modello, nessun vettore. None se niente regge la soglia."""
+    terms = rare_terms(prompt_lower)
+    if len(terms) < 2:
+        return None
+    rdir = base_dir() / "receipts"
+    if not rdir.is_dir():
+        return None
+    best = None
+    for f in sorted(rdir.glob("*.json")):
+        try:
+            r = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if r.get("outcome") != "ok" or not r.get("task"):
+            continue
+        if cwd and str(r.get("cwd") or "") == str(cwd):
+            continue
+        shared = terms & rare_terms(" ".join(str(r.get(k) or "")
+                                             for k in ("task", "verify", "type")))
+        if len(shared) < 2:
+            continue
+        key = (len(shared), f.name)
+        if best is None or key > best[0]:
+            best = (key, f, r)
+    if not best:
+        return None
+    _, f, r = best
+    where = "/".join(Path(str(r.get("cwd") or "?")).parts[-2:])
+    day = (r.get("closed_at") or "")[:10]
+    md = f.with_suffix(".md")
+    ref = str(md if md.is_file() else f)
+    return (f"[fd-memory] a similar task closed fine elsewhere: "
+            f"\"{r['task'][:80]}\" in {where} ({day}) — receipt: {ref}")
+
+
 def main():
     data = json.load(sys.stdin)
     prompt = str(data.get("prompt") or "")
@@ -143,6 +204,16 @@ def main():
     if len(prompt) < MIN_PROMPT_LEN or prompt.lstrip().startswith("/"):
         return
     prompt_lower = prompt.lower()
+    cwd = str(data.get("cwd") or "") or None
+
+    # Memoria cross-progetto (D.3.2): indipendente dal route hint e dal suo
+    # braccio di controllo — e' un fatto verificato, non un suggerimento.
+    try:
+        mem = solved_elsewhere(prompt_lower, cwd)
+    except Exception:
+        mem = None
+    if mem:
+        print(mem)
 
     candidates = soft_dep_candidates(prompt_lower)
     card = cardinality_candidate(prompt_lower)
@@ -153,7 +224,6 @@ def main():
     candidates = candidates[:MAX_CANDIDATES]
 
     session_id = str(data.get("session_id") or "") or None
-    cwd = str(data.get("cwd") or "") or None
     holdout = in_holdout(session_id)
     if not holdout:
         print("[fd-route-hint] candidati deterministici — da VALUTARE, non "
