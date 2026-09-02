@@ -602,6 +602,16 @@ def cmd_budget_open(args):
                              "--agents": None, "--priority": None})
     if opts["--priority"] and opts["--priority"] not in ("normal", "incident"):
         sys.exit("invalid --priority (allowed: normal, incident)")
+    # C1.7 (1.39, dietro flag FD_BG_SESSION=1): --route bg-session apre il
+    # budget PER la sessione figlia (--cwd = la sua cartella) e lo firma con
+    # la sessione padre; la figlia lo vede ereditato a SessionStart, il suo
+    # Stop hook lo enforce, la ricevuta cita il padre.
+    if opts["--route"] == "bg-session":
+        if os.environ.get("FD_BG_SESSION") != "1":
+            sys.exit("--route bg-session is behind a flag: set FD_BG_SESSION=1 "
+                     "(experimental until measured on ≥5 real uses)")
+        if not opts["--cwd"]:
+            sys.exit("--route bg-session requires --cwd <folder of the background session>")
     if opts["--data-class"] and opts["--data-class"] not in (
             "public", "internal", "restricted"):
         sys.exit("invalid --data-class (allowed: public, internal, restricted)")
@@ -702,6 +712,8 @@ def cmd_budget_open(args):
         # le ALTRE sessioni dello stesso account vedono negati i nuovi
         # fan-out finche' il flag vive (scadenza automatica, vedi PRIORITY).
         "priority": opts["--priority"] or "normal",
+        "parent_session": (safe_sid(os.environ.get("CLAUDE_CODE_SESSION_ID"))
+                           if opts["--route"] == "bg-session" else None),
         # paths: perimetro scritture dichiarato (glob fnmatch, virgole) —
         # enforced dal hook perimeter-gate su Write/Edit dentro il progetto;
         # si estende solo con budget-amend (emendamento esplicito, loggato).
@@ -1058,6 +1070,8 @@ def receipt_lines(budget, cwd, sid):
                       + (f" (cache read on {models})" if models else ""))
     if budget.get("verify"):
         detail.append(f"verification: {budget['verify']}")
+    if budget.get("parent_session"):
+        detail.append(f"opened by parent session {str(budget['parent_session'])[:8]} (bg-session route)")
     if budget.get("data_class"):
         detail.append(f"data class: {budget['data_class']}")
     if budget.get("paths"):

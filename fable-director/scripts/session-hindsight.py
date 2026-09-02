@@ -175,6 +175,27 @@ def resume_cache_line(payload):
             ).replace(",", ".")
 
 
+def inherited_budget_line(cwd):
+    """C1.7: la sessione figlia (claude --bg / nuova-sessione) trova il budget
+    aperto per la SUA cartella da un'altra sessione con --route bg-session."""
+    try:
+        import hashlib
+        import re as _re
+        s = str(cwd).replace("\\", "/")
+        slug = (_re.sub(r"[^A-Za-z0-9]+", "-", s).strip("-")
+                + "-" + hashlib.sha256(s.encode()).hexdigest()[:8])
+        bfile = Path.home() / ".claude" / "fable-director" / "budgets" / f"{slug}.json"
+        b = json.loads(bfile.read_text(encoding="utf-8"))
+        if b.get("status") != "open" or b.get("route") != "bg-session":
+            return None
+        return (f"FD ▷ Budget inherited from session {str(b.get('parent_session') or '?')[:8]}: "
+                f"'{b.get('task')}' — expected output {b.get('expected_output_tokens')} tokens"
+                + (f", verify: {b['verify']}" if b.get("verify") else "")
+                + ". Close it here with budget-close when the work is done; the receipt names the parent.")
+    except Exception:
+        return None
+
+
 def last_session_line(con, cwd, session_id=None):
     """E1 (1.39): 'Last session in this folder: 3 days ago, 212 turns; last
     task budget: closed fine (design-review), 5 days ago.' Dati: session_summary
@@ -241,6 +262,10 @@ def main():
     db = Path.home() / ".claude" / "fable-director" / "telemetry.db"
     pl = hook_payload()
     rc = resume_cache_line(pl)
+    if (pl.get("source") or "startup") in ("startup", "resume"):
+        ib = inherited_budget_line(cwd)
+        if ib:
+            print("\n" + ib)
     if not db.is_file():
         if rc:
             print("\n" + rc)
