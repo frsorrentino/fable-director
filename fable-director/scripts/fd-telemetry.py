@@ -2028,6 +2028,173 @@ def parse_opts(args, spec):
     return opts
 
 
+# ---------- sforzo per cliente e per deliverable (D.3.1) ----------
+CLIENTS_FILE = BASE / "clients.json"
+_STOP_TERMS = set("""della delle dello degli nella nelle questo questa questi
+quello quella sono essere fare fatto anche ancora avere dove ogni perche perché
+prima quando quindi senza sopra sotto tutto tutti tutte verso about after again
+against because before being between could should their there these those
+through under until where which while would files script scripts python tests
+test task tasks claude fable director sessione session budget budgets prompt
+modello modelli model agent agents subagent workflow report progetto cartella
+folder directory cliente client""".split())
+
+
+def rare_terms(text):
+    import re as _re
+    return {w for w in _re.findall(r"[a-zà-ú0-9_\-]{5,}", str(text).lower())
+            if w not in _STOP_TERMS and not w.isdigit()}
+
+
+def load_clients():
+    """{"nome": ["pattern cwd o remote", ...]} — glob fnmatch o sottostringa
+    sul cwd (con ~ espanso). Assente → {}."""
+    try:
+        data = json.loads(CLIENTS_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return {k: v for k, v in data.items() if not k.startswith("_") and isinstance(v, list)}
+
+
+def client_of(cwd, clients):
+    import fnmatch
+    c = str(cwd or "")
+    for name, pats in clients.items():
+        for pat in pats:
+            pat = str(pat)
+            if pat.startswith("~"):
+                pat = str(Path.home()) + pat[1:]
+            if pat in c or fnmatch.fnmatch(c, pat) or fnmatch.fnmatch(c, pat.rstrip("/") + "/*"):
+                return name
+    return None
+
+
+def hours(sec):
+    try:
+        h = float(sec) / 3600
+    except (TypeError, ValueError):
+        return "?"
+    return f"{h:.1f} h"
+
+
+def cmd_effort(args):
+    """`effort --client NAME [--month YYYY-MM]` — quanto COSTA servire quel
+    cliente (ore macchina, eq, deliverable chiusi con esito, rework, deleghe
+    interne ed esterne), su tutte le cartelle e gli account della macchina.
+    `effort --like "testo"` — quanto SFORZO ha richiesto un deliverable
+    simile (turni, deleghe, rework, giorni) prima di un preventivo a forfait.
+    Mai una cifra in euro: sforzo, non fattura."""
+    opts = parse_opts(args, {"--client": None, "--month": None, "--like": None,
+                             "--list": None})
+    if not DB_PATH.is_file():
+        sys.exit("no telemetry yet")
+    con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, timeout=1.0)
+    rows = con.execute("SELECT ts, event, session_id, cwd, payload FROM events "
+                       "WHERE event IN ('session_summary','task_close','external_exec') "
+                       "ORDER BY ts").fetchall()
+    con.close()
+    ev = []
+    for ts, event, sid, cwd, pl in rows:
+        try:
+            ev.append((ts, event, sid, cwd, json.loads(pl or "{}")))
+        except json.JSONDecodeError:
+            continue
+
+    if opts["--like"]:
+        terms = rare_terms(opts["--like"])
+        hits = []
+        for ts, event, sid, cwd, p in ev:
+            if event != "task_close":
+                continue
+            shared = terms & rare_terms(" ".join(str(p.get(k) or "") for k in ("task", "type", "verify")))
+            if len(shared) >= 2 or (len(terms) == 1 and shared):
+                hits.append((len(shared), ts, cwd, p))
+        if not hits:
+            print(f"no closed task resembles \"{opts['--like']}\" (needs two rare words in common).")
+            return
+        hits.sort(key=lambda x: (-x[0], x[1]))
+        print(f"# Effort of deliverables resembling \"{opts['--like']}\" — {len(hits)} found\n")
+        for _, ts, cwd, p in hits[:10]:
+            bits = [ts[:10], "/".join(Path(str(cwd)).parts[-2:])]
+            rw = ratio_words(p.get("actual_output_tokens"), p.get("expected_output_tokens"))
+            if rw:
+                bits.append(rw)
+            if p.get("actual_eq_tokens"):
+                bits.append(f"{fmt(p['actual_eq_tokens'])} eq")
+            if p.get("reopens") is not None:
+                bits.append("no file reopened" if not p["reopens"] else f"{p['reopens']} reopens")
+            try:
+                d0 = datetime.fromisoformat(str(p.get("declared_at")).replace("Z", "+00:00"))
+                d1 = datetime.fromisoformat(str(p.get("closed_at")).replace("Z", "+00:00"))
+                mins = int((d1 - d0).total_seconds() // 60)
+                bits.append(f"{mins} min" if mins < 120 else f"{mins // 60} h")
+            except (ValueError, TypeError):
+                pass
+            outcome = {"ok": "closed fine", "flagged": "blew the budget"}.get(p.get("outcome"), p.get("outcome"))
+            print(f"- {p.get('task')} ({p.get('type') or 'no type'}, {p.get('route') or '?'}): "
+                  f"{outcome} — " + ", ".join(bits))
+        print("\nEffort, not price: turns, delegations and rework of the last similar deliverable.")
+        return
+
+    clients = load_clients()
+    if not clients:
+        sys.exit(f"no clients declared: write {CLIENTS_FILE} as "
+                 '{"joyconcept": ["~/Desktop/*/joyconcept*", "git@github.com:org/joyconcept.git"]}')
+    if not opts["--client"]:
+        print("clients: " + ", ".join(sorted(clients)))
+        return
+    name = opts["--client"]
+    if name not in clients:
+        sys.exit(f"unknown client '{name}' (declared: {', '.join(sorted(clients)) or 'none'})")
+    month = opts["--month"]
+    sess, tasks, ext = [], [], {}
+    for ts, event, sid, cwd, p in ev:
+        if month and not ts.startswith(month):
+            continue
+        if client_of(cwd, clients) != name:
+            continue
+        if event == "session_summary":
+            sess.append((ts, sid, cwd, p))
+        elif event == "task_close":
+            tasks.append((ts, cwd, p))
+        elif event == "external_exec":
+            ext[p.get("provider") or "?"] = ext.get(p.get("provider") or "?", 0) + 1
+    if not sess and not tasks:
+        print(f"nothing recorded for '{name}'" + (f" in {month}" if month else "") + ".")
+        return
+    span = f" in {month}" if month else " (all time)"
+    print(f"# Cost of serving '{name}'{span} — effort, not price\n")
+    secs = sum(float(p.get("duration_s") or 0) for _, _, _, p in sess)
+    eq = sum(int(p.get("eq_tokens") or 0) for _, _, _, p in sess)
+    turns = sum(int(p.get("n_usage_records") or 0) for _, _, _, p in sess)
+    folders = sorted({"/".join(Path(str(c)).parts[-2:]) for _, _, c, _ in sess} |
+                     {"/".join(Path(str(c)).parts[-2:]) for _, c, _ in tasks})
+    accounts = sorted({p.get("account") for _, _, _, p in sess if p.get("account")})
+    print(f"sessions: {len(sess)} ({turns} turns, {hours(secs)} of active session time, "
+          f"{fmt(eq)} eq)" + (f" on accounts {', '.join(accounts)}" if accounts else ""))
+    print("folders: " + ", ".join(folders))
+    sub_out = sum(int(p.get("subagent_output") or 0) for _, _, _, p in sess)
+    n_sub = sum(int(p.get("n_subagent_files") or 0) for _, _, _, p in sess)
+    print(f"delegations: {n_sub} agent runs, {fmt(sub_out)} tokens delegated"
+          + (f"; external: " + ", ".join(f"{k} ×{v}" for k, v in sorted(ext.items())) if ext else ""))
+    if tasks:
+        oc = {}
+        for _, _, p in tasks:
+            oc[p.get("outcome") or "?"] = oc.get(p.get("outcome") or "?", 0) + 1
+        reopens = sum(int(p.get("reopens") or 0) for _, _, p in tasks)
+        print(f"deliverables (task budgets closed): {len(tasks)} — "
+              + ", ".join(f"{v} {({'ok': 'closed fine', 'flagged': 'blew the budget'}).get(k, k)}"
+                          for k, v in sorted(oc.items()))
+              + f"; {reopens} file reopens")
+        for ts, cwd, p in tasks[-8:]:
+            rw = ratio_words(p.get("actual_output_tokens"), p.get("expected_output_tokens"))
+            print(f"  {ts[:10]} {p.get('task')} ({p.get('type') or 'no type'}): "
+                  f"{({'ok': 'closed fine', 'flagged': 'blew the budget'}).get(p.get('outcome'), p.get('outcome'))}"
+                  + (f", {rw}" if rw else ""))
+    else:
+        print("deliverables: no task budget closed for this client.")
+
+
 def main():
     if len(sys.argv) < 2:
         sys.exit(__doc__)
@@ -2035,7 +2202,7 @@ def main():
     dispatch = {"budget-open": cmd_budget_open, "budget-close": cmd_budget_close,
                 "budget-amend": cmd_budget_amend,
                 "log": cmd_log, "session-summary": cmd_session_summary,
-                "report": cmd_report,
+                "report": cmd_report, "effort": cmd_effort,
                 "cache-get": cmd_cache_get, "cache-put": cmd_cache_put}
     if cmd not in dispatch:
         sys.exit(f"sottocomando sconosciuto: {cmd}\n{__doc__}")
