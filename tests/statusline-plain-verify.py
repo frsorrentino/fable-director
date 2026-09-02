@@ -83,7 +83,7 @@ check("T2 agenti al lavoro", "2 agents working" in out and "stuck" not in out, o
 
 out80 = render(stdin(rl=90, reset_in=40 * 60)); out60 = render(stdin(rl=71))
 check("T3 quota 5h: 'almost gone, resets in 40 min' / '71% used, resets HH:MM'",
-      "quota almost gone, resets in 40 min" in out80 and re.search(r"quota 71% used, resets \d{2}:\d{2}", out60),
+      "quota 90% used — almost gone, resets in 40 min" in out80 and re.search(r"quota 71% used, resets \d{2}:\d{2}", out60),
       out80 + "\n" + out60)
 out = render(stdin(pct=85))
 check("T4 contesto quasi pieno", "context almost full (85%) — finish the task and start a new session" in out, out)
@@ -142,10 +142,10 @@ check("T9 precedenza di un'altra sessione", "another session has priority (incid
 out = render(stdin(pct=85, rl=90, wk=72, reset_in=40 * 60))
 l1, _, l2 = out.partition("\n")
 check("T10 piu eccezioni → riga 2 con la piu urgente prima",
-      l1.strip() == "Fable 5.1" and l2.startswith("└ quota almost gone") and "context almost full" in l2, out)
+      l1.strip() == "Fable 5.1" and l2.startswith("└ quota 90% used — almost gone") and "context almost full" in l2, out)
 narrow = render(stdin(pct=85, rl=90, wk=72, reset_in=40 * 60), COLUMNS="60")
 check("T10b larghezza ridotta: cade la meno urgente, resta la piu urgente",
-      "quota almost gone" in narrow and "weekly" not in narrow, narrow)
+      "quota 90% used — almost gone" in narrow and "weekly" not in narrow, narrow)
 check("T11 nessuna sigla storica in nessuna resa plain",
       not SIGLE.search(out) and not SIGLE.search(out2) and not SIGLE.search(out80), out)
 

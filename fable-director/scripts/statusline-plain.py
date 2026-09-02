@@ -97,7 +97,7 @@ def main():
             mins = minutes_until(rlt)
             when = (f"resets in {mins} min" if mins is not None and mins < 120
                     else f"resets {rlt}" if rlt else "resets later")
-            exc.append((3, RED, f"quota almost gone, {when}"))
+            exc.append((3, RED, f"quota {rl:.0f}% used — almost gone, {when}"))
         elif rl >= 60:
             normal.append(f"quota {rl:.0f}% used" + (f", resets {rlt}" if rlt else ""))
         else:
@@ -105,7 +105,7 @@ def main():
     # --- quota settimanale ----------------------------------------------------
     if wk is not None:
         if wk >= 80:
-            exc.append((8, RED, "weekly quota almost gone" + (f", resets {wkt}" if wkt else "")))
+            exc.append((8, RED, f"weekly quota {wk:.0f}% used — almost gone" + (f", resets {wkt}" if wkt else "")))
         elif wk >= 60:
             exc.append((8, YEL, f"weekly quota {wk:.0f}% used" + (f", resets {wkt}" if wkt else "")))
 

@@ -10,8 +10,8 @@ Fable 5.1 · quota ok until 17:30                                   caveman
 ```
 
 Since 1.39 the default line is **plain**: every segment says what to do, in
-words, and only when there is something to do — `quota almost gone, resets in
-40 min`, `verification failed: python3 tests/run.py (exit 1)`, `1 agent stuck
+words, and only when there is something to do — `quota 92% used — almost gone,
+resets in 40 min`, `verification failed: python3 tests/run.py (exit 1)`, `1 agent stuck
 for 32 min — check /tasks`, `budget over 2.3× — reconsider the route`. When
 everything is fine the line is a model name and a quota reassurance. The full
 list of exception texts is in the legend (`/fable-director:help`). The dense

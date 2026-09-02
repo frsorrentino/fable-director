@@ -18,13 +18,13 @@ When something needs you, the exception replaces the quiet text or goes to a sec
 |---|---|---|
 | `budget over 3× — post-mortem before closing` (red block) | the task spent three times its declared estimate; closing is blocked | write the one-line post-mortem in the playbook, then `budget-close --outcome flagged` |
 | `verification failed: python3 tests/run.py (exit 1)` | the command you declared as "done" does not pass | do not report the task as finished; fix, the check re-runs after your next write |
-| `quota almost gone, resets in 40 min` | five-hour plan window at 80% or more | inline work and closures only until the reset; batches wait |
+| `quota 92% used — almost gone, resets in 40 min` | five-hour plan window at 80% or more; the percentage is your margin | inline work and closures only until the reset; batches wait |
 | `budget checks off (transcript unreadable) — update the plugin` | the transcript format changed; spend accounting is unreliable | update fable-director |
 | `context almost full (85%) — finish the task and start a new session` | the conversation is near the window ceiling | close at a verified boundary, distill, start fresh |
 | `1 agent stuck for 32 min — check /tasks` | a delegated agent has been running for over half an hour | open `/tasks`, resume or stop it |
 | `budget over 2.3× — reconsider the route` | spend passed twice the estimate (checkpoint) | switch route now if the plan was wrong; a reversal here is cheaper than a post-mortem at 3× |
 | `another session has priority (incident: …) — new fan-outs wait` | a session on this account opened a budget with `--priority incident` | single turns are free; fan-outs wait until it closes (2 h at most) |
-| `weekly quota 72% used, resets Thu 4` / `weekly quota almost gone` | weekly plan window at 60% / 80% | plan the week; premium work first |
+| `weekly quota 72% used, resets Thu 4` / `weekly quota 85% used — almost gone, resets Fri 5` | weekly plan window at 60% / 80% | plan the week; premium work first |
 | `3 commands failed in a row — change approach` | the same failure keeps repeating | change something structural: tool, diagnosis or model, not a fourth identical retry |
 | `effort max on` | a high reasoning effort is active and costs more | `/effort high` if the task does not need it |
 | `context 62% full` | more than half the window used | fine; batch tool calls, avoid re-reading |
