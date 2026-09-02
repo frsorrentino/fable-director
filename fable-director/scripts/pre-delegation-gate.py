@@ -490,6 +490,8 @@ def effort_coherence(data, budget):
         session_eff = session_eff or os.environ.get("CLAUDE_EFFORT") or None
         effective = pinned or session_eff
         origin = "frontmatter" if pinned else "session"
+        # (1.39) Nessun effort effettivo noto → nessun mismatch: 9 dei 16
+        # eventi misurati erano "low≠None", rumore del gate, non un segnale.
         if not effective or effective == declared:
             return None
         try:

@@ -130,5 +130,11 @@ r2 = prompt("Il sito PrestaShop va aggiornato alla versione nuova, procedi con c
 check("H7 stessa cartella esclusa; 1 solo termine → silenzio",
       "[fd-memory]" not in r.stdout and "[fd-memory]" not in r2.stdout, r.stdout + r2.stdout)
 
+# H8 interruttore route-hint.json: candidati spenti, memoria intatta
+(home / ".claude" / "fable-director" / "route-hint.json").write_text('{"enabled": false}')
+r = prompt("Un altro sito PrestaShop ha traffico anomalo, sembra scraping: rigenera le descrizioni di ogni prodotto")
+check("H8 route-hint.json enabled=false: niente [fd-route-hint], [fd-memory] resta",
+      "[fd-route-hint]" not in r.stdout and "[fd-memory]" in r.stdout, r.stdout)
+
 print(f"\n{len(passed)} passed, {len(failed)} failed")
 sys.exit(1 if failed else 0)

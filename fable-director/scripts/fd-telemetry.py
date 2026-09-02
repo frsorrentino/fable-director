@@ -1659,6 +1659,13 @@ def cmd_report(args):
                   f"shown {r_t:.2f} ({arm_adopted[False]}/{arm_n[False]}) vs "
                   f"withheld {r_w:.2f} ({arm_adopted[True]}/{arm_n[True]}) "
                   f"— if equal, the hint changes nothing and can die")
+            # Scadenza (1.39): a 30 shown / 8 withheld sessioni senza
+            # differenza il hint ha avuto la sua occasione — si spegne con un
+            # file, non con una discussione. Ogni prompt paga un processo.
+            if arm_n[False] >= 30 and arm_n[True] >= 8 and abs(r_t - r_w) < 0.05:
+                print("  VERDICT: no measurable difference at 30/8 sessions — turn the "
+                      "hint off: write {\"enabled\": false} to "
+                      f"{BASE / 'route-hint.json'} (the [fd-memory] line is unaffected)")
         else:
             print("  insufficient data (need ≥20 shown and ≥5 withheld "
                   "SESSIONS) — numbers below this would be theatre")
@@ -1899,7 +1906,9 @@ def cmd_report(args):
     if mismatches:
         pairs = {}
         for m in mismatches:
-            key = f"{m.get('declared', '?')}≠{m.get('pinned', '?')}"
+            # (1.39) mostra l'effort EFFETTIVO (pinnato o di sessione): i 9
+            # "low≠None" del report di agosto erano l'etichetta, non il dato.
+            key = f"{m.get('declared', '?')}≠{m.get('effective') or m.get('pinned') or '?'}"
             pairs[key] = pairs.get(key, 0) + 1
         pairs_s = ", ".join(f"{k}×{v}" for k, v in
                             sorted(pairs.items(), key=lambda x: -x[1]))

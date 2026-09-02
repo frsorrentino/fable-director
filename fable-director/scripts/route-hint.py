@@ -215,6 +215,13 @@ def main():
     if mem:
         print(mem)
 
+    # Interruttore (1.39): route-hint.json {"enabled": false} spegne i
+    # candidati keyword (verdetto del braccio di controllo), non la memoria.
+    try:
+        if load_json(base_dir() / "route-hint.json").get("enabled") is False:
+            return
+    except Exception:
+        pass
     candidates = soft_dep_candidates(prompt_lower)
     card = cardinality_candidate(prompt_lower)
     if card:
