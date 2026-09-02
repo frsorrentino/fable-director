@@ -215,6 +215,72 @@ def scan_jsonl(path, sub, since):
     sub["last_ts"] = last_ts.isoformat() if last_ts else None
 
 
+VERIFY_RUNNERS = ("python3", "python", "pytest", "bash", "sh", "npm", "npx",
+                  "node", "make", "cargo", "go", "php", "composer", "phpunit")
+VERIFY_TIMEOUT_S = int(os.environ.get("FD_VERIFY_TIMEOUT_S") or 60)
+VERIFY_MIN_GAP_S = int(os.environ.get("FD_VERIFY_MIN_GAP_S") or 300)
+
+
+def verify_command(budget):
+    """Il --verify e' un COMANDO solo se inizia con un runner noto; la prosa
+    ("checklist: ...") resta prosa e non viene mai eseguita."""
+    v = str((budget or {}).get("verify") or "").strip()
+    first = v.split()[0] if v else ""
+    return v if first in VERIFY_RUNNERS else None
+
+
+def run_verify(budget, state, cwd, rw_stats):
+    """C1.6 / E7 (1.39): il done dichiarato diventa un comando. Eseguito dallo
+    Stop hook con timeout, SOLO quando qualcosa e' cambiato (nuove scritture
+    dal run precedente) e non piu' di una volta ogni VERIFY_MIN_GAP_S — mai
+    una suite intera a ogni turno di lettura. Esito in state['verify_rc']
+    (0, N, 'timeout'), ora e comando; budget-close lo copia nella ricevuta.
+    Ritorna il messaggio da mostrare (solo al PASSAGGIO a fail, o da fail a
+    pass), altrimenti None. Mai bloccante."""
+    cmd = verify_command(budget)
+    if not cmd:
+        return None
+    touches = int((rw_stats or {}).get("write_touches") or 0)
+    prev_rc = state.get("verify_rc")
+    prev_touch = state.get("verify_touches")
+    last_at = state.get("verify_at")
+    now = datetime.now(timezone.utc)
+    if prev_touch is not None and touches == prev_touch and prev_rc is not None:
+        return None  # niente di nuovo da verificare
+    # Dopo un PASS le scritture nuove rilanciano al piu' ogni VERIFY_MIN_GAP_S
+    # (una suite lunga non gira a ogni turno); dopo un FAIL la correzione
+    # merita il ricontrollo subito.
+    try:
+        if prev_rc == 0 and last_at and \
+                (now - datetime.fromisoformat(last_at)).total_seconds() < VERIFY_MIN_GAP_S:
+            return None
+    except (ValueError, TypeError):
+        pass
+    import subprocess
+    try:
+        r = subprocess.run(cmd, shell=True, cwd=str(cwd), capture_output=True,
+                           text=True, timeout=VERIFY_TIMEOUT_S)
+        rc = r.returncode
+        tail = (r.stderr or r.stdout or "").strip().splitlines()[-1:] or [""]
+    except subprocess.TimeoutExpired:
+        rc, tail = "timeout", [""]
+    except Exception as e:
+        rc, tail = "error", [str(e)[:120]]
+    state["verify_rc"] = rc
+    state["verify_at"] = now.isoformat()
+    state["verify_cmd"] = cmd
+    state["verify_touches"] = touches
+    state["verify_tail"] = tail[0][:160]
+    if rc == 0 and prev_rc not in (None, 0):
+        return f"FD ✓ verification passed again: {cmd}"
+    if rc != 0 and prev_rc in (None, 0):
+        what = ("timed out (60 s)" if rc == "timeout" else f"exit {rc}")
+        return (f"FD ✗ verification failed: {cmd} ({what})"
+                + (f" — {tail[0]}" if tail[0] else "")
+                + ". The declared done does not hold yet; do not report the task as finished.")
+    return None
+
+
 def _merge_cr_by_model(state):
     """Somma main + agenti Workflow per modello; {} se nessuno dei due ha la
     mappa (state di versioni precedenti → eq alla tariffa default)."""
@@ -295,7 +361,32 @@ def sum_session_incremental(transcript, since, state_file, declared_iso,
             (state["n_rec"], state["n_usage"], state["n_ts"]), state)
 
 
+_VERIFY_MSG = None
+_PRINTED = False
+
+
+def emit(obj):
+    """UN solo JSON su stdout per turno: l'esito del verify (se c'e') viene
+    fuso nel messaggio, mai stampato come secondo oggetto."""
+    global _PRINTED
+    if _VERIFY_MSG:
+        if "reason" in obj:
+            obj["reason"] = _VERIFY_MSG + "\n" + obj["reason"]
+        else:
+            obj["systemMessage"] = (_VERIFY_MSG + "\n" + (obj.get("systemMessage") or "")).strip()
+    print(json.dumps(obj, ensure_ascii=False))
+    _PRINTED = True
+
+
 def main():
+    try:
+        _main()
+    finally:
+        if _VERIFY_MSG and not _PRINTED:
+            print(json.dumps({"systemMessage": _VERIFY_MSG}, ensure_ascii=False))
+
+
+def _main():
     try:
         data = json.load(sys.stdin)
     except (json.JSONDecodeError, ValueError):
@@ -342,6 +433,18 @@ def main():
     # Rework del task finora (None se zero write o modulo assente).
     mod = _fdt()
     rw_stats = mod.rework_stats(state.get("rw")) if mod else None
+    # Verify eseguibile (C1.6/E7): dopo scritture nuove, con timeout; lo
+    # state viene riscritto qui sotto con l'esito.
+    verify_msg = None
+    try:
+        verify_msg = run_verify(budget, state, budget.get("cwd") or cwd, rw_stats)
+        if verify_msg or state.get("verify_rc") is not None:
+            write_json_atomic(state_file, state)
+    except Exception:
+        verify_msg = None
+    if verify_msg:
+        global _VERIFY_MSG
+        _VERIFY_MSG = verify_msg
     # Costo in eq del task finora (misura in fase di taratura, MAI enforcement:
     # le soglie 2×/3× restano sui token dichiarati — vedi EQ_MULT).
     actual_eq = None
@@ -366,13 +469,13 @@ def main():
                 "source": "stop-budget-check", "missing": missing,
                 "n_records": n_rec, "transcript": str(transcript),
                 "auto": True}, cwd)
-            print(json.dumps({"systemMessage": (
+            emit({"systemMessage": (
                 f"✕ FABLE-DIRECTOR schema sentinel — {n_rec} transcript "
                 f"records but zero recognized '{missing}' fields: the Claude "
                 f"Code transcript format has likely changed.\n"
                 f"Consequence: budget ENFORCEMENT IS OFF (counts would read "
                 f"0). Tell the user and update the fable-director plugin."
-            )}, ensure_ascii=False))
+            )})
         return
 
     out_bust = actual_out >= 3 * exp_out
@@ -399,7 +502,7 @@ def main():
                         "the task context was incomplete — complete the "
                         "picture (files/state/schema in the spec) before "
                         "resuming; it costs less than another reopen cycle.")
-            print(json.dumps({"decision": "block", "reason": (
+            emit({"decision": "block", "reason": (
                 f"⚠ FABLE-DIRECTOR 2× checkpoint — actual spend (output "
                 f"{actual_out}, fresh input {actual_in}) passed TWICE the "
                 f"pre-budget for task '{budget.get('task')}'."
@@ -410,7 +513,7 @@ def main():
                 f"'{{\"from\":\"...\",\"to\":\"...\",\"at\":\"2x-checkpoint\"}}'\n"
                 f"If the route still holds, continue and close the turn "
                 f"normally."
-            )}))
+            )})
         return
 
     budget["status"] = "flagged"
@@ -452,7 +555,7 @@ def main():
         f"(3) fd-telemetry.py budget-close --outcome flagged  (scripts in "
         f"<plugin fable-director>/scripts/)"
     )
-    print(json.dumps({"decision": "block", "reason": reason}))
+    emit({"decision": "block", "reason": reason})
 
 
 if __name__ == "__main__":

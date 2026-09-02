@@ -449,6 +449,54 @@ def verify_contract(budget, bfile):
         return None
 
 
+CONTRACT_PARTS = (
+    ("Objective", r"\b(objective|obiettivo)\b"),
+    ("Files", r"\b(files?|file in scope)\b"),
+    ("Interfaces", r"\b(interfaces?|interfacc[ei]|output format|schema)\b"),
+    ("Constraints", r"\b(constraints?|vincol[io])\b"),
+    ("Verification", r"\b(verification|verifica|verify)\b"),
+)
+STATUS_TOKENS_RE = re.compile(r"\b(DONE|BLOCKED|ABSTAIN|NEEDS_CONTEXT)\b")
+LINT_EXEMPT_TYPES = {"fork", "Explore", "Plan", "claude-code-guide"}
+LINT_MIN_PROMPT = 200
+
+
+def contract_lint(data):
+    """C1.5 (1.39): linter deterministico del contratto a 5 parti sul prompt
+    di ogni Agent. La regola era solo prosa nella skill; il costo del
+    contratto incompleto e' misurato (93 riaperture di file in 21 giorni,
+    189k input freschi per agente Workflow, incidente 4,9×). Solo AVVISO,
+    mai deny; esenti fork (eredita il contesto), Explore/Plan (ricerca) e i
+    prompt brevi. Ritorna la riga o None."""
+    try:
+        if data.get("tool_name") != "Agent":
+            return None
+        ti = data.get("tool_input") or {}
+        if (ti.get("subagent_type") or "") in LINT_EXEMPT_TYPES:
+            return None
+        prompt = str(ti.get("prompt") or "")
+        if len(prompt) < LINT_MIN_PROMPT:
+            return None
+        low = prompt.lower()
+        missing = [name for name, rx in CONTRACT_PARTS
+                   if not re.search(rx, low, re.I)]
+        no_status = not STATUS_TOKENS_RE.search(prompt)
+        if not missing and not no_status:
+            return None
+        bits = []
+        if missing:
+            bits.append("missing " + ", ".join(missing))
+        if no_status:
+            bits.append("no status token asked (DONE / BLOCKED / NEEDS_CONTEXT / ABSTAIN)")
+        return ("FD ⚠ delegation contract incomplete — " + "; ".join(bits)
+                + ". A spec the executor can run without shared context is the "
+                  "test that the route is delegable; ship file surfaces with "
+                  "tools/skeleton.py when the executor only consumes them. "
+                  "Delegation allowed.")
+    except Exception:
+        return None
+
+
 def xf_advisory(budget):
     """Advisory rotta esterna, mai deny/ask, max UNA nota al giorno. Due
     trigger in ordine di forza:
@@ -587,6 +635,7 @@ def main():
                                 nested_notice(data),
                                 effort_coherence(data, budget),
                                 verify_contract(budget, bfile),
+                                contract_lint(data),
                                 xf_advisory(budget)) if m]
             if msgs:
                 print(json.dumps({"systemMessage": "\n".join(msgs)},

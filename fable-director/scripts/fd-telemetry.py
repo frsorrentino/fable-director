@@ -1028,6 +1028,10 @@ def cmd_budget_close(args):
                 if rew:
                     budget.setdefault("reopens", rew["reopens"])
                     budget.setdefault("rework_worst", rew["worst"])
+                # Esito del verify eseguibile (Stop hook, C1.6): in ricevuta.
+                if st.get("verify_rc") is not None:
+                    budget.setdefault("verify_rc", st.get("verify_rc"))
+                    budget.setdefault("verify_at", st.get("verify_at"))
         except (json.JSONDecodeError, OSError, ValueError):
             pass
     write_json_atomic(bfile, budget)
