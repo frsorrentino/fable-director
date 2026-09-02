@@ -31,6 +31,7 @@ insieme): lock flock dove esiste + rename atomico.
 """
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -60,6 +61,102 @@ def log_event(event, payload, session_id=None, cwd=None):
         mod.log_event(event, payload, session_id=session_id, cwd=cwd)
     except Exception:
         pass
+
+
+STATUS_RE = re.compile(
+    r"^\s*[`*_]*(DONE_WITH_CONCERNS|DONE|NEEDS_CONTEXT|BLOCKED|ABSTAIN)[`*_]*\s*$",
+    re.M)
+STATUS_KEY = {"DONE": "ok", "DONE_WITH_CONCERNS": "concerns",
+              "NEEDS_CONTEXT": "needs_context", "BLOCKED": "blocked",
+              "ABSTAIN": "abstain"}
+INFRA_RE = re.compile(r"timeout|timed out|\b(403|429|5\d\d)\b|rate limit|"
+                      r"permission denied|EACCES|connection|ECONNRESET|quota",
+                      re.I)
+
+
+def last_assistant_text(transcript):
+    """Ultimo blocco di testo assistant dal transcript dell'agente (fallback
+    quando l'host non passa last_assistant_message)."""
+    last = ""
+    try:
+        with open(transcript, errors="replace") as fh:
+            for line in fh:
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if rec.get("type") != "assistant":
+                    continue
+                for c in ((rec.get("message") or {}).get("content") or []):
+                    if isinstance(c, dict) and c.get("type") == "text" and c.get("text"):
+                        last = c["text"]
+    except OSError:
+        pass
+    return last
+
+
+def parse_status(text):
+    """(status_key, blocker_line): l'ULTIMO token di stato nel testo (il
+    contratto lo vuole su riga propria in chiusura); assente → 'unknown', mai
+    inferito dal tono. La riga di blocco = ultima riga non vuota prima del
+    token, per BLOCKED/NEEDS_CONTEXT/ABSTAIN."""
+    if not text:
+        return "unknown", None
+    hits = list(STATUS_RE.finditer(text))
+    if not hits:
+        return "unknown", None
+    m = hits[-1]
+    key = STATUS_KEY[m.group(1)]
+    blocker = None
+    if key in ("blocked", "needs_context", "abstain"):
+        before = [l.strip() for l in text[:m.start()].splitlines() if l.strip()]
+        if before:
+            blocker = before[-1][:160]
+    return key, blocker
+
+
+def agent_usage(transcript):
+    """Usage dell'agente dal suo transcript, dedup per message.id (i record
+    multi-riga ripetono lo stesso usage). Ritorna (model, turns, tot)."""
+    turns, model = {}, None
+    try:
+        with open(transcript, errors="replace") as fh:
+            for line in fh:
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                m = rec.get("message") or {}
+                u = m.get("usage")
+                if rec.get("type") != "assistant" or not isinstance(u, dict):
+                    continue
+                model = m.get("model") or model
+                mid = m.get("id") or rec.get("requestId") or str(len(turns))
+                row = turns.setdefault(mid, {"input_tokens": 0, "output_tokens": 0,
+                                             "cache_read_input_tokens": 0,
+                                             "cache_creation_input_tokens": 0})
+                for k in row:
+                    row[k] = max(row[k], u.get(k) or 0)
+    except OSError:
+        pass
+    tot = {k: sum(r[k] for r in turns.values()) for k in
+           ("input_tokens", "output_tokens", "cache_read_input_tokens",
+            "cache_creation_input_tokens")}
+    return model, len(turns), tot
+
+
+def eq_of(model, tot):
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "fd_telemetry", Path(__file__).with_name("fd-telemetry.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod.eq_tokens(tot["input_tokens"], tot["output_tokens"],
+                             tot["cache_read_input_tokens"],
+                             tot["cache_creation_input_tokens"], model=model)
+    except Exception:
+        return None
 
 
 def pinned_effort(agent_type):
@@ -99,7 +196,8 @@ def prune(now):
 
 def empty_state():
     return {"inflight": {}, "started": 0, "stopped": 0,
-            "by_type": {}, "effort_ignored": 0, "nested_seen": 0}
+            "by_type": {}, "effort_ignored": 0, "nested_seen": 0,
+            "outcomes": {}, "failures_by_type": {}, "last_blocked": []}
 
 
 def update(path, mutate):
@@ -160,6 +258,24 @@ def on_stop(data, path):
     # di Claude Code, o override della sessione): è il degrado silenzioso che
     # il README elenca fra i limiti noti. Qui smette di essere silenzioso.
     mismatch = bool(pinned and actual and pinned != actual)
+    # ESITO della delega, letto dall'hook e non dal modello: il token di stato
+    # del contratto (DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED /
+    # ABSTAIN) nell'ultimo messaggio dell'agente; assente → unknown, mai
+    # inferito. Con usage e modello dal transcript dell'agente: costo in eq
+    # alla tariffa del SUO modello (model-economics.json).
+    transcript = data.get("agent_transcript_path")
+    text = data.get("last_assistant_message")
+    if not text and transcript:
+        text = last_assistant_text(transcript)
+    status, blocker = parse_status(text or "")
+    model, turns, tot = agent_usage(transcript) if transcript else (None, 0, None)
+    eq = eq_of(model, tot) if tot else None
+    failed = status in ("blocked", "needs_context", "abstain")
+    fail_class = None
+    if failed:
+        fail_class = ("infra" if blocker and INFRA_RE.search(blocker)
+                      else "approach" if status == "needs_context"
+                      else "capability")
 
     def mutate(state):
         state["inflight"].pop(aid, None)
@@ -169,13 +285,49 @@ def on_stop(data, path):
             state["last_effort_ignored"] = {
                 "agent_type": atype, "pinned": pinned, "actual": actual,
                 "ts": now_iso()}
-        return None
+        oc = state.setdefault("outcomes", {})
+        oc[status] = int(oc.get(status) or 0) + 1
+        n_fail = 0
+        if failed:
+            fbt = state.setdefault("failures_by_type", {})
+            fbt[atype] = int(fbt.get(atype) or 0) + 1
+            n_fail = fbt[atype]
+            lb = state.setdefault("last_blocked", [])
+            lb.append({"agent_type": atype, "status": status,
+                       "blocker": blocker, "ts": now_iso()})
+            del lb[:-5]
+        return n_fail
 
-    update(path, mutate)
+    n_fail = update(path, mutate)
+    sid, cwd = data.get("session_id"), data.get("cwd")
     if mismatch:
         log_event("effort_ignored",
                   {"agent_type": atype, "pinned": pinned, "actual": actual},
-                  session_id=data.get("session_id"), cwd=data.get("cwd"))
+                  session_id=sid, cwd=cwd)
+    payload = {"agent_id": aid, "agent_type": atype, "model": model,
+               "effort": actual or pinned, "status": status, "turns": turns,
+               "eq": eq, "blocker": blocker, "auto": True}
+    if tot:
+        payload["output_tokens"] = tot["output_tokens"]
+        payload["fresh_input"] = tot["input_tokens"] + tot["cache_creation_input_tokens"]
+    log_event("delegation_outcome", payload, session_id=sid, cwd=cwd)
+    # Rule of 3, deterministica: al SECONDO fallimento dello stesso tipo di
+    # agente nella sessione la diagnosi viene loggata dall'hook (classe
+    # infra/approach/capability dal testo di blocco) e detta all'utente —
+    # exit 1 = "stderr all'utente, continua"; mai exit 2 (parlerebbe al
+    # subagent). Misurato prima: 7 fail_streak, 0 escalation model-logged.
+    if failed and n_fail >= 2:
+        log_event("escalation", {"class": fail_class, "agent_type": atype,
+                                 "status": status, "n": n_fail,
+                                 "resolution": "pending", "auto": True},
+                  session_id=sid, cwd=cwd)
+        nxt = {"infra": "retry or resume the same executor — escalating the model does not help",
+               "approach": "the contract lacked context: repack the spec (Files/Interfaces), do not retry as is",
+               "capability": "change something structural — model up, or best-of-3 if the output is objectively checkable"}[fail_class]
+        print(f"FD ⚠ {n_fail} {status.upper()} from {atype} this session "
+              f"({fail_class}): {nxt}. No identical 4th attempt.", file=sys.stderr)
+        return 1
+    return 0
 
 
 def main():
@@ -194,7 +346,7 @@ def main():
             on_start(data, path)
             prune(time.time())
         elif event == "SubagentStop":
-            on_stop(data, path)
+            return on_stop(data, path) or 0
     except Exception:
         # Un misuratore che rompe la sessione che misura è peggio del buco
         # che chiude: qualunque errore qui è silenzio, mai un blocco.

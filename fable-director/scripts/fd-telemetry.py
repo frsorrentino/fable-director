@@ -1555,6 +1555,35 @@ def cmd_report(args):
               f"dal gate; molti no_budget = il modello salta il pre-budget, "
               f"molti flagged = post-mortem che non vengono chiusi")
 
+    outcomes = [p for e, p in events if e == "delegation_outcome"]
+    if outcomes:
+        by = {}
+        for o in outcomes:
+            key = (o.get("agent_type") or "?", o.get("model") or "?")
+            d = by.setdefault(key, {"n": 0, "ok": 0, "fail": 0, "unknown": 0, "eq": []})
+            d["n"] += 1
+            st = o.get("status")
+            if st in ("ok", "concerns"):
+                d["ok"] += 1
+            elif st == "unknown":
+                d["unknown"] += 1
+            else:
+                d["fail"] += 1
+            if o.get("eq"):
+                d["eq"].append(o["eq"])
+        print("\nDelegation outcomes (status token read by the SubagentStop hook, "
+              "never self-assessed):")
+        for (atype, model), d in sorted(by.items(), key=lambda x: -x[1]["n"]):
+            med = f", median {fmt(int(sorted(d['eq'])[len(d['eq']) // 2]))} eq" if d["eq"] else ""
+            print(f"  {atype} on {model}: {d['n']} runs — ok {d['ok']}, failed {d['fail']}, "
+                  f"no status token {d['unknown']}{med}")
+        esc = [p for e, p in events if e == "escalation" and p.get("auto")]
+        if esc:
+            cls = {}
+            for x in esc:
+                cls[x.get("class")] = cls.get(x.get("class"), 0) + 1
+            print("  rule-of-3 diagnoses (auto): " + ", ".join(f"{k} ×{v}" for k, v in cls.items()))
+
     mismatches = [p for e, p in events if e == "effort_mismatch"]
     if mismatches:
         pairs = {}
