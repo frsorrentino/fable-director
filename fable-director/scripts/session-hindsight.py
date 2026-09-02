@@ -136,6 +136,45 @@ def days_ago(ts):
     return "today" if d <= 0 else "yesterday" if d == 1 else f"{d} days ago"
 
 
+RESUME_MIN_CONTEXT = 100_000
+
+
+def human_gap(seconds):
+    try:
+        sec = int(seconds)
+    except (TypeError, ValueError):
+        return None
+    if sec < 3600:
+        return f"{sec // 60} min"
+    h, m = divmod(sec // 60, 60)
+    return f"{h} h {m} min" if m else f"{h} h"
+
+
+def resume_cache_line(payload):
+    """C2.2 (1.39): alla ripresa dopo una pausa il cache e' scaduto e il primo
+    turno riscrive TUTTO il contesto (misurato 2026-08-11..09-01: 76% dei
+    reset di cache sono riprese dopo >1h, re-cache mediano 280k token, ~20%
+    del costo a tariffe 5.1). L'host (CC ≥2.1.251) passa staleness, contesto
+    e costo stimato: qui diventano una riga di consiglio, mai un blocco. Campi
+    assenti → silenzio."""
+    if payload.get("source") not in ("resume", "fork"):
+        return None
+    if not payload.get("prompt_cache_likely_expired"):
+        return None
+    ctx = payload.get("context_tokens")
+    if not isinstance(ctx, (int, float)) or ctx < RESUME_MIN_CONTEXT:
+        return None
+    gap = human_gap(payload.get("seconds_since_last_response"))
+    usd = payload.get("estimated_cache_write_usd")
+    cost = f" (~${usd:.2f} at list price)" if isinstance(usd, (int, float)) else ""
+    return (f"FD ⚠ Resuming after {gap or 'a long pause'}: the prompt cache expired, "
+            f"so the first turn re-caches ~{int(ctx):,} tokens{cost}. If the last task "
+            f"closed at a verified boundary (tests green, commit landed), a fresh "
+            f"session with a short distillate costs a fraction of that; if the work "
+            f"is mid-task, continue — the reasoning in this context is load-bearing."
+            ).replace(",", ".")
+
+
 def last_session_line(con, cwd, session_id=None):
     """E1 (1.39): 'Last session in this folder: 3 days ago, 212 turns; last
     task budget: closed fine (design-review), 5 days ago.' Dati: session_summary
@@ -200,11 +239,30 @@ def main():
     cwd = hook_cwd()
     claude_md_hygiene(cwd)
     db = Path.home() / ".claude" / "fable-director" / "telemetry.db"
+    pl = hook_payload()
+    rc = resume_cache_line(pl)
     if not db.is_file():
+        if rc:
+            print("\n" + rc)
         return
     con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=1.0)
     rows = cwd_slug_match(con, cwd)
-    pl = hook_payload()
+    if rc:
+        print("\n" + rc)
+        try:
+            import importlib.util
+            spec = importlib.util.spec_from_file_location(
+                "fd_telemetry", Path(__file__).with_name("fd-telemetry.py"))
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            mod.log_event("resume_stale", {
+                "seconds_since_last_response": pl.get("seconds_since_last_response"),
+                "context_tokens": pl.get("context_tokens"),
+                "estimated_cache_write_usd": pl.get("estimated_cache_write_usd"),
+                "source": pl.get("source"), "auto": True},
+                session_id=pl.get("session_id"), cwd=cwd)
+        except Exception:
+            pass
     # E1: solo all'avvio vero (startup/resume); compact/clear/fork sono la
     # stessa sessione.
     if (pl.get("source") or "startup") in ("startup", "resume"):
