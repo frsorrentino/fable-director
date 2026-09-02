@@ -825,15 +825,32 @@ def cmd_budget_amend(args):
     decision record (quante volte il lavoro reale sfonda il perimetro
     dichiarato è un dato di calibrazione, come le stime)."""
     opts = parse_opts(args, {"--add-paths": None, "--reason": None,
-                             "--cwd": None})
-    if not opts["--add-paths"]:
-        sys.exit("budget-amend requires --add-paths \"glob[,glob]\"")
+                             "--cwd": None, "--route": None})
+    if not opts["--add-paths"] and not opts["--route"]:
+        sys.exit("budget-amend requires --add-paths \"glob[,glob]\" and/or --route ROUTE")
     cwd, bfile = resolve_budget_file(opts["--cwd"])
     if not bfile.is_file():
         sys.exit(f"nessun budget file: {bfile}")
     budget = json.loads(bfile.read_text())
     if budget.get("status") != "open":
         sys.exit("budget-amend requires an OPEN budget")
+    if opts["--route"]:
+        # Cambio di rotta a meta' task = reversal (decisione iniziale
+        # falsificata, non errore): loggato, e il budget ricorda la rotta nuova.
+        if opts["--route"] not in ("inline", "workflow", "script", "agent", "external"):
+            sys.exit("invalid --route")
+        prev = budget.get("route")
+        budget["route"] = opts["--route"]
+        budget.setdefault("amendments", []).append({
+            "route": opts["--route"], "from": prev, "reason": opts["--reason"],
+            "ts": now_iso()})
+        log_event("reversal", {"from": prev or "?", "to": opts["--route"],
+                               "reason": opts["--reason"], "kind": "route",
+                               "at": "budget-amend"}, cwd=cwd)
+        if not opts["--add-paths"]:
+            write_json_atomic(bfile, budget)
+            print(f"route amended: {prev or '?'} → {opts['--route']} (reversal logged)")
+            return
     new = [p.strip() for p in opts["--add-paths"].split(",") if p.strip()]
     # Ri-lettura FRESCA immediatamente prima della write: uno Stop hook
     # concorrente può aver flaggato il budget tra la nostra read e qui —

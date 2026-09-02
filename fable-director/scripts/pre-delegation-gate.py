@@ -170,6 +170,65 @@ QUOTA_GUARD_CEILING = 90.0   # five_hour_used_pct oltre cui un nuovo Workflow è
 QUOTA_SNAPSHOT_MAX_AGE_S = 600  # snapshot quota più vecchio → nessun check
 
 
+FAILOVER_WINDOW_PCT = 80.0
+
+
+def external_failover(data, budget):
+    """C1.4 (1.39): a quota scarsa (finestra 5h ≥ FAILOVER_WINDOW_PCT) il
+    gate non si limita a negare/lasciare passare: PROPONE la rotta esterna
+    pronta da eseguire, solo per budget eleggibili — tipo dichiarato, effort
+    non alto (asse 2 resta su Claude), data_class non restricted, rotta
+    agent/workflow/external — e solo se un provider gratuito ha credito oggi.
+    Propone, non esegue: il passaggio passa da budget-amend --route external
+    (reversal nel decision record). Ritorna il testo o None."""
+    try:
+        if data.get("tool_name") not in ("Agent", "Workflow"):
+            return None
+        if not isinstance(budget, dict) or not budget.get("type"):
+            return None
+        if budget.get("effort") in ("high", "xhigh", "max"):
+            return None
+        if budget.get("data_class") == "restricted":
+            return None
+        if budget.get("route") not in (None, "agent", "workflow", "external"):
+            return None
+        base = Path.home() / ".claude" / "fable-director"
+        acct = hashlib.sha256((os.environ.get("CLAUDE_CONFIG_DIR")
+                               or str(Path.home() / ".claude")).encode()).hexdigest()[:8]
+        qfile = base / f"quota-{acct}.json"
+        if not qfile.is_file():
+            qfile = base / "quota.json"
+        if not qfile.is_file() or time.time() - qfile.stat().st_mtime > QUOTA_SNAPSHOT_MAX_AGE_S:
+            return None
+        used = json.loads(qfile.read_text()).get("five_hour_used_pct")
+        if used is None or float(used) < FAILOVER_WINDOW_PCT:
+            return None
+        cfile = base / "cross-family.json"
+        if not cfile.is_file():
+            return None
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "external_exec", Path(__file__).with_name("external-exec.py"))
+        ext = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ext)
+        cfg = json.loads(cfile.read_text())
+        prov = ext.best_free_provider(cfg)
+        if not prov:
+            return None
+        ee = Path(__file__).with_name("external-exec.py")
+        tel = Path(__file__).with_name("fd-telemetry.py")
+        return (f"FD ⇄ five-hour window at {float(used):.0f}% — this task "
+                f"('{budget.get('type')}', effort {budget.get('effort') or 'n/d'}, "
+                f"data-class {budget.get('data_class') or 'n/d'}) is eligible for the "
+                f"external free route; '{prov}' has credit today. Ready to run per item:\n"
+                f"  python3 {ee} --provider {prov} --spec-file SPEC.md --schema-json "
+                f"--effort low --type {budget.get('type')} --out OUT.json\n"
+                f"and record the switch: python3 {tel} budget-amend --route external "
+                f"--reason \"quota {float(used):.0f}%\". Quality-sensitive items stay on Claude.")
+    except Exception:
+        return None
+
+
 def priority_guard(data):
     """D.3.4 (1.39): broker di quota tra sessioni. Se un'ALTRA sessione dello
     stesso account ha aperto un budget `--priority incident` (flag vivo, con
@@ -674,7 +733,8 @@ def main():
             guard = quota_guard(data)
             if guard:
                 log_gate_deny(data, "quota_guard", budget)
-                deny(guard)
+                fo = external_failover(data, budget)
+                deny(guard + ("\n" + fo if fo else ""))
                 return
             hold = priority_guard(data)
             if hold:
@@ -697,6 +757,7 @@ def main():
                                 effort_coherence(data, budget),
                                 verify_contract(budget, bfile),
                                 contract_lint(data),
+                                external_failover(data, budget),
                                 xf_advisory(budget)) if m]
             if msgs:
                 print(json.dumps({"systemMessage": "\n".join(msgs)},

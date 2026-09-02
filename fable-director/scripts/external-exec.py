@@ -247,6 +247,27 @@ def log_exec(payload):
         pass
 
 
+def best_free_provider(cfg, usage=None):
+    """Provider gratuito con piu' margine residuo oggi (used/rpd piu' basso);
+    solo type cli/http (non image), billing free. None se nessuno."""
+    usage = today_usage() if usage is None else usage
+    best = None
+    for name, prov in (cfg.get("providers") or {}).items():
+        if not isinstance(prov, dict) or billing_of(prov) != "free":
+            continue
+        if prov.get("type") == "image":
+            continue
+        rpd = ((prov.get("limits") or {}).get("rpd")) or 0
+        used = usage.get(name, 0)
+        if rpd and used >= rpd:
+            continue
+        ratio = (used / rpd) if rpd else 0.0
+        key = (ratio, used, name)
+        if best is None or key < best[0]:
+            best = (key, name)
+    return best[1] if best else None
+
+
 def today_usage():
     """Chiamate esterne di oggi per provider, dalla telemetria (external_exec
     + verification cross-family). Best-effort: errore → dict vuoto."""
@@ -685,6 +706,11 @@ def main():
     except (json.JSONDecodeError, OSError) as e:
         unavailable(f"config unreadable: {e}")
     name = opts["--provider"] or cfg.get("default")
+    if name == "auto":
+        # --provider auto: il free tier con piu' margine oggi (C1.4).
+        name = best_free_provider(cfg)
+        if not name:
+            unavailable("--provider auto: no free provider with daily credit left")
     prov = (cfg.get("providers") or {}).get(name)
     if not prov:
         unavailable(f"provider '{name}' not defined in config")
