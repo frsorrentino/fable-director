@@ -11,8 +11,9 @@ them as text, visible on any client. Freshness is declared, never faked:
 - delegations: current session's state file (CLAUDE_CODE_SESSION_ID);
 - external: telemetry (today's cross-family + external-exec calls).
 
-Usage: fd-status.py [--detail]   (from the project cwd; zero model tokens)
-       --detail adds session delegations and the last task receipt.
+Usage: fd-status.py [--detail|--all|--receipts [all]]   (zero model tokens)
+       --detail adds session delegations and the last task receipt;
+       --receipts lists the last readable receipts of this cwd (all = machine).
 """
 import hashlib
 import json
@@ -119,6 +120,26 @@ def fleet_view():
 
 
 def main():
+    if "--receipts" in sys.argv[1:]:
+        # Ricevute leggibili (budget-close): ultime 10 di questo cwd, o di
+        # tutta la macchina con `--receipts all`. Prima riga del .md = la
+        # riga di chiusura in parole.
+        args = sys.argv[1:]
+        scope = args[args.index("--receipts") + 1] if len(args) > args.index("--receipts") + 1 else ""
+        rdir = BASE / "receipts"
+        pat = "*.md" if scope == "all" else f"{cwd_slug(os.getcwd())}-*.md"
+        recs = sorted(rdir.glob(pat), key=lambda p: p.name)[-10:] if rdir.is_dir() else []
+        if not recs:
+            print("no readable receipts yet (they are written by budget-close since 1.39)")
+            return 0
+        for r in recs:
+            try:
+                head = r.read_text(encoding="utf-8").splitlines()[0].lstrip("# ").strip()
+            except (OSError, IndexError):
+                continue
+            day = r.stem.rsplit("-", 1)[-1][:8]
+            print(f"{day[:4]}-{day[4:6]}-{day[6:]}  {head}")
+        return 0
     if "--all" in sys.argv[1:]:
         fleet_view()
         return

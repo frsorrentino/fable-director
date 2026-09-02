@@ -787,6 +787,142 @@ def cmd_budget_amend(args):
     print(f"perimeter amended: +{', '.join(new)}")
 
 
+def fmt(n):
+    """1234567 → '1.234.567' (separatore italiano, come la statusline)."""
+    return f"{n:,.0f}".replace(",", ".")
+
+
+def ratio_words(actual, expected):
+    """Rapporto consuntivo/stima in PAROLE (nessuna sigla a schermo)."""
+    if not expected or actual is None:
+        return None
+    r = actual / expected
+    if r < 0.4:
+        return "cost about a third of the estimate"
+    if r < 0.7:
+        return "cost about half the estimate"
+    if r < 1.3:
+        return "cost about what was estimated"
+    if r < 3:
+        return f"cost {r:.1f} times the estimate"
+    return f"cost more than three times the estimate ({r:.1f}×)"
+
+
+def subagent_state(sid):
+    """State del misuratore deleghe per la sessione (subagent-meter.py):
+    conteggi, tipi, esiti. {} se assente."""
+    if not sid:
+        return {}
+    safe = "".join(c if (c.isalnum() or c in "-_") else "-" for c in str(sid))[:120]
+    try:
+        return json.loads((BASE / "subagents" / f"{safe}.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def external_calls_since(sid, cwd, since_iso):
+    """Chiamate esterne (external_exec) del task: per sessione se nota,
+    altrimenti per cwd da declared_at. {provider: n}."""
+    out = {}
+    try:
+        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, timeout=1.0)
+        if sid:
+            rows = con.execute("SELECT payload FROM events WHERE event='external_exec' "
+                               "AND session_id=? AND ts>=?", (sid, since_iso or "")).fetchall()
+        else:
+            rows = con.execute("SELECT payload FROM events WHERE event='external_exec' "
+                               "AND cwd=? AND ts>=?", (str(cwd), since_iso or "")).fetchall()
+        con.close()
+        for (pl,) in rows:
+            prov = (json.loads(pl).get("provider") or "?")
+            out[prov] = out.get(prov, 0) + 1
+    except Exception:
+        pass
+    return out
+
+
+def receipt_lines(budget, cwd, sid):
+    """Ricevuta LEGGIBILE del task chiuso: cosa era, cosa è costato, chi ha
+    eseguito, com'è stato verificato, cosa è uscito dalla macchina. Ogni
+    pezzo assente viene omesso, mai stimato. Ritorna (riga_di_chiusura,
+    righe_dettaglio)."""
+    outcome = budget.get("outcome") or "?"
+    head = {"ok": "Closed fine", "flagged": "Closed flagged (post-mortem due)",
+            "abandoned": "Closed as abandoned"}.get(outcome, f"Closed ({outcome})")
+    bits = []
+    rw = ratio_words(budget.get("actual_output_tokens"),
+                     budget.get("expected_output_tokens"))
+    if rw:
+        bits.append(rw)
+    st = subagent_state(sid)
+    n_dlg = int(st.get("stopped") or 0) if st else 0
+    oc = (st.get("outcomes") or {}) if st else {}
+    if n_dlg:
+        fails = sum(v for k, v in oc.items() if k in ("blocked", "needs_context", "abstain"))
+        s_d = f"{n_dlg} delegation{'s' if n_dlg != 1 else ''}"
+        if fails:
+            s_d += f", {fails} failed"
+        elif oc.get("unknown"):
+            s_d += f", {oc['unknown']} without a status token"
+        bits.append(s_d)
+    elif budget.get("route") in ("agent", "workflow"):
+        bits.append("no delegation recorded")
+    reopens = budget.get("reopens")
+    if reopens is not None:
+        bits.append("no file reopened" if not reopens else
+                    f"{reopens} file reopen{'s' if reopens != 1 else ''}")
+    vrc = budget.get("verify_rc")
+    if budget.get("verify"):
+        if vrc is None:
+            bits.append("verification not run")
+        elif vrc == 0:
+            bits.append("verification passed")
+        elif vrc == "timeout":
+            bits.append("verification timed out")
+        else:
+            bits.append(f"verification FAILED (exit {vrc})")
+    ext = external_calls_since(sid, cwd, budget.get("declared_at"))
+    if ext:
+        bits.append("external: " + ", ".join(f"{k} ×{v}" for k, v in sorted(ext.items())))
+    mins = None
+    try:
+        d0 = datetime.fromisoformat(str(budget.get("declared_at")).replace("Z", "+00:00"))
+        d1 = datetime.fromisoformat(str(budget.get("closed_at")).replace("Z", "+00:00"))
+        mins = int((d1 - d0).total_seconds() // 60)
+    except (ValueError, TypeError):
+        pass
+    if mins is not None:
+        bits.append(f"{mins} min" if mins < 120 else f"{mins // 60} h {mins % 60} min")
+    line = f"{head}: {budget.get('task')}" + (" — " + ", ".join(bits) + "." if bits else ".")
+
+    detail = []
+    what = " / ".join(x for x in (budget.get("type"), budget.get("route"),
+                                  f"effort {budget['effort']}" if budget.get("effort") else None) if x)
+    if what:
+        detail.append(f"what: {what}")
+    if st and st.get("by_type"):
+        who = ", ".join(f"{t} ×{n}" for t, n in sorted(st["by_type"].items(), key=lambda x: -x[1]))
+        detail.append(f"executors: {who}")
+    for lb in (st.get("last_blocked") or [])[-3:] if st else []:
+        detail.append(f"  {lb.get('status', '?').upper()} from {lb.get('agent_type')}: "
+                      f"{lb.get('blocker') or '(no blocker line)'}")
+    for sw in budget.get("model_switches") or []:
+        detail.append(f"model switch: {sw.get('from')} → {sw.get('to')}"
+                      + (f" with {fmt(sw['context_tokens'])} tokens of context" if sw.get("context_tokens") else ""))
+    if budget.get("actual_eq_tokens"):
+        crm = budget.get("cache_read_by_model") or {}
+        models = ", ".join(sorted(crm)) if crm else None
+        detail.append(f"cost: {fmt(budget['actual_eq_tokens'])} eq"
+                      + (f" (cache read on {models})" if models else ""))
+    if budget.get("verify"):
+        detail.append(f"verification: {budget['verify']}")
+    if budget.get("data_class"):
+        detail.append(f"data class: {budget['data_class']}")
+    if budget.get("paths"):
+        detail.append("write perimeter: " + ", ".join(budget["paths"]))
+    return line, detail
+
+
 def cmd_budget_close(args):
     opts = parse_opts(args, {"--outcome": "ok", "--cwd": None,
                              "--actual-output": None})
@@ -852,8 +988,9 @@ def cmd_budget_close(args):
     # — stima vs consuntivo, contratto verify, perimetro, emendamenti, esito.
     # Zero token modello: la scrive questo script, nessuno la rilegge se non
     # per audit. Cap 200 file (le più vecchie muoiono).
+    rdir = BUDGETS.parent / "receipts"
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     try:
-        rdir = BUDGETS.parent / "receipts"
         rdir.mkdir(parents=True, exist_ok=True)
         receipt = {k: budget.get(k) for k in (
             "task", "type", "route", "effort", "expected_output_tokens",
@@ -868,15 +1005,27 @@ def cmd_budget_close(args):
                  / "plugin.json").read_text()).get("version")
         except (json.JSONDecodeError, OSError):
             pass
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         (rdir / f"{cwd_slug(cwd)}-{stamp}.json").write_text(
             json.dumps(receipt, ensure_ascii=False, indent=1))
         old = sorted(rdir.glob("*.json"), key=lambda p: p.stat().st_mtime)
         for p in old[:-200]:
             p.unlink()
+            p.with_suffix(".md").unlink(missing_ok=True)
     except Exception:
         pass
-    print(f"budget closed ({opts['--outcome']}): {budget.get('task')}")
+    # Ricevuta LEGGIBILE (1.39): la stessa chiusura in parole, per chi non
+    # legge JSON — collega, cliente, la sessione che riparte da qui.
+    line, detail = receipt_lines(budget, cwd, close_sid or budget.get("owner_sid"))
+    try:
+        md = [f"# {line}", "", f"- when: {budget.get('closed_at')}", f"- where: {cwd}"]
+        md += [f"- {d.strip()}" for d in detail]
+        (rdir / f"{cwd_slug(cwd)}-{stamp}.md").write_text("\n".join(md) + "\n",
+                                                          encoding="utf-8")
+    except Exception:
+        pass
+    print(line)
+    for d in detail:
+        print("  " + d)
 
 
 ALLOWED_EVENTS = {"task_open", "task_close", "budget_flag", "retry", "escalation",

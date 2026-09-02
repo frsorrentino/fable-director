@@ -9,6 +9,6 @@ Run and report the output AS-IS (it is already formatted, freshness included —
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/fd-status.py" ${ARGUMENTS}
 ```
 
-The user may pass `--detail` for session delegations and the last task receipt.
+The user may pass `--detail` for session delegations and the last task receipt, `--all` for every open budget on the machine, or `--receipts` (`--receipts all`) for the last readable task receipts written by `budget-close`.
 
 Only allowed addition: if a line contains an alarm (⚠, ✕, FLAGGED), one sentence of context on what to do.
