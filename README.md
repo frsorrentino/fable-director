@@ -7,10 +7,11 @@ to do.** It makes your agent declare what a job should cost before it delegates,
 routes the cheap parts to cheap executors, and blocks the turn when spend runs
 away — with quality as a constraint, never part of the trade.
 
-**The honest price:** the always-on checks are a premium on small work — **~5%**
-on quick one-off tasks, and up to **+47%** on easy self-contained bug fixes
-(measured on SWE-bench, where the discipline had nothing to protect). If your
-work is mostly small and easy, this plugin is not for you.
+**The honest price:** the always-on checks are a premium on small work — **~5%
+to ~20%** on quick one-off tasks (shape-dependent, N small), and up to **+47%**
+on easy self-contained bug fixes (measured on SWE-bench, where the discipline
+had nothing to protect). If your work is mostly small and easy, this plugin is
+not for you.
 
 ## Quickstart
 
@@ -34,8 +35,9 @@ respected forever). No-CLI alternative and zip migration:
 
 ## What you get
 
-- **Your quota lasts longer on the jobs that eat it** — ~25% fewer tokens on big
-  reading jobs, ~20% on repetitive mechanical work.
+- **Same cost, better result on the jobs that eat your quota** — on big reading
+  jobs tokens are neutral and quality is consistently higher (N=6/5); ~20% fewer
+  tokens on repetitive mechanical work.
 - **The job you run every week stops costing you** — repeatable work is promoted
   to a script; from the second run it's close to free.
 - **Your agent can't quietly overspend** — it declares an estimate before
@@ -68,18 +70,19 @@ times each, counting real tokens and real dollars:
 
 | Kind of work | With the plugin | Verdict |
 |---|---|---|
-| **Big reading jobs** (240 long customer reviews) | Same result in 3-7 steps instead of 3-32, **~25% fewer tokens**, same dollars, quality equal or slightly better | ✅ saves |
+| **Big reading jobs** (240 long customer reviews) | Same result in 3-7 steps instead of 3-32; tokens and dollars **neutral** (−2.6% ±35%, N=6/5 — indistinguishable from zero), **quality consistently higher** (sentiment 99% vs 94%, safety recall 98% vs 95%) | 🛡️ same cost, better result |
 | **Repetitive mechanical work** (30 data files) | **~20% fewer tokens**, near-identical behavior every run | ✅ saves |
-| **Quick small tasks** (one question, one small fix) | **~5% more** — the fixed price of the always-on checks | ➖ small premium |
+| **Quick small tasks** (one question, one small fix) | **~5% to ~20% more** — the fixed price of the always-on checks, larger on tiny shapes | ➖ small premium |
 | **Quality of results** | Equal or better everywhere it saves (98% vs 95%); never traded for savings | 🛡️ protected |
 | **Recurring jobs** (the same task every week) | The repeatable core becomes a script: from the second run, **that job** is close to free | ✅ the biggest saving |
 | **Non-code batches** (classify, extract, transform) | The bulk runs on free external models | ✅ off your Claude quota |
 | **Real-world bug fixing** (SWE-bench Verified, official grader) | Easy issues: +47% premium. Hard issues: **same tokens, nothing lost, 2 extra resolved**, zero runaway runs | 🛡️ insurance that pays off on hard work |
 
 To be clear: the deep cuts apply to **specific jobs the plugin can script or
-route externally**, not to your Claude usage as a whole. The 20-25% is what a
-single-shot benchmark can see; the last two rows are where the design aims, and
-they compound over weeks.
+route externally**, not to your Claude usage as a whole. At equal model a
+single-shot benchmark sees **equal cost and higher quality**, not fewer tokens
+(`benchmarks/README.md`, consolidated N=6/5); the last two rows are where the
+design aims, and they compound over weeks.
 
 *(These numbers count tokens — the visible part. The real bill is dominated
 by context re-sending: measured and managed since 1.33.0.)*
