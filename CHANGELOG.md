@@ -4,6 +4,8 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.39.x
 
+- **1.39.1**
+  - Plain statusline: the quota alarms keep the percentage — `quota 92% used — almost gone, resets in 43 min`, `weekly quota 85% used — almost gone, resets Fri 5`. The number is the margin; without it the line said "almost" and nothing else.
 - **1.39.0**
   - Route hint with a deadline: at 30 shown / 8 withheld sessions with no measurable difference in cheap-route adoption, `report` prints the verdict and the switch (`route-hint.json {"enabled": false}`), which silences the keyword candidates and leaves `[fd-memory]` untouched. Effort-mismatch rows in `report` now name the effective effort (pinned or session) instead of `None`.
   - Kernel trimmed from 8.2k to 5.7k bytes (~1.4k tokens per session): the numbers stay, the operational detail (flags, external-route rules, perimeter mechanics) lives in the skill, the idempotency-cache and pin-your-model explanations are gone (0 uses / native since 2.1.251). Honest note: at Fable 5.1 rates the token saving is ~0.1% — the reason is attention, not cost.
