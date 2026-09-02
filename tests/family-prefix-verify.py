@@ -101,17 +101,57 @@ check("F5 quality guard: codice → ignorato",
 # F6 paid
 r = run("codex: scrivi un verbale della riunione di oggi")
 check("F6 provider a pagamento: ignorato, consenso esplicito richiesto",
-      "is billed" in r.stdout and "--paid-ok" in r.stdout and len(events()) == n_before, r.stdout)
+      "billed" in r.stdout and "--paid-ok" in r.stdout and len(events()) == n_before, r.stdout)
 # F7 provider che fallisce
 r = run("gemini-stable: scrivi due righe di auguri")
 ev = events()
 check("F7 provider giu': 'not available', evento ok=false",
       "not available" in r.stdout and "Normal turn" in r.stdout and ev[-1]["ok"] is False
       and "BOZZA" not in r.stdout, r.stdout + str(ev[-1:]))
+# X1 xfamily? con codex a pagamento → solo gemini, nota su codex, ordine
+cfg["providers"]["codex"]["billing"] = "free"
+slow = base / "slow-provider.py"
+slow.write_text("import sys,time\nspec=sys.stdin.read()\ntime.sleep(1.5)\n"
+                "open(sys.argv[1],'w').write('CODEX: ' + spec.splitlines()[-1][:40])\n")
+cfg["providers"]["codex"]["command"] = [sys.executable, str(slow), "{output_file}"]
+(base / "cross-family.json").write_text(json.dumps(cfg))
+import time as _t
+t0 = _t.time()
+r = run("xfamily? conviene il multistrato o il massello per una libreria")
+dt = _t.time() - t0
+ev = events()
+pairs = [e.get("pair") for e in ev[-2:]]
+gi = r.stdout.find("----- gemini -----"); ci = r.stdout.find("----- codex -----")
+check("X1 xfamily?: due pareri, ordine gemini poi codex, intestazione TWO OPINIONS, pair comune",
+      "TWO OPINIONS from gemini (fake-flash), codex (gpt-x)" in r.stdout and 0 < gi < ci
+      and "BOZZA: conviene" in r.stdout and "CODEX: conviene" in r.stdout
+      and len(ev) >= 2 and pairs[0] and pairs[0] == pairs[1]
+      and {e["provider"] for e in ev[-2:]} == {"gemini", "codex"},
+      r.stdout + str(ev[-2:]))
+check("X1b parallelo: durata < somma (provider lento 1,5 s, totale sotto 4 s)", dt < 4.0, f"{dt:.1f}s")
+r = run("xfamily: scrivi la lettera alla PA")
+check("X2 xfamily: due bozze, istruzione di sceglierne UNA e dire perche'",
+      "TWO DRAFTS" in r.stdout and "pick ONE as your base" in r.stdout and "do not merge" in r.stdout,
+      r.stdout)
+cfg["providers"]["codex"]["command"] = [sys.executable, str(fail), "{output_file}"]
+(base / "cross-family.json").write_text(json.dumps(cfg))
+r = run("xfamily? domanda con codex giu'")
+check("X3 un provider giu': l'altro basta, con la nota",
+      "TWO OPINIONS from gemini (fake-flash)" in r.stdout and "codex not available" in r.stdout
+      and "----- gemini -----" in r.stdout and "----- codex -----" not in r.stdout,
+      r.stdout)
+cfg["providers"]["gemini"]["command"] = [sys.executable, str(fail), "{output_file}"]
+(base / "cross-family.json").write_text(json.dumps(cfg))
+r = run("xfamily? entrambi giu'")
+check("X4 entrambi giu': turno normale con la riga", "not available" in r.stdout and "Normal turn" in r.stdout
+      and "TWO" not in r.stdout, r.stdout)
+r = run("xfamily: implementa il fix in src/app.py")
+check("X5 guardie sovrane anche su xfamily", "prefix ignored" in r.stdout and "quality guard" in r.stdout, r.stdout)
+
 # F8 provider mancante
 (base / "cross-family.json").write_text(json.dumps({"default": "gemini", "providers": {}}))
 r = run("gemini: ciao")
-check("F8 provider non in config: una riga, turno normale", "not in cross-family.json" in r.stdout, r.stdout)
+check("F8 provider non in config: una riga, turno normale", "not in cross-family.json" in r.stdout and "Normal turn" in r.stdout, r.stdout)
 # F9 hooks
 h = json.loads((HERE.parent / "fable-director" / "hooks" / "hooks.json").read_text())["hooks"]
 check("F9 hooks.json: family-prefix.py su UserPromptSubmit con python3",

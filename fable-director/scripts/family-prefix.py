@@ -9,6 +9,11 @@ provider esterno senza configurazione oltre a cross-family.json. Due forme:
   `gemini? quanto costa X`       → SECONDO PARERE: la risposta viene riportata
       tale quale, delimitata e attribuita; Claude aggiunge al massimo una riga.
 
+`xfamily? domanda` interroga ENTRAMBI (gemini e codex) in PARALLELO e riporta i
+due pareri uno dopo l'altro, sempre nello stesso ordine; `xfamily: bozza`
+produce due bozze e Claude ne sceglie UNA come base, dicendo quale e perche'.
+Un provider giu' → l'altro basta, con la nota; entrambi giu' → turno normale.
+
 Regola non negoziabile: il prefisso NON scavalca data_class ne' quality_guard.
 Budget aperto `restricted` → turno normale e lo dice. Prompt che sembra
 lavoro su codice (fence, path con estensione + verbi di implementazione) →
@@ -33,8 +38,9 @@ except Exception:
     pass
 
 BASE = Path.home() / ".claude" / "fable-director"
-PREFIX_RE = re.compile(r"^\s*(gemini-stable|gemini|codex)\s*([:?])\s+(\S.*)$",
+PREFIX_RE = re.compile(r"^\s*(gemini-stable|gemini|codex|xfamily)\s*([:?])\s+(\S.*)$",
                        re.I | re.S)
+XFAMILY = ("gemini", "codex")  # ordine FISSO di risposta: gemini, poi codex
 CODE_HINT_RE = re.compile(
     r"```|\b[\w./-]+\.(py|php|js|ts|tsx|jsx|go|rs|java|rb|sh|sql|scss|css|html)\b",
     re.I)
@@ -138,25 +144,120 @@ def main():
     except Exception:
         say(f"{tag} config unreadable. Normal turn.")
         return 0
-    prov = (cfg.get("providers") or {}).get(name)
-    if not prov:
-        say(f"{tag} provider '{name}' not in cross-family.json. Normal turn.")
-        return 0
-    if ext.billing_of(prov) != "free":
-        say(f"{tag} provider '{name}' is billed — the prefix never spends money "
-            f"without explicit consent (external-exec.py --paid-ok). Normal turn.")
+    names = list(XFAMILY) if name == "xfamily" else [name]
+    provs = {}
+    skipped = []
+    for n in names:
+        prov = (cfg.get("providers") or {}).get(n)
+        if not prov:
+            skipped.append((n, "not in cross-family.json"))
+            continue
+        if ext.billing_of(prov) != "free":
+            skipped.append((n, "billed — never without explicit consent (--paid-ok)"))
+            continue
+        provs[n] = prov
+    if not provs:
+        why = "; ".join(f"{n}: {r}" for n, r in skipped) or "no provider"
+        say(f"{tag} not usable ({why}). Normal turn.")
         return 0
 
-    # --- chiamata ----------------------------------------------------------
+    # --- chiamate: in PARALLELO per xfamily (la latenza non raddoppia) ------
     ext.EXEC_SYSTEM = DRAFT_SYSTEM if mode == "draft" else OPINION_SYSTEM
-    user_msg = body
+    pair = None
+    if len(names) > 1:
+        import uuid
+        pair = uuid.uuid4().hex[:12]
+    results = {}
+    if len(provs) == 1:
+        n, prov = next(iter(provs.items()))
+        results[n] = call_provider(ext, n, prov, body)
+    else:
+        # Un sottoprocesso per provider (stesso script, --call): isolamento
+        # vero dello stdout catturato — i helper di external-exec stampano
+        # su sys.stdout, che tra thread sarebbe condiviso.
+        import subprocess
+        procs = {}
+        for n in provs:
+            procs[n] = subprocess.Popen(
+                [sys.executable, __file__, "--call", n, mode],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL, text=True)
+        for n, pr in procs.items():
+            try:
+                outp, _ = pr.communicate(body, timeout=TIMEOUT_S + 15)
+                last = [l for l in (outp or "").splitlines() if l.strip()][-1:]
+                res = json.loads(last[0]) if last else {}
+                results[n] = (res.get("content"), res.get("detail"))
+            except subprocess.TimeoutExpired:
+                pr.kill()
+                results[n] = (None, f"timeout ({TIMEOUT_S}s)")
+            except Exception as e:
+                results[n] = (None, f"{e.__class__.__name__}")
+    for n in names:
+        if n not in provs:
+            continue
+        content, detail = results.get(n, (None, "no result"))
+        ok = bool(content and str(content).strip())
+        ev = {"provider": n, "model": provs[n].get("model", "?"),
+              "billing": ext.billing_of(provs[n]), "type": f"prefix-{mode}",
+              "mode": mode, "ok": ok, "chars_in": len(body),
+              "chars_out": len(content or ""), "session_id": sid,
+              "check": "-" if ok else (detail or "-")[:120]}
+        if pair:
+            ev["pair"] = pair
+        ext.log_exec(ev)
+    good = [n for n in names if n in provs and results.get(n, (None,))[0]
+            and str(results[n][0]).strip()]
+    bad = [(n, (results.get(n, (None, "?"))[1] or "no output")) for n in names
+           if n in provs and n not in good] + skipped
+    if not good:
+        why = "; ".join(f"{n}: {r[:120]}" for n, r in bad)
+        say(f"{tag} not available ({why}). Normal turn.")
+        return 0
+
+    # --- intestazioni -------------------------------------------------------
+    if len(names) > 1:
+        who = ", ".join(f"{n} ({provs[n].get('model', '?')})" for n in good)
+        if mode == "draft":
+            say(f"{tag} TWO DRAFTS from {who} — pick ONE as your base (say which "
+                f"and why in one line), correct it, and deliver the corrected "
+                f"version as your own answer; do not merge them. "
+                f"The user asked: {body[:200]}")
+        else:
+            say(f"{tag} TWO OPINIONS from {who} — report BOTH to the user AS IS, "
+                f"in this order, each delimited and attributed (\"gemini says: …\", "
+                f"\"codex says: …\"). Add at most one line of your own, only if "
+                f"they diverge.")
+        for n, why in bad:
+            say(f"{tag} {n} not available ({str(why)[:120]}).")
+    else:
+        n = good[0]
+        if mode == "draft":
+            say(f"{tag} DRAFT from {n} ({provs[n].get('model', '?')}) — a first draft "
+                f"for you to CORRECT, not to quote: keep what holds, rewrite what "
+                f"is wrong or [TO CHECK], and deliver the corrected version to the "
+                f"user as your own answer. The user asked: {body[:200]}")
+        else:
+            say(f"{tag} OPINION from {n} ({provs[n].get('model', '?')}) — report it to "
+                f"the user AS IS, delimited and attributed (\"{n} says: …\"). Add "
+                f"at most one line of your own, only if you disagree.")
+    for n in good:
+        say(f"----- {n} -----" if len(names) > 1 else "-----")
+        say(str(results[n][0]).strip())
+        say("-----")
+    return 0
+
+
+def call_provider(ext, name, prov, body):
+    """(content, detail) — stdout dei helper di external-exec catturato,
+    SystemExit (unavailable) tradotto in detail. Mai eccezioni fuori."""
     buf = io.StringIO()
     content, detail = None, None
     try:
         with contextlib.redirect_stdout(buf):
             if prov.get("type") == "cli":
                 opts = {"--model": None, "--effort": None, "--resume-last": False}
-                content = ext.call_cli(prov, name, user_msg, TIMEOUT_S, opts, None)
+                content = ext.call_cli(prov, name, body, TIMEOUT_S, opts, None)
             elif prov.get("type") == "image":
                 detail = "image providers are not text providers"
             else:
@@ -164,40 +265,38 @@ def main():
                 if not api_key:
                     detail = "API key missing"
                 else:
-                    content = ext.call_http(prov, name, api_key, user_msg, TIMEOUT_S)
+                    content = ext.call_http(prov, name, api_key, body, TIMEOUT_S)
     except SystemExit:
         dl = [l for l in buf.getvalue().splitlines() if l.startswith("DETAIL:")]
         detail = dl[-1][7:].strip() if dl else "provider unavailable"
     except Exception as e:
         detail = f"{e.__class__.__name__}: {str(e)[:120]}"
-    ok = bool(content and str(content).strip())
-    ext.log_exec({"provider": name, "model": prov.get("model", "?"),
-                  "billing": ext.billing_of(prov), "type": f"prefix-{mode}",
-                  "mode": mode, "ok": ok, "chars_in": len(body),
-                  "chars_out": len(content or ""), "session_id": sid,
-                  "check": "-" if ok else (detail or "-")[:120]})
-    if not ok:
-        say(f"{tag} not available ({(detail or 'no output')[:160]}). Normal turn.")
-        return 0
+    return content, detail
 
-    content = str(content).strip()
-    if mode == "draft":
-        say(f"{tag} DRAFT from {name} ({prov.get('model', '?')}) — a first draft "
-            f"for you to CORRECT, not to quote: keep what holds, rewrite what "
-            f"is wrong or [TO CHECK], and deliver the corrected version to the "
-            f"user as your own answer. The user asked: {body[:200]}")
-    else:
-        say(f"{tag} OPINION from {name} ({prov.get('model', '?')}) — report it to "
-            f"the user AS IS, delimited and attributed (\"{name} says: …\"). Add "
-            f"at most one line of your own, only if you disagree.")
-    say("-----")
-    say(content)
-    say("-----")
+
+def call_one(argv):
+    """`--call NAME MODE` (interno): body su stdin, JSON {content, detail} su
+    stdout. Usato dal modo xfamily per isolare le chiamate parallele."""
+    name, mode = argv[0], argv[1]
+    body = sys.stdin.read()
+    try:
+        ext = load_ext()
+        cfg = json.loads(ext.CONFIG_PATH.read_text())
+        prov = (cfg.get("providers") or {}).get(name) or {}
+        ext.EXEC_SYSTEM = DRAFT_SYSTEM if mode == "draft" else OPINION_SYSTEM
+        content, detail = call_provider(ext, name, prov, body)
+    except Exception as e:
+        content, detail = None, f"{e.__class__.__name__}"
+    # stdout puo' contenere residui dei helper: il JSON va su una riga finale
+    # riconoscibile → il chiamante legge l'ultima riga.
+    print("\n" + json.dumps({"content": content, "detail": detail}, ensure_ascii=False))
     return 0
 
 
 if __name__ == "__main__":
     try:
+        if len(sys.argv) >= 4 and sys.argv[1] == "--call":
+            sys.exit(call_one(sys.argv[2:]))
         sys.exit(main())
     except Exception:
         sys.exit(0)
