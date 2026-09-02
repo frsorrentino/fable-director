@@ -170,6 +170,62 @@ QUOTA_GUARD_CEILING = 90.0   # five_hour_used_pct oltre cui un nuovo Workflow è
 QUOTA_SNAPSHOT_MAX_AGE_S = 600  # snapshot quota più vecchio → nessun check
 
 
+def priority_guard(data):
+    """D.3.4 (1.39): broker di quota tra sessioni. Se un'ALTRA sessione dello
+    stesso account ha aperto un budget `--priority incident` (flag vivo, con
+    scadenza) e la finestra 5h e' sopra PRIORITY_WINDOW_PCT, i NUOVI fan-out
+    di questa sessione (Agent/Workflow) vengono negati con il nome del task
+    che ha la precedenza. I turni singoli restano liberi; il resume passa.
+    Snapshot quota assente/stantio → fail-open."""
+    try:
+        if data.get("tool_name") not in ("Agent", "Workflow"):
+            return None
+        if (data.get("tool_input") or {}).get("resumeFromRunId"):
+            return None
+        mod = _fdt_mod()
+        if not mod or not hasattr(mod, "priority_active"):
+            return None
+        pr = mod.priority_active(session_id=data.get("session_id"))
+        if not pr:
+            return None
+        base = Path.home() / ".claude" / "fable-director"
+        acct = hashlib.sha256((os.environ.get("CLAUDE_CONFIG_DIR")
+                               or str(Path.home() / ".claude")).encode()).hexdigest()[:8]
+        qfile = base / f"quota-{acct}.json"
+        if not qfile.is_file():
+            qfile = base / "quota.json"
+        if not qfile.is_file() or time.time() - qfile.stat().st_mtime > QUOTA_SNAPSHOT_MAX_AGE_S:
+            return None
+        used = json.loads(qfile.read_text()).get("five_hour_used_pct")
+        if used is None or float(used) < mod.PRIORITY_WINDOW_PCT:
+            return None
+        return (f"✕ FABLE-DIRECTOR priority — another session on this account is "
+                f"handling an incident ('{pr.get('task')}', since {str(pr.get('since'))[11:16]} UTC) "
+                f"and the five-hour window is at {float(used):.0f}%. New fan-outs "
+                f"here wait; single turns are free. The hold expires by itself "
+                f"(2 h) or when that budget closes.")
+    except Exception:
+        return None
+
+
+_FDT_MOD = None
+
+
+def _fdt_mod():
+    global _FDT_MOD
+    if _FDT_MOD is None:
+        try:
+            import importlib.util
+            spec = importlib.util.spec_from_file_location(
+                "fd_telemetry", Path(__file__).with_name("fd-telemetry.py"))
+            m = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(m)
+            _FDT_MOD = m
+        except Exception:
+            _FDT_MOD = False
+    return _FDT_MOD or None
+
+
 def quota_guard(data):
     """Fan-out a finestra 5h quasi esausta = run che muore a metà volo: token
     bruciati, zero deliverable — e il limite colpisce la fase più a valle
@@ -619,6 +675,11 @@ def main():
             if guard:
                 log_gate_deny(data, "quota_guard", budget)
                 deny(guard)
+                return
+            hold = priority_guard(data)
+            if hold:
+                log_gate_deny(data, "priority_hold", budget)
+                deny(hold)
                 return
             # Registro PRIMA del checkpoint: se l'ask viene approvato l'hook non
             # gira di nuovo — senza questo, proprio le deleghe più costose

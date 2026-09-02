@@ -67,7 +67,7 @@ import os
 import re
 import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # Windows: stdout/stderr default cp1252 → i nostri messaggi con ≈ → × ▶
@@ -599,7 +599,9 @@ def cmd_budget_open(args):
                              "--route": None, "--reason": None, "--alternative": None,
                              "--effort": None, "--verify": None,
                              "--data-class": None, "--paths": None,
-                             "--agents": None})
+                             "--agents": None, "--priority": None})
+    if opts["--priority"] and opts["--priority"] not in ("normal", "incident"):
+        sys.exit("invalid --priority (allowed: normal, incident)")
     if opts["--data-class"] and opts["--data-class"] not in (
             "public", "internal", "restricted"):
         sys.exit("invalid --data-class (allowed: public, internal, restricted)")
@@ -696,6 +698,10 @@ def cmd_budget_open(args):
         # rotte esterne (external-exec/cross-verify) deterministicamente.
         "verify": opts["--verify"],
         "data_class": opts["--data-class"],
+        # priority incident: questa sessione ha la precedenza sulla quota —
+        # le ALTRE sessioni dello stesso account vedono negati i nuovi
+        # fan-out finche' il flag vive (scadenza automatica, vedi PRIORITY).
+        "priority": opts["--priority"] or "normal",
         # paths: perimetro scritture dichiarato (glob fnmatch, virgole) —
         # enforced dal hook perimeter-gate su Write/Edit dentro il progetto;
         # si estende solo con budget-amend (emendamento esplicito, loggato).
@@ -721,6 +727,12 @@ def cmd_budget_open(args):
     write_json_atomic(bfile, budget)
     log_event("task_open", budget, cwd=cwd)
     print(f"budget open: {bfile}")
+    if budget.get("priority") == "incident":
+        priority_set(budget, cwd)
+        print(f"FD ▲ incident priority on: other sessions on this account get "
+              f"their new fan-outs held while the five-hour window is above "
+              f"{PRIORITY_WINDOW_PCT:.0f}% — expires in {PRIORITY_TTL_S // 3600} h "
+              f"or at budget-close.")
     # E3: memoria dei precedenti dello stesso tipo, al momento giusto.
     sim = similar_tasks_line(budget.get("type"), budget.get("declared_at"))
     if sim:
@@ -844,6 +856,65 @@ def cmd_budget_amend(args):
 def fmt(n):
     """1234567 → '1.234.567' (separatore italiano, come la statusline)."""
     return f"{n:,.0f}".replace(",", ".")
+
+
+# ---------- broker di quota tra sessioni (D.3.4) ----------
+PRIORITY_FILE = BASE / "priority.json"
+PRIORITY_TTL_S = 2 * 3600       # flag dimenticato: muore da solo
+PRIORITY_WINDOW_PCT = 50.0      # sotto: quota abbondante, nessun freno
+
+
+def account_key():
+    return hashlib.sha256((os.environ.get("CLAUDE_CONFIG_DIR")
+                           or str(Path.home() / ".claude")).encode()).hexdigest()[:8]
+
+
+def priority_set(budget, cwd):
+    """Scrive il flag di precedenza (una sessione per account alla volta)."""
+    try:
+        PRIORITY_FILE.write_text(json.dumps({
+            "task": budget.get("task"), "session_id": budget.get("owner_sid"),
+            "account": account_key(), "cwd": str(cwd), "since": now_iso(),
+            "expires_at": (datetime.now(timezone.utc)
+                           + timedelta(seconds=PRIORITY_TTL_S)).isoformat(),
+        }, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def priority_active(session_id=None):
+    """Il flag vivo di UN'ALTRA sessione dello stesso account, o None.
+    Scaduto → rimosso e None (fail-open: un flag vecchio non frena nulla)."""
+    try:
+        if not PRIORITY_FILE.is_file():
+            return None
+        pr = json.loads(PRIORITY_FILE.read_text(encoding="utf-8"))
+        exp = datetime.fromisoformat(str(pr.get("expires_at")))
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) >= exp:
+            PRIORITY_FILE.unlink(missing_ok=True)
+            return None
+        if pr.get("account") != account_key():
+            return None
+        if session_id and pr.get("session_id") == session_id:
+            return None
+        return pr
+    except Exception:
+        return None
+
+
+def priority_clear(session_id=None, cwd=None):
+    """A budget-close: rimuove il flag se e' di questa sessione (o cwd)."""
+    try:
+        if not PRIORITY_FILE.is_file():
+            return
+        pr = json.loads(PRIORITY_FILE.read_text(encoding="utf-8"))
+        if (session_id and pr.get("session_id") == session_id) or \
+                (cwd and str(pr.get("cwd")) == str(cwd)):
+            PRIORITY_FILE.unlink(missing_ok=True)
+    except Exception:
+        pass
 
 
 def ratio_words(actual, expected):
@@ -1035,6 +1106,8 @@ def cmd_budget_close(args):
         except (json.JSONDecodeError, OSError, ValueError):
             pass
     write_json_atomic(bfile, budget)
+    if budget.get("priority") == "incident":
+        priority_clear(budget.get("owner_sid"), cwd)
     # Lo state file dello Stop incrementale è chiavato su declared_at: a
     # budget chiuso è morto — rimuoverlo evita accumulo, non serve migrarlo.
     try:
