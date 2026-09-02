@@ -53,8 +53,8 @@ check("B1 box drawing con titolo",
       "┌─ fable-director" in out and out.count("│") >= 4
       and "└" in out, out)
 check("B2 quote a barre 10 celle",
-      re.search(r"5H\s+▓▓▓░░░░░░░ 35%", out) is not None
-      and re.search(r"7D\s+▓▓▓▓▓▓▓░░░ 70%", out) is not None, out)
+      re.search(r"five-hour quota: ▓▓▓░░░░░░░ 35%", out) is not None
+      and re.search(r"weekly quota: ▓▓▓▓▓▓▓░░░ 70%", out) is not None, out)
 check("B3 freshness dichiarata accanto alle quote",
       "as-of" in out, out)
 check("B4 senza history → nessuna riga burn (mai inventata)",
@@ -70,7 +70,7 @@ for i in range(6):
 (base / f"quota-history-{acct}.jsonl").write_text("\n".join(rows) + "\n")
 out2 = run(home)
 check("B5 con history → burn con sparkline e proiezione 100%",
-      re.search(r"burn\s+~[\d.]+%/h [▁▂▃▄▅▆▇█]{3,}", out2) is not None
+      re.search(r"burn rate: ~[\d.]+%/h [▁▂▃▄▅▆▇█]{3,}", out2) is not None
       and "100%" in out2, out2)
 
 # B6: bucket ignoti registrati dalla statusline → riga informativa
@@ -88,7 +88,7 @@ check("B6 unknown bucket → riga new col nome del campo",
     {"five_hour_used_pct": 35.0, "weekly_used_pct": 13.0}))
 out4 = run(home)
 check("B7 plan con frazione → bound ✦ ≤26% dichiarato come tetto",
-      re.search(r"✦\s*≤26%", out4) is not None and "bound" in out4, out4)
+      re.search(r"premium model: ≤26%", out4) is not None and "bound" in out4, out4)
 
 print()
 if FAILS:

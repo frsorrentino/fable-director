@@ -1,5 +1,5 @@
 ---
-description: Statusline legend and plugin commands — what every segment, symbol and color means
+description: Statusline legend and plugin commands — every line you can see, what it means and what to do; expert mode below
 allowed-tools: Bash
 ---
 

@@ -10,6 +10,8 @@
 # Uso:
 #   bash statusline-install.sh          # installa / aggiorna il path
 #   bash statusline-install.sh --remove # rimuove SOLO la nostra statusLine
+#   bash statusline-install.sh --expert # riga storica con le sigle (default: plain, parole)
+#   bash statusline-install.sh --plain  # torna alla resa in parole
 #
 # Dopo la scrittura: riavviare Claude Code (la statusLine è letta all'avvio).
 
@@ -27,6 +29,16 @@ fi
 
 MODE="install"
 [ "${1:-}" = "--remove" ] && MODE="remove"
+# --expert / --plain: modalita di resa (1.39). plain = parole, solo eccezioni
+# (default); expert = la riga storica con le sigle. Scrive
+# <config>/fable-director/statusline.json e NON tocca settings.json.
+if [ "${1:-}" = "--expert" ] || [ "${1:-}" = "--plain" ]; then
+  SL_DIR="$CFG_DIR/fable-director"
+  mkdir -p "$SL_DIR"
+  printf '{"mode": "%s"}\n' "${1#--}" > "$SL_DIR/statusline.json"
+  echo "statusline mode: ${1#--} ($SL_DIR/statusline.json) — takes effect at the next refresh"
+  exit 0
+fi
 
 # Tutta la logica di merge in python: parsing/scrittura JSON deterministici,
 # preserva le altre chiavi, non tocca una statusLine di terzi.

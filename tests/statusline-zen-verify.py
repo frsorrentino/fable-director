@@ -72,6 +72,7 @@ def render(home, stdin, **env):
     e = dict(os.environ, HOME=str(home), **{k: str(v) for k, v in env.items()})
     e.pop("CLAUDE_CONFIG_DIR", None)
     e.setdefault("CAVEMAN_STATUSLINE_SH", "/nonexistent/no-badge.sh")
+    e.setdefault("FD_STATUSLINE_MODE", "expert")  # questi check descrivono la riga storica
     return subprocess.run(["bash", str(ROOT / "statusline-ctx.sh")],
                           input=stdin, capture_output=True, text=True,
                           env=e, timeout=30).stdout

@@ -108,6 +108,7 @@ stdin_payload = json.dumps({
 
 def render(home, **env):
     e = dict(os.environ, HOME=str(home), **{k: str(v) for k, v in env.items()})
+    e.setdefault("FD_STATUSLINE_MODE", "expert")  # riga storica
     e.pop("CLAUDE_CONFIG_DIR", None)
     out = subprocess.run(["bash", str(ROOT / "statusline-ctx.sh")],
                          input=stdin_payload, capture_output=True, text=True,

@@ -29,7 +29,7 @@ badge=""
 # Tutte le metriche in UNA passata python (statusline gira spesso: un solo processo).
 # Campi assenti → "-" → il segmento si omette. Il budget file è di fable-director
 # (fd-telemetry.py budget-open / stop-budget-check.py): qui SOLO lettura.
-read -r model pct rl rlt wk wkt bdg xf dlg cache cmp grind eff bar win lk fw prn pru <<EOF
+read -r model pct rl rlt wk wkt bdg xf dlg cache cmp grind eff bar win lk fw prn pru stuck vrf prio <<EOF
 $(printf '%s' "$input" | python3 -c '
 import json,sys,os,time
 from pathlib import Path
@@ -470,9 +470,69 @@ try:
             if gs>=2: grind=str(gs)
 except Exception:
     pass
-print(model,pct,rl,rlt,wk,wkt,bdg,xf,dlg,cache,cmp,grind,eff,bar,win,lk,fw,prn,pru)
+# [PLAIN 1.39] tre token in piu per la resa in parole: stuck = minuti del
+# delegato in volo da piu tempo; vrf = esito del verify eseguibile dallo
+# Stop hook (rc:comando); prio = task dell incidente di UN ALTRA sessione
+# che tiene la precedenza sulla quota. Assenti → "-" (mai inventati).
+stuck="-"; vrf="-"; prio="-"
+try:
+    if sid:
+        _sg="".join(c if (c.isalnum() or c in "-_") else "-" for c in str(sid))[:120]
+        sgf=Path.home()/".claude"/"fable-director"/"subagents"/f"{_sg}.json"
+        if sgf.is_file():
+            from datetime import datetime as _d2, timezone as _z2
+            _now=_d2.now(_z2.utc); _old=0
+            for _v in (json.loads(sgf.read_text()).get("inflight") or {}).values():
+                try:
+                    _t=_d2.fromisoformat(str(_v.get("since")).replace("Z","+00:00"))
+                    if _t.tzinfo is None: _t=_t.replace(tzinfo=_z2.utc)
+                    _old=max(_old,int((_now-_t).total_seconds()//60))
+                except Exception: pass
+            if _old: stuck=str(_old)
+except Exception: pass
+try:
+    if b_open:
+        _sf=bf.with_name(bf.stem+".state.json")
+        if _sf.is_file():
+            _st=json.loads(_sf.read_text())
+            if _st.get("verify_rc") is not None:
+                vrf=str(_st.get("verify_rc"))+":"+str(_st.get("verify_cmd") or "")
+except Exception: pass
+try:
+    _pf=Path.home()/".claude"/"fable-director"/"priority.json"
+    if _pf.is_file():
+        _pr=json.loads(_pf.read_text())
+        from datetime import datetime as _d3, timezone as _z3
+        _ex=_d3.fromisoformat(str(_pr.get("expires_at")))
+        if _ex.tzinfo is None: _ex=_ex.replace(tzinfo=_z3.utc)
+        _acct=_hl.sha256((os.environ.get("CLAUDE_CONFIG_DIR") or str(Path.home()/".claude")).encode()).hexdigest()[:8]
+        if _d3.now(_z3.utc) < _ex and _pr.get("account")==_acct and _pr.get("session_id")!=sid:
+            prio=str(_pr.get("task") or "incident")[:60]
+except Exception: pass
+vrf=str(vrf).replace(" ",","); prio=str(prio).replace(" ",",")
+print(model,pct,rl,rlt,wk,wkt,bdg,xf,dlg,cache,cmp,grind,eff,bar,win,lk,fw,prn,pru,stuck,vrf,prio)
 ' 2>/dev/null)
 EOF
+
+# [MODE 1.39] plain (default): parole, solo eccezioni — resa in
+# statusline-plain.py con gli stessi token. expert: la riga storica qui sotto.
+# FD_STATUSLINE_MODE=expert|plain nell env, oppure statusline.json {"mode":..}
+# (statusline-install.sh --expert / --plain).
+FD_MODE="${FD_STATUSLINE_MODE:-}"
+if [ -z "$FD_MODE" ] && [ -f "$FD_DIR/statusline.json" ]; then
+  FD_MODE=$(python3 -c 'import json,sys
+try: print((json.load(open(sys.argv[1])) or {}).get("mode") or "")
+except Exception: print("")' "$FD_DIR/statusline.json" 2>/dev/null)
+fi
+if [ "$FD_MODE" != "expert" ]; then
+  FD_SL_MODEL="$model" FD_SL_PCT="$pct" FD_SL_RL="$rl" FD_SL_RLT="$rlt" FD_SL_WK="$wk" \
+  FD_SL_WKT="$wkt" FD_SL_BDG="$bdg" FD_SL_XF="$xf" FD_SL_DLG="$dlg" FD_SL_CACHE="$cache" \
+  FD_SL_CMP="$cmp" FD_SL_GRIND="$grind" FD_SL_EFF="$eff" FD_SL_WIN="$win" FD_SL_PRN="$prn" \
+  FD_SL_PRU="$pru" FD_SL_STUCK="$stuck" FD_SL_VRF="$vrf" FD_SL_PRIO="$prio" \
+  FD_SL_BADGE="$badge" FD_SL_LK="$lk" \
+  python3 "$(dirname "$0")/statusline-plain.py"
+  exit 0
+fi
 
 color_for() {
   if [ "$1" -ge 80 ] 2>/dev/null; then printf '\033[38;5;196m'   # rosso

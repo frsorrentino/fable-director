@@ -417,7 +417,30 @@ def main():
     # regge da solo. Larghezza = contenuto piu largo, titolo con orologio.
     title = ("\u250c\u2500 fable-director \u2500\u2500 "
              + datetime.now().astimezone().strftime("%d %b %H:%M") + " ")
-    body = [f"\u2502 {lab:<5}{txt}" for lab, txt in rows]
+    # 1.39 (sezione F): ogni riga e "nome: numero — cosa vuol dire", cosi
+    # nemmeno qui serve la legenda. Le sigle storiche restano come chiavi
+    # interne; a schermo vanno i nomi.
+    NAMES = {
+        "now": ("task budget", "the open pre-budget of this folder and its spend against the estimate"),
+        "5H": ("five-hour quota", "share of the plan window used; resets at the time shown"),
+        "7D": ("weekly quota", "share of the weekly plan used; resets on the day shown"),
+        "qta": ("quota source", "which account and how fresh the statusline snapshot is"),
+        "\u2726": ("premium model", "upper bound on the premium model's weekly window, never measured spend"),
+        "burn": ("burn rate", "how fast the five-hour window is going, from recent samples"),
+        "xf": ("external calls", "free-tier calls today per provider, on their own reset window"),
+        "dlg": ("delegations", "agents launched this session and tokens they produced, per model"),
+        "agt": ("agent effort", "declared effort tier versus what the agent actually ran"),
+        "rcpt": ("last receipt", "how the last closed task in this folder went"),
+        "new": ("unknown bucket", "a rate-limit bucket this plugin does not know yet"),
+        "": ("", ""),
+    }
+    body = []
+    for lab, txt in rows:
+        name, meaning = NAMES.get(lab, (lab, ""))
+        if not name:
+            body.append(f"\u2502   {txt}")
+        else:
+            body.append(f"\u2502 {name}: {txt}" + (f" \u2014 {meaning}" if meaning else ""))
     width = max([len(title)] + [len(x) + 1 for x in body])
     out = [title + "\u2500" * (width - len(title)) + "\u2510"]
     out += [x + " " * (width - len(x)) + "\u2502" for x in body]
