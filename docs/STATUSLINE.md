@@ -6,14 +6,15 @@ One glance at model, context and plan quotas — so you see the rate limit comin
 ![fable-director statusline](../assets/statusline.svg)
 
 ```
-Fable 5.1 · quota ok until 17:30                                   caveman
+Fable 5.1 · quota ok until 17:30 · context 26%                     caveman
 ```
 
 Since 1.39 the default line is **plain**: every segment says what to do, in
-words, and only when there is something to do — `quota 92% used — almost gone,
-resets in 40 min`, `verification failed: python3 tests/run.py (exit 1)`, `1 agent stuck
+words, and only when there is something to do — `quota 92% used, resets in 40
+min`, `verification failed: python3 tests/run.py (exit 1)`, `1 agent stuck
 for 32 min — check /tasks`, `budget over 2.3× — reconsider the route`. When
-everything is fine the line is a model name and a quota reassurance. The full
+everything is fine the line is a model name, a quota reassurance and the
+context percentage (always visible: it is your margin). The full
 list of exception texts is in the legend (`/fable-director:help`). The dense
 historic line with `ctx`, `5H`, `bdg`, `dlg` and `cache` is the **expert
 mode**: `statusline-install.sh --expert` (back with `--plain`).
@@ -34,8 +35,9 @@ a quota past 60%, a session running at `xhigh`/`max` effort, a budget past its
 checkpoint. Alarms are full words with text markers that survive terminals
 without colour.
 
-At 3× — or with enforcement broken — the alarm **takes over**: a solid-red block
-at the head of the line, everything else dropping to half-light.
+At 3× — or with enforcement broken — the alarm **takes over** the head of the
+line, everything else dropping to half-light: plain red text in the default
+line, a solid-red block in expert mode.
 
 ## The segments
 

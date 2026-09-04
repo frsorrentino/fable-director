@@ -58,6 +58,13 @@ wording, production writes without a backup.
   axes: *flow* (bytes each MCP server pushes into context, paid once per call)
   and *stock* (schema bytes a `ToolSearch` load injects into the prefix, re-paid
   **every turn**). The report keeps them separate and never sums them.
+- 🪟 **`PostToolUse` (Workflow launch record)** — the delegation gate, in its
+  PostToolUse role, persists per `runId` the script text and the `args` a
+  Workflow was launched (or resumed) with, under
+  `~/.claude/fable-director/workflows/`. The PreToolUse role compares every
+  resume against it: args in a different form or a script edited before the
+  first cached call means the resume cache is lost — said before the run, in
+  agents that will re-run.
 - 🔁 **`PostToolUse` (fail-streak)** — counts *consecutive* failing Bash
   commands, recomputed from the transcript each time so no counter can drift
   (resets on the first success; your own denials never count). At every 3rd it

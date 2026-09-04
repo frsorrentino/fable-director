@@ -2,6 +2,17 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.40.x
+
+- **1.40.0 — workflows sized to the five-hour window; plain statusline polished.**
+  - Window fit in the delegation gate: before a Workflow launch, the declared fan-out (`--agents N`) times the measured eq per agent is compared with what is left of the five-hour window (eq per window calibrated from the meter's own samples, defaults from the 2026-09-03 measurements, overrides in `cost-checkpoint.json`). Above the remaining window: a warning with the options (chunk to what fits, `model: 'sonnet'` for the reading stages, wait for the reset at HH:MM); above 2×: deny. A resume is never denied; agents already in the run's journal are subtracted. Measured before: 15 agents dead at the wall with zero usage and re-run after the reset, ~5.6M eq.
+  - Resume hygiene: the gate records every Workflow launch (script text and args per `runId`, PostToolUse) and, on `resumeFromRunId`, says which agents will re-run — args in a different form or value, script edited before the first cached call (line number). The resume cache replays only the unchanged prefix of `agent()` calls; the 3 readers re-paid on 2026-09-03 would have been named before the launch.
+  - Workflow script lint at launch (warnings, never a deny): `agent()` calls that inherit a top-tier session model, `effort: 'max'` on several agents, `.pdf` paths read by agents (convert once with `ocrmypdf`/`pdftotext`), `args` passed as a JSON string. Each line carries the measured cost.
+  - Heavy launcher warning: a Workflow launched or resumed from a session above 200k tokens of context says what every resume after the wall re-caches (600k → ~720k eq ≈ 2 agents) and points to the lean-session route.
+  - Meter: every Workflow agent outcome now carries its `run_id` and the five-hour quota at stop; `fd-telemetry.py report` prints the resulting calibration (eq per agent, eq per window). Statusline writes `sessions/<sid>.json` (context, model, effort, quota) and the five-hour reset time in the quota file — the gate reads them, nothing else changes on screen.
+  - Skill, kernel and playbook state the workflow economics in numbers: loss at the wall = in-flight width × per-agent cost; prefix-cache semantics of resume; model and effort per stage; PDF pre-pass; `+Nk` as a native output fuse. Suite: `tests/workflow-guard-verify.py` (11 checks).
+  - Plain statusline: the context percentage is always visible (`Fable 5.1 · quota ok until 17:30 · context 26%`), no more "almost" (`quota 100% used, resets in 12 min`, `context 100% full — …`), and the 3× budget alarm is plain red text at the head of the line instead of a black-on-red block.
+
 ## 1.39.x
 
 - **1.39.1 — quota alarms keep the percentage.**

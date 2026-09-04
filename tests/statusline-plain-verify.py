@@ -3,11 +3,12 @@
 
 Criterio: ogni segmento dice cosa fare, in parole; a riposo la riga tace.
 
-  T1 stato normale: "Fable 5.1 · quota ok until HH:MM", nessuna sigla, una riga
+  T1 stato normale: "Fable 5.1 · quota ok until HH:MM · context 26%", nessuna sigla, una riga
   T2 agenti al lavoro: "2 agents working"
-  T3 quota 5h ≥80: "quota almost gone, resets in N min"; 60-79: "quota 71% used, resets HH:MM"
-  T4 contesto ≥80: "context almost full (85%) — finish the task and start a new session"
-  T5 budget 2×: "budget over 2.3× — reconsider the route"; 3× flagged: blocco rosso
+  T3 quota 5h ≥80: "quota 90% used, resets in N min"; 60-79: "quota 71% used, resets HH:MM";
+     100: "quota 100% used, resets in N min" (mai "almost")
+  T4 contesto ≥80: "context 85% full — finish the task and start a new session"
+  T5 budget 2×: "budget over 2.3× — reconsider the route"; 3× flagged: testo rosso, nessuno sfondo
      "budget over 3× — post-mortem before closing"
   T6 verify fallito: "verification failed: python3 tests/run.py (exit 1)"
   T7 agente fermo ≥30 min: "1 agent stuck for 32 min — check /tasks"; sotto: no
@@ -67,9 +68,9 @@ def render(s, **env):
 SIGLE = re.compile(r"\bctx\b|\b5H\b|\b7D\b|\bbdg\b|\bdlg\b|\bcmp\b|\bcache\b|\bxf\b|✦|▓|░|⟲")
 
 out = render(stdin())
-check("T1 normale: 'Fable 5.1 · quota ok until HH:MM', una riga, nessuna sigla",
-      re.fullmatch(r"Fable 5\.1 · quota ok until \d{2}:\d{2}", out.strip()) is not None and "\n" not in out.strip()
-      and not SIGLE.search(out), repr(out))
+check("T1 normale: 'Fable 5.1 · quota ok until HH:MM · context 26%', una riga, nessuna sigla",
+      re.fullmatch(r"Fable 5\.1 · quota ok until \d{2}:\d{2} · context 26%", out.strip()) is not None
+      and "\n" not in out.strip() and not SIGLE.search(out), repr(out))
 
 # T2 agenti in volo
 sdir = base / "subagents"; sdir.mkdir()
@@ -81,12 +82,15 @@ out = render(stdin())
 check("T2 agenti al lavoro", "2 agents working" in out and "stuck" not in out, out)
 (sdir / f"{SID}.json").unlink()
 
-out80 = render(stdin(rl=90, reset_in=40 * 60)); out60 = render(stdin(rl=71))
-check("T3 quota 5h: 'almost gone, resets in 40 min' / '71% used, resets HH:MM'",
-      "quota 90% used — almost gone, resets in 40 min" in out80 and re.search(r"quota 71% used, resets \d{2}:\d{2}", out60),
-      out80 + "\n" + out60)
-out = render(stdin(pct=85))
-check("T4 contesto quasi pieno", "context almost full (85%) — finish the task and start a new session" in out, out)
+out80 = render(stdin(rl=90, reset_in=40 * 60)); out60 = render(stdin(rl=71)); out100 = render(stdin(rl=100, reset_in=40 * 60))
+check("T3 quota 5h: '90% used, resets in 40 min' / '71% used, resets HH:MM' / '100% used', mai 'almost'",
+      "quota 90% used, resets in 40 min" in out80 and re.search(r"quota 71% used, resets \d{2}:\d{2}", out60)
+      and "quota 100% used, resets in 40 min" in out100 and "almost" not in out80 + out100,
+      out80 + "\n" + out60 + "\n" + out100)
+out = render(stdin(pct=85)); outfull = render(stdin(pct=100))
+check("T4 contesto quasi pieno / pieno, percentuale sempre presente",
+      "context 85% full — finish the task and start a new session" in out
+      and "context 100% full — finish the task" in outfull and "almost" not in out + outfull, out + "\n" + outfull)
 
 # T5 budget 2× e 3×
 FDT = str(ROOT / "fd-telemetry.py")
@@ -101,9 +105,12 @@ b = json.loads(bfile.read_text()); b["warned"] = True; bfile.write_text(json.dum
 out2 = render(stdin())
 b["status"] = "flagged"; bfile.write_text(json.dumps(b))
 out3 = render(stdin())
-check("T5 budget 2× in parole; 3× blocco rosso",
+raw3 = subprocess.run(["bash", str(ROOT / "statusline-ctx.sh")], input=stdin(), capture_output=True, text=True,
+                      env=dict(os.environ, HOME=str(home), CAVEMAN_STATUSLINE_SH="/nonexistent", COLUMNS="140"),
+                      timeout=30).stdout
+check("T5 budget 2× in parole; 3× testo rosso senza sfondo",
       "budget over 2× — reconsider the route" in out2 and "budget over 3× — post-mortem before closing" in out3
-      and "bdg" not in out2, out2 + "\n" + out3)
+      and "bdg" not in out2 and "\x1b[48;" not in raw3 and "\x1b[38;5;196m" in raw3, out2 + "\n" + out3 + "\n" + repr(raw3))
 b["status"] = "open"; b["warned"] = False; bfile.write_text(json.dumps(b))
 
 # T6 verify fallito (state file)
@@ -142,10 +149,10 @@ check("T9 precedenza di un'altra sessione", "another session has priority (incid
 out = render(stdin(pct=85, rl=90, wk=72, reset_in=40 * 60))
 l1, _, l2 = out.partition("\n")
 check("T10 piu eccezioni → riga 2 con la piu urgente prima",
-      l1.strip() == "Fable 5.1" and l2.startswith("└ quota 90% used — almost gone") and "context almost full" in l2, out)
+      l1.strip() == "Fable 5.1" and l2.startswith("└ quota 90% used, resets in 40 min") and "context 85% full" in l2, out)
 narrow = render(stdin(pct=85, rl=90, wk=72, reset_in=40 * 60), COLUMNS="60")
 check("T10b larghezza ridotta: cade la meno urgente, resta la piu urgente",
-      "quota 90% used — almost gone" in narrow and "weekly" not in narrow, narrow)
+      "quota 90% used, resets in 40 min" in narrow and "weekly" not in narrow, narrow)
 check("T11 nessuna sigla storica in nessuna resa plain",
       not SIGLE.search(out) and not SIGLE.search(out2) and not SIGLE.search(out80), out)
 

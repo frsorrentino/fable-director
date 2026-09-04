@@ -83,6 +83,7 @@ try:
         if r is not None: q["five_hour_used_pct"]=round(float(r),1)
         if w is not None: q["weekly_used_pct"]=round(float(w),1)
         if w_reset: q["weekly_resets_at"]=w_reset
+        if fh.get("resets_at") is not None: q["five_hour_resets_at"]=fh.get("resets_at")
         # Sentinella bucket ignoti: se rate_limits espone una chiave nuova
         # (es. un futuro bucket per-modello) la registriamo nel quota file —
         # la si scopre alla prima sessione, non per caso. Mai interpretata.
@@ -140,6 +141,36 @@ try:
                         tmph=hf.with_name(f"{hf.name}.{os.getpid()}.tmp")
                         tmph.write_text("\n".join(_tl)+"\n"); os.replace(tmph,hf)
                 except Exception: pass
+    except Exception:
+        pass
+    # Snapshot di SESSIONE per il gate (1.40): contesto corrente, modello,
+    # effort e quota 5h — cosi il gate dei Workflow sa quanto pesa il thread
+    # che lancia (ri-cache dopo il muro) e quale modello ereditano gli agenti.
+    # Scrittura solo a cambiamento (o ogni 5 min per la freschezza). NB
+    # niente apostrofi qui: stringa shell single-quoted.
+    try:
+        _sid=d.get("session_id")
+        if _sid:
+            cw=d.get("context_window") or {}
+            cu=cw.get("current_usage") or {}
+            ctx=sum(int(cu.get(k) or 0) for k in ("input_tokens","cache_creation_input_tokens","cache_read_input_tokens"))
+            if not ctx and p is not None and cw.get("context_window_size"):
+                ctx=int(float(p)/100.0*int(cw.get("context_window_size")))
+            snapd={"session_id":str(_sid),"model":(d.get("model") or {}).get("id"),"effort":el,"ctx_tokens":ctx,"ctx_size":cw.get("context_window_size"),"five_hour_used_pct":(round(float(r),1) if r is not None else None),"five_hour_resets_at":fh.get("resets_at"),"ts":int(time.time())}
+            sd=Path.home()/".claude"/"fable-director"/"sessions"
+            sd.mkdir(parents=True,exist_ok=True)
+            sf=sd/(str(_sid).replace("/","-")+".json")
+            olds={}
+            try:
+                if sf.is_file(): olds=json.loads(sf.read_text())
+            except Exception: olds={}
+            if any(olds.get(k)!=snapd[k] for k in snapd if k!="ts") or time.time()-float(olds.get("ts") or 0)>300:
+                tmps=sf.with_name(f"{sf.name}.{os.getpid()}.tmp")
+                tmps.write_text(json.dumps(snapd)); os.replace(tmps,sf)
+                for _old in sd.glob("*.json"):
+                    try:
+                        if time.time()-_old.stat().st_mtime>7*86400: _old.unlink()
+                    except Exception: pass
     except Exception:
         pass
     # plan-<acct>.json: proprieta del piano DICHIARATE dall utente (il plugin

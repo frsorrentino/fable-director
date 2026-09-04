@@ -8,7 +8,7 @@ installato da GitHub senza mai parlarci, un collega junior. Se uno solo
 dovrebbe cercarla nella legenda, la riga cambia o sparisce.
 
 Input: i token gia calcolati da statusline-ctx.sh (env FD_SL_*). Output: una
-riga in stato normale ("Fable 5.1 · quota ok until 17:30"), le eccezioni in
+riga in stato normale ("Fable 5.1 · quota ok until 17:30 · context 26%"), le eccezioni in
 ordine di priorita; piu di una eccezione = riga 2. Il colore non porta mai
 informazione da solo: la parola c e sempre.
 """
@@ -69,7 +69,7 @@ def main():
     stuck, vrf, prio = num(env("FD_SL_STUCK")), env("FD_SL_VRF"), env("FD_SL_PRIO")
     badge = os.environ.get("FD_SL_BADGE", "")
 
-    takeover = None          # blocco rosso in testa (budget 3x, enforcement off)
+    takeover = None          # testo rosso in testa (budget 3x, enforcement off)
     exc = []                 # (priorita, colore, testo) — piu basso = piu urgente
     normal = []              # stato tranquillo
 
@@ -97,7 +97,7 @@ def main():
             mins = minutes_until(rlt)
             when = (f"resets in {mins} min" if mins is not None and mins < 120
                     else f"resets {rlt}" if rlt else "resets later")
-            exc.append((3, RED, f"quota {rl:.0f}% used — almost gone, {when}"))
+            exc.append((3, RED, f"quota {rl:.0f}% used, {when}"))
         elif rl >= 60:
             normal.append(f"quota {rl:.0f}% used" + (f", resets {rlt}" if rlt else ""))
         else:
@@ -105,16 +105,18 @@ def main():
     # --- quota settimanale ----------------------------------------------------
     if wk is not None:
         if wk >= 80:
-            exc.append((8, RED, f"weekly quota {wk:.0f}% used — almost gone" + (f", resets {wkt}" if wkt else "")))
+            exc.append((8, RED, f"weekly quota {wk:.0f}% used" + (f", resets {wkt}" if wkt else "")))
         elif wk >= 60:
             exc.append((8, YEL, f"weekly quota {wk:.0f}% used" + (f", resets {wkt}" if wkt else "")))
 
-    # --- contesto --------------------------------------------------------------
+    # --- contesto (sempre visibile: la percentuale e il margine) ---------------
     if pct is not None:
         if pct >= 80:
-            exc.append((5, RED, f"context almost full ({pct:.0f}%) — finish the task and start a new session"))
+            exc.append((5, RED, f"context {pct:.0f}% full — finish the task and start a new session"))
         elif pct >= 60:
             exc.append((11, YEL, f"context {pct:.0f}% full"))
+        else:
+            normal.append(f"context {pct:.0f}%")
 
     # --- agenti (E5) -----------------------------------------------------------
     m = re.match(r"⟲(\d+)", dlg)
@@ -166,7 +168,7 @@ def main():
     head = f"{GREY}{model}{RST}"
     line1_parts = [head] + [f"{GREY}{t}{RST}" for t in normal]
     if takeover:
-        line1_parts = [f"\033[48;5;196m\033[38;5;16m {takeover[0]} {RST}"] + [f"{DIM}{model}{RST}"]
+        line1_parts = [f"{takeover[1]}{takeover[0]}{RST}"] + [f"{DIM}{model}{RST}"]
     line2_parts = [f"{c}{t}{RST}" for _, c, t in exc]
 
     W = os.environ.get("COLUMNS", "120")

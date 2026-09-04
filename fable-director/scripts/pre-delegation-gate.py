@@ -28,6 +28,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import sqlite3
 import sys
 import time
@@ -332,6 +333,343 @@ def quota_guard(data):
             f"resets; (b) size the workflow to finish BEFORE the wall; "
             f"(c) resume a previous run — resumeFromRunId is always allowed."
         )
+    except Exception:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Economia dei Workflow (1.40): finestra 5h, igiene del resume, lint dello
+# script, thread di lancio. Misure 2026-09-03 (run wf_4798f715, 4 ondate, 49
+# agenti, 10,4M eq di agenti + 8,4M eq di main): 15 agenti morti al muro con
+# usage zero e ri-pagati dopo il reset, 3 lettori ri-eseguiti per prompt
+# diverso al resume, thread di lancio da 600-860k ri-cachato 3 volte. Tutto
+# deterministico su file locali; deny solo dove lo spreco e' certo.
+# ---------------------------------------------------------------------------
+WF_FIT_WARN_RATIO = 1.0      # stima ≥ residuo finestra → avviso
+WF_FIT_DENY_RATIO = 2.0      # stima ≥ 2× residuo → deny (nuovo run; resume mai)
+WF_LEAN_CTX_TOKENS = 200_000 # contesto del thread oltre cui il lancio e' "pesante"
+SNAPSHOT_MAX_AGE_S = 600
+WF_RECORDS = Path.home() / ".claude" / "fable-director" / "workflows"
+WF_RECORD_TTL_S = 30 * 86400
+
+
+def _acct_hash():
+    return hashlib.sha256((os.environ.get("CLAUDE_CONFIG_DIR")
+                           or str(Path.home() / ".claude")).encode()).hexdigest()[:8]
+
+
+def _read_json(path, max_age=None):
+    try:
+        pth = Path(path)
+        if not pth.is_file():
+            return None
+        if max_age is not None and time.time() - pth.stat().st_mtime > max_age:
+            return None
+        return json.loads(pth.read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def quota_snapshot():
+    """Quota vista dallo statusline (file per-account, fresco ≤10 min)."""
+    base = Path.home() / ".claude" / "fable-director"
+    q = _read_json(base / f"quota-{_acct_hash()}.json", SNAPSHOT_MAX_AGE_S)
+    if q is None:
+        q = _read_json(base / "quota.json", SNAPSHOT_MAX_AGE_S)
+    return q if isinstance(q, dict) else {}
+
+
+def session_snapshot(data):
+    """sessions/<sid>.json scritto dallo statusline: contesto, modello, effort."""
+    sid = str(data.get("session_id") or "")
+    if not sid:
+        return {}
+    snap = _read_json(Path.home() / ".claude" / "fable-director" / "sessions"
+                      / (sid.replace("/", "-") + ".json"), SNAPSHOT_MAX_AGE_S)
+    return snap if isinstance(snap, dict) else {}
+
+
+def session_dir(data):
+    t = data.get("transcript_path")
+    if not t:
+        return None
+    pth = Path(str(t))
+    return pth.with_suffix("") if pth.suffix == ".jsonl" else pth
+
+
+def script_text(ti):
+    """Testo dello script: inline (`script`) o dal file (`scriptPath`)."""
+    s = ti.get("script")
+    if isinstance(s, str) and s.strip():
+        return s
+    sp = ti.get("scriptPath")
+    if sp:
+        try:
+            pth = Path(str(sp))
+            if pth.is_file() and pth.stat().st_size <= 2_000_000:
+                return pth.read_text(errors="replace")
+        except OSError:
+            pass
+    return ""
+
+
+def local_hhmm(epoch):
+    try:
+        return time.strftime("%H:%M", time.localtime(int(float(epoch))))
+    except (TypeError, ValueError, OverflowError, OSError):
+        return None
+
+
+def fmt_eq(n):
+    n = float(n)
+    if n >= 1e6:
+        return (f"{n / 1e6:.1f}M").replace(".0M", "M")
+    return f"{n / 1e3:.0f}k"
+
+
+def wf_calibration():
+    m = _fdt_mod()
+    try:
+        if m and hasattr(m, "workflow_calibration"):
+            return m.workflow_calibration()
+    except Exception:
+        pass
+    return {"agent_eq": 330_000.0, "agent_src": "default",
+            "window_eq": 3_500_000.0, "window_src": "default",
+            "n_agents": 0, "n_pairs": 0}
+
+
+def _journal_done(data, run_id):
+    """Agenti gia' conclusi di un run (righe di journal.jsonl); 0 se assente."""
+    try:
+        sdir = session_dir(data)
+        if not sdir:
+            return 0
+        j = sdir / "subagents" / "workflows" / str(run_id) / "journal.jsonl"
+        if not j.is_file():
+            return 0
+        return sum(1 for ln in j.read_text(errors="replace").splitlines() if ln.strip())
+    except OSError:
+        return 0
+
+
+def workflow_fit(data, budget):
+    """Il fan-out dichiarato (--agents) entra nel residuo della finestra 5h?
+    stima = max(N × eq mediano per agente, eq dichiarato nel budget); residuo
+    = (100 − usato%) × finestra in eq (taratura: fd-telemetry
+    workflow_calibration). Ritorna (deny_reason, warn_line): deny solo per un
+    run NUOVO oltre 2× il residuo — un'ondata che muore al muro si paga per
+    intero e si ripaga dopo il reset; il resume passa sempre (avviso al piu').
+    Snapshot quota assente/stantio o --agents non dichiarato → silenzio."""
+    try:
+        if data.get("tool_name") != "Workflow":
+            return None, None
+        ti = data.get("tool_input") or {}
+        q = quota_snapshot()
+        used = q.get("five_hour_used_pct")
+        if used is None:
+            return None, None
+        n = (budget or {}).get("agents")
+        if not n:
+            return None, None
+        n = int(n)
+        run_id = ti.get("resumeFromRunId")
+        if run_id:
+            n = max(n - _journal_done(data, run_id), 0)
+            if n == 0:
+                return None, None
+        cal = wf_calibration()
+        per = float(cal["agent_eq"]) or 330_000.0
+        exp_out = int((budget or {}).get("expected_output_tokens") or 0)
+        exp_in = int((budget or {}).get("expected_input_tokens") or 0)
+        declared_eq = 0.0 if run_id else exp_out * 5.0 + exp_in * 1.25
+        est = max(n * per, declared_eq)
+        remaining_pct = max(100.0 - float(used), 0.0)
+        remaining = remaining_pct / 100.0 * float(cal["window_eq"])
+        if remaining <= 0:
+            return None, None  # ≥100%: e' il quota_guard a parlare
+        ratio = est / remaining
+        if ratio < WF_FIT_WARN_RATIO:
+            return None, None
+        fit = int(remaining // per)
+        reset = local_hhmm(q.get("five_hour_resets_at"))
+        reset_s = f" at {reset}" if reset else ""
+        head = (f"{'resume: ' if run_id else ''}{n} agents{' still to run' if run_id else ''} "
+                f"× ~{fmt_eq(per)} eq ≈ {fmt_eq(est)} eq against {remaining_pct:.0f}% of the "
+                f"five-hour window left ≈ {fmt_eq(remaining)} eq ({ratio:.1f}×)")
+        opts = (f"(a) chunk: at most {fit} agents fit now — run those, resume the rest after "
+                f"the reset{reset_s} (resumeFromRunId, identical args, unchanged script prefix); "
+                f"(b) reading/fetching/extracting stages on `model: 'sonnet'` (measured "
+                f"2026-09-01: same eq, ~1/5 the USD of Fable 5.1); (c) wait for the reset{reset_s}.")
+        srcs = (f"agent eq {cal['agent_src']}; window eq {cal['window_src']}; override in "
+                f"cost-checkpoint.json (workflow_agent_eq, five_hour_window_eq)")
+        if ratio >= WF_FIT_DENY_RATIO and not run_id:
+            return (f"✕ FABLE-DIRECTOR window fit — this workflow cannot finish in the current "
+                    f"five-hour window: {head}. A wave that dies at the wall is paid in full and "
+                    f"paid again after the reset (measured 2026-09-03: 15 agents lost, ~5.6M eq "
+                    f"re-run).\nOptions: {opts}\nSources: {srcs}."), None
+        return None, (f"FD ⚠ window fit tight — {head}: the last agents risk the wall. "
+                      f"Options: {opts} Sources: {srcs}. Delegation allowed.")
+    except Exception:
+        return None, None
+
+
+def _first_diff_line(a, b):
+    la, lb = a.splitlines(), b.splitlines()
+    for i, (x, y) in enumerate(zip(la, lb), 1):
+        if x != y:
+            return i
+    return min(len(la), len(lb)) + 1
+
+
+def record_workflow_launch(data):
+    """PostToolUse Workflow: persiste per runId lo script e gli args con cui
+    il run e' PARTITO (o ripreso: l'ultimo lancio e' la verita' della cache).
+    Serve a resume_hygiene: il resume rigioca dalla cache solo il prefisso
+    di chiamate agent() con prompt identico — args in forma diversa o script
+    modificato prima della prima chiamata = tutto ri-eseguito."""
+    try:
+        if data.get("tool_name") != "Workflow":
+            return
+        ti = data.get("tool_input") or {}
+        resp = data.get("tool_response")
+        run_id = None
+        if isinstance(resp, dict) and resp.get("runId"):
+            run_id = str(resp["runId"])
+        else:
+            blob = resp if isinstance(resp, str) else json.dumps(resp, ensure_ascii=False)
+            m = re.search(r"\b(wf_[A-Za-z0-9-]{6,})\b", blob or "")
+            run_id = m.group(1) if m else None
+        if not run_id:
+            return
+        rec = {"run_id": run_id,
+               "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+               "session_id": data.get("session_id"), "cwd": data.get("cwd"),
+               "scriptPath": ti.get("scriptPath")
+               or (resp.get("scriptPath") if isinstance(resp, dict) else None),
+               "args": ti.get("args") if "args" in ti else None,
+               "resumed": bool(ti.get("resumeFromRunId")),
+               "script": script_text(ti)[:600_000]}
+        WF_RECORDS.mkdir(parents=True, exist_ok=True)
+        out = WF_RECORDS / f"{run_id}.json"
+        tmp = out.with_name(f"{out.name}.{os.getpid()}.tmp")
+        tmp.write_text(json.dumps(rec, ensure_ascii=False))
+        os.replace(tmp, out)
+        now = time.time()
+        for old in WF_RECORDS.glob("wf_*.json"):
+            try:
+                if now - old.stat().st_mtime > WF_RECORD_TTL_S:
+                    old.unlink()
+            except OSError:
+                pass
+    except Exception:
+        return
+
+
+def resume_hygiene(data):
+    """Resume con args diversi o script cambiato = cache di ripresa persa
+    (prefisso). Confronta con il record del lancio; avviso, mai deny (una
+    modifica puo' essere voluta). Ritorna la riga o None."""
+    try:
+        if data.get("tool_name") != "Workflow":
+            return None
+        ti = data.get("tool_input") or {}
+        run_id = ti.get("resumeFromRunId")
+        if not run_id:
+            return None
+        rec = _read_json(WF_RECORDS / f"{run_id}.json")
+        if not isinstance(rec, dict):
+            return None
+        bits = []
+        cur_args = ti.get("args") if "args" in ti else None
+        old_args = rec.get("args")
+        if (json.dumps(cur_args, sort_keys=True, ensure_ascii=False)
+                != json.dumps(old_args, sort_keys=True, ensure_ascii=False)):
+            bits.append(f"args differ from the last launch of {run_id} "
+                        f"({json.dumps(old_args, ensure_ascii=False)} then, "
+                        f"{json.dumps(cur_args, ensure_ascii=False)} now): every agent whose "
+                        f"prompt depends on args re-runs — pass args exactly as before")
+        old_script = rec.get("script") or ""
+        cur_script = script_text(ti) if (ti.get("script") or ti.get("scriptPath")) else ""
+        if old_script and cur_script and old_script != cur_script:
+            ln = _first_diff_line(old_script, cur_script)
+            bits.append(f"script changed since the last launch (first difference at line {ln}): "
+                        f"cached results replay only for the agent() calls BEFORE the first "
+                        f"changed one — everything from it onward runs again")
+        if not bits:
+            return None
+        return "FD ⚠ resume hygiene — " + "; ".join(bits) + ". Delegation allowed."
+    except Exception:
+        return None
+
+
+def workflow_lint(data):
+    """Lint deterministico dello script al lancio: agent() senza model: su
+    sessione top-tier, effort max diffuso, PDF letti dagli agenti, args
+    come stringa JSON. Solo avviso con il costo misurato accanto."""
+    try:
+        if data.get("tool_name") != "Workflow":
+            return None
+        ti = data.get("tool_input") or {}
+        if ti.get("resumeFromRunId"):
+            return None
+        bits = []
+        args = ti.get("args")
+        if isinstance(args, str) and args.strip()[:1] in ("{", "["):
+            bits.append("args passed as a JSON string: the script receives a string "
+                        "(`args.data` is undefined) and a resume launched with the object "
+                        "re-runs every agent whose prompt depends on args — pass the object")
+        text = script_text(ti)
+        if text:
+            n_calls = len(re.findall(r"\bagent\s*\(", text))
+            n_model = len(re.findall(r"\bmodel\s*:", text))
+            n_max = len(re.findall(r"\beffort\s*:\s*['\"](?:max|xhigh)['\"]", text))
+            pdfs = sorted(set(m.lower() for m in re.findall(r"[\w./\\-]+\.pdf\b", text, re.I)))
+            model = str(session_snapshot(data).get("model") or "")
+            top = model.startswith(("claude-fable", "claude-opus", "claude-mythos"))
+            if n_calls and n_calls > n_model and (top or not model):
+                inh = f"the session model ({model})" if model else "the session model"
+                bits.append(f"{n_calls} agent() calls, {n_calls - n_model} without `model:` inherit "
+                            f"{inh}: stages that read, fetch or extract (axis 3-5) belong on "
+                            f"`model: 'sonnet'` (measured 2026-09-01 on fd-executor: same eq, "
+                            f"5.5× the USD on Fable 5.1); keep the top model for the judgment stages")
+            if n_max >= 2:
+                bits.append(f"effort max/xhigh on {n_max} agent() calls: measured 2026-09-03, judges "
+                            f"at max produced 33-68k output tokens each — 40-60% of their cost at "
+                            f"the 5× output multiplier; 'high' for panels, 'max' for the one synthesis")
+            if pdfs:
+                have = [t for t in ("ocrmypdf", "pdftotext") if shutil.which(t)]
+                tool = f"`{have[0]}`" if have else "pdftotext/ocrmypdf"
+                bits.append(f"{len(pdfs)} .pdf path(s) in the script: a scanned PDF read by an agent "
+                            f"costs ~1.5k tokens per page as images, PER agent (measured: 49 page "
+                            f"images ≈ 75k tokens in one judge) — convert once with {tool} (zero "
+                            f"model tokens) and point the prompts at the .txt")
+        if not bits:
+            return None
+        return "FD ⚠ workflow lint — " + "; ".join(bits) + ". Delegation allowed."
+    except Exception:
+        return None
+
+
+def lean_thread(data):
+    """Lancio o resume da un thread con contesto grande: ogni ripresa dopo il
+    muro (>1h) ri-cachea tutto il contesto. Avviso con il costo in agenti."""
+    try:
+        if data.get("tool_name") != "Workflow":
+            return None
+        snap = session_snapshot(data)
+        ctx = int(snap.get("ctx_tokens") or 0)
+        if ctx < WF_LEAN_CTX_TOKENS:
+            return None
+        cal = wf_calibration()
+        recache = ctx * 1.25
+        n_ag = recache / (float(cal["agent_eq"]) or 330_000.0)
+        return (f"FD ⚠ heavy launcher — this session's context is {fmt_eq(ctx)} tokens: every "
+                f"resume after the wall (>1h idle) re-caches it, ~{fmt_eq(recache)} eq ≈ {n_ag:.0f} "
+                f"Workflow agents each time (measured 2026-09-03: 3 resumes ≈ 2.2M eq, a whole "
+                f"wave of judges). Long workflows belong to a fresh session with a 2k distillate "
+                f"(`budget-open --route bg-session`, or the nuova-sessione skill); close this one "
+                f"at a verified boundary. Delegation allowed.")
     except Exception:
         return None
 
@@ -697,6 +1035,9 @@ def main():
         data = json.load(sys.stdin)
     except (json.JSONDecodeError, ValueError):
         return
+    if data.get("hook_event_name") == "PostToolUse" or "tool_response" in data:
+        record_workflow_launch(data)  # record del lancio per resume_hygiene
+        return
     cwd = data.get("cwd") or os.getcwd()
     # Slug: identico a cwd_slug() in fd-telemetry.py (canonico + hash)
     s = str(cwd).replace("\\", "/")
@@ -738,6 +1079,13 @@ def main():
                 fo = external_failover(data, budget)
                 deny(guard + ("\n" + fo if fo else ""))
                 return
+            # Window fit (1.40): fan-out dichiarato contro il residuo della
+            # finestra 5h — deny solo per un run nuovo oltre 2× il residuo.
+            fit_deny, fit_warn = workflow_fit(data, budget)
+            if fit_deny:
+                log_gate_deny(data, "window_fit", budget)
+                deny(fit_deny)
+                return
             hold = priority_guard(data)
             if hold:
                 log_gate_deny(data, "priority_hold", budget)
@@ -759,6 +1107,10 @@ def main():
                                 effort_coherence(data, budget),
                                 verify_contract(budget, bfile),
                                 contract_lint(data),
+                                fit_warn,
+                                resume_hygiene(data),
+                                workflow_lint(data),
+                                lean_thread(data),
                                 external_failover(data, budget),
                                 xf_advisory(budget)) if m]
             if msgs:

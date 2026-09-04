@@ -145,6 +145,32 @@ def agent_usage(transcript):
     return model, len(turns), tot
 
 
+def five_hour_pct():
+    """Quota 5h vista dallo statusline (file per-account, fresco ≤10 min):
+    con l'eq dell'agente da' al report/gate la taratura eq↔finestra. None
+    se assente o stantio — mai inventata."""
+    try:
+        import hashlib
+        acct = hashlib.sha256((os.environ.get("CLAUDE_CONFIG_DIR")
+                               or str(Path.home() / ".claude")).encode()).hexdigest()[:8]
+        base = Path.home() / ".claude" / "fable-director"
+        qf = base / f"quota-{acct}.json"
+        if not qf.is_file():
+            qf = base / "quota.json"
+        if not qf.is_file() or time.time() - qf.stat().st_mtime > 600:
+            return None
+        v = json.loads(qf.read_text()).get("five_hour_used_pct")
+        return float(v) if v is not None else None
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def run_id_of(transcript):
+    """wf_<id> dal path del transcript di un agente Workflow, None altrimenti."""
+    m = re.search(r"[/\\]workflows[/\\](wf_[A-Za-z0-9-]+)[/\\]", str(transcript or ""))
+    return m.group(1) if m else None
+
+
 def eq_of(model, tot):
     try:
         import importlib.util
@@ -310,6 +336,14 @@ def on_stop(data, path):
     if tot:
         payload["output_tokens"] = tot["output_tokens"]
         payload["fresh_input"] = tot["input_tokens"] + tot["cache_creation_input_tokens"]
+    # (1.40) run del Workflow e quota 5h al momento dello stop: con l'eq
+    # danno la taratura eq↔finestra che il gate usa prima del lancio.
+    rid = run_id_of(transcript)
+    if rid:
+        payload["run_id"] = rid
+    pct = five_hour_pct()
+    if pct is not None:
+        payload["five_hour_pct"] = pct
     log_event("delegation_outcome", payload, session_id=sid, cwd=cwd)
     # Rule of 3, deterministica: al SECONDO fallimento dello stesso tipo di
     # agente nella sessione la diagnosi viene loggata dall'hook (classe

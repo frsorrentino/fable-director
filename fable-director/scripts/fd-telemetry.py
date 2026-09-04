@@ -163,6 +163,109 @@ SENTINEL_MIN_RECORDS = 20  # sotto: transcript troppo corto per giudicare lo sch
 REWORK_DIAG_MIN = 4
 
 
+# ---------------------------------------------------------------------------
+# Taratura Workflow (1.40): eq per agente e capacita' della finestra 5h in eq.
+# Misure 2026-09-03 (run wf_4798f715, 4 ondate, 49 agenti, 10,4M eq agenti):
+# eq mediano per agente Workflow su Fable 5.1 ~330k; tre muri della finestra
+# 5h dopo 2,3M / 3,7M / 4,9M eq. Il gate le usa per dire PRIMA del lancio
+# se il fan-out entra nella finestra; le misure (delegation_outcome con
+# eq e five_hour_pct scritti dal meter) sostituiscono i default da sole.
+# ---------------------------------------------------------------------------
+WF_AGENT_EQ_DEFAULT = 330_000
+WF_WINDOW_EQ_DEFAULT = 3_500_000
+WF_CAL_MIN_AGENTS = 5
+WF_CAL_MIN_PAIRS = 5
+
+
+def workflow_calibration(days=90):
+    """Ritorna {agent_eq, agent_src, window_eq, window_src, n_agents, n_pairs}.
+    Precedenza: cost-checkpoint.json (workflow_agent_eq, five_hour_window_eq)
+    → misura (mediana) → default. La finestra in eq viene dalle coppie di
+    delegation_outcome della stessa sessione con five_hour_pct: Σeq degli
+    agenti fermati tra due campioni / Δpct × 100 (la spesa main-thread nel
+    mezzo la sottostima = conservativa). Mai solleva."""
+    out = {"agent_eq": float(WF_AGENT_EQ_DEFAULT),
+           "agent_src": "default (median of 19 Workflow agents measured 2026-09-03 on Fable 5.1)",
+           "window_eq": float(WF_WINDOW_EQ_DEFAULT),
+           "window_src": "default (3 five-hour walls measured 2026-09-03: 2.3M / 3.7M / 4.9M eq)",
+           "n_agents": 0, "n_pairs": 0}
+    cfg = {}
+    try:
+        cf = BASE / "cost-checkpoint.json"
+        if cf.is_file():
+            cfg = json.loads(cf.read_text()) or {}
+    except (OSError, ValueError):
+        cfg = {}
+    pinned = set()
+    for key, name in (("workflow_agent_eq", "agent"), ("five_hour_window_eq", "window")):
+        try:
+            if cfg.get(key):
+                out[f"{name}_eq"] = float(cfg[key])
+                out[f"{name}_src"] = f"cost-checkpoint.json ({key})"
+                pinned.add(name)
+        except (TypeError, ValueError):
+            pass
+    if not DB_PATH.is_file():
+        return out
+    try:
+        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, timeout=1.0)
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        rows = con.execute("SELECT ts, session_id, payload FROM events WHERE "
+                           "event='delegation_outcome' AND ts>=? ORDER BY ts, id",
+                           (since,)).fetchall()
+        con.close()
+    except sqlite3.Error:
+        return out
+    eqs, by_sess = [], {}
+    for ts, sid, p in rows:
+        try:
+            d = json.loads(p)
+        except ValueError:
+            continue
+        if d.get("agent_type") != "workflow-subagent":
+            continue
+        eq = d.get("eq")
+        eq = float(eq) if isinstance(eq, (int, float)) and eq > 0 else 0.0
+        if eq:
+            eqs.append(eq)
+        by_sess.setdefault(sid, []).append((ts, d.get("five_hour_pct"), eq))
+    out["n_agents"] = len(eqs)
+    if len(eqs) >= WF_CAL_MIN_AGENTS and "agent" not in pinned:
+        eqs.sort()
+        out["agent_eq"] = eqs[len(eqs) // 2]
+        out["agent_src"] = f"measured (median of {len(eqs)} Workflow agents, last {days} days)"
+
+    def _t(s):
+        try:
+            return datetime.fromisoformat(str(s).replace("Z", "+00:00")).timestamp()
+        except (ValueError, TypeError):
+            return None
+    ests = []
+    for lst in by_sess.values():
+        prev_pct, prev_ts, acc = None, None, 0.0
+        for ts, pct, eq in lst:
+            acc += eq
+            if pct is None:
+                continue
+            try:
+                pct = float(pct)
+            except (TypeError, ValueError):
+                continue
+            t = _t(ts)
+            if prev_pct is not None and prev_ts is not None and t is not None:
+                delta = pct - prev_pct
+                if 3 <= delta <= 60 and (t - prev_ts) <= 4 * 3600 and acc > 0:
+                    ests.append(acc / delta * 100.0)
+            prev_pct, prev_ts, acc = pct, t, 0.0
+    out["n_pairs"] = len(ests)
+    if len(ests) >= WF_CAL_MIN_PAIRS and "window" not in pinned:
+        ests.sort()
+        out["window_eq"] = ests[len(ests) // 2]
+        out["window_src"] = (f"measured ({len(ests)} five-hour quota deltas, last {days} days; "
+                             f"main-thread spend between agents biases it low = conservative)")
+    return out
+
+
 def now_iso():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -1901,6 +2004,14 @@ def cmd_report(args):
             for x in esc:
                 cls[x.get("class")] = cls.get(x.get("class"), 0) + 1
             print("  rule-of-3 diagnoses (auto): " + ", ".join(f"{k} ×{v}" for k, v in cls.items()))
+
+    try:
+        cal = workflow_calibration(days)
+        print(f"\nWorkflow window calibration (used by the gate's 'window fit' check): "
+              f"agent ≈ {fmt(int(cal['agent_eq']))} eq [{cal['agent_src']}]; "
+              f"five-hour window ≈ {fmt(int(cal['window_eq']))} eq [{cal['window_src']}]")
+    except Exception:
+        pass
 
     mismatches = [p for e, p in events if e == "effort_mismatch"]
     if mismatches:
