@@ -27,7 +27,7 @@ When something needs you, the exception replaces the quiet text or goes to a sec
 | `weekly quota 72% used, resets Thu 4` / `weekly quota 85% used, resets Fri 5` (red) | weekly plan window at 60% / 80% | plan the week; premium work first |
 | `3 commands failed in a row — change approach` | the same failure keeps repeating | change something structural: tool, diagnosis or model, not a fourth identical retry |
 | `effort max on` | a high reasoning effort is active and costs more | `/effort high` if the task does not need it |
-| `context 62% full` (yellow) | more than half the window used; below 60% it is the quiet `context 26%` | fine; batch tool calls, avoid re-reading |
+| `context 62%` (yellow, first line) | more than half the window used; the percentage is always on the first line — grey below 60%, red from 80% | fine; batch tool calls, avoid re-reading |
 | `gemini free calls almost used up (1300/1500), resets 09:00` | the external free tier is nearly exhausted for today | keep the rest for what matters |
 | `PR #42 approved` / `PR #42: changes requested` / `PR #42 pending` | the open pull request of this branch | as it says |
 | `caveman` | a third-party mode you switched on yourself | nothing |

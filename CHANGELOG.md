@@ -4,6 +4,10 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.40.x
 
+- **1.40.1 — context percentage pinned to the first line.**
+  - Plain statusline: `context N%` sits on the first line at every level (grey, yellow from 60%, red from 80%); between 60% and 79% it used to be the least urgent exception on the second line, the first one dropped on a narrow terminal. From 80% the second line still says `context 85% full — finish the task and start a new session`.
+  - Model title: the window suffix Claude Code 2.1.259 adds to the display name (`Fable 5.1 (200k)`) is stripped instead of truncated to `Fable 5.1 (2`.
+
 - **1.40.0 — workflows sized to the five-hour window; plain statusline polished.**
   - Window fit in the delegation gate: before a Workflow launch, the declared fan-out (`--agents N`) times the measured eq per agent is compared with what is left of the five-hour window (eq per window calibrated from the meter's own samples, defaults from the 2026-09-03 measurements, overrides in `cost-checkpoint.json`). Above the remaining window: a warning with the options (chunk to what fits, `model: 'sonnet'` for the reading stages, wait for the reset at HH:MM); above 2×: deny. A resume is never denied; agents already in the run's journal are subtracted. Measured before: 15 agents dead at the wall with zero usage and re-run after the reset, ~5.6M eq.
   - Resume hygiene: the gate records every Workflow launch (script text and args per `runId`, PostToolUse) and, on `resumeFromRunId`, says which agents will re-run — args in a different form or value, script edited before the first cached call (line number). The resume cache replays only the unchanged prefix of `agent()` calls; the 3 readers re-paid on 2026-09-03 would have been named before the launch.

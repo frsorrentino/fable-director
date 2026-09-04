@@ -71,7 +71,7 @@ def main():
 
     takeover = None          # testo rosso in testa (budget 3x, enforcement off)
     exc = []                 # (priorita, colore, testo) — piu basso = piu urgente
-    normal = []              # stato tranquillo
+    normal = []              # stato tranquillo: (colore, testo), sempre in riga 1
 
     # --- budget --------------------------------------------------------------
     if bdg.startswith("r:") and "ENFORCEMENT OFF" in bdg:
@@ -99,9 +99,9 @@ def main():
                     else f"resets {rlt}" if rlt else "resets later")
             exc.append((3, RED, f"quota {rl:.0f}% used, {when}"))
         elif rl >= 60:
-            normal.append(f"quota {rl:.0f}% used" + (f", resets {rlt}" if rlt else ""))
+            normal.append((GREY, f"quota {rl:.0f}% used" + (f", resets {rlt}" if rlt else "")))
         else:
-            normal.append(f"quota ok until {rlt}" if rlt else "quota ok")
+            normal.append((GREY, f"quota ok until {rlt}" if rlt else "quota ok"))
     # --- quota settimanale ----------------------------------------------------
     if wk is not None:
         if wk >= 80:
@@ -109,14 +109,13 @@ def main():
         elif wk >= 60:
             exc.append((8, YEL, f"weekly quota {wk:.0f}% used" + (f", resets {wkt}" if wkt else "")))
 
-    # --- contesto (sempre visibile: la percentuale e il margine) ---------------
+    # --- contesto: SEMPRE in riga 1 (la percentuale e il margine), colore per
+    # livello; da 80 anche la frase in riga 2. Mai in coda alle eccezioni:
+    # li' era la voce meno urgente, la prima a cadere su terminale stretto.
     if pct is not None:
+        normal.append((RED if pct >= 80 else YEL if pct >= 60 else GREY, f"context {pct:.0f}%"))
         if pct >= 80:
             exc.append((5, RED, f"context {pct:.0f}% full — finish the task and start a new session"))
-        elif pct >= 60:
-            exc.append((11, YEL, f"context {pct:.0f}% full"))
-        else:
-            normal.append(f"context {pct:.0f}%")
 
     # --- agenti (E5) -----------------------------------------------------------
     m = re.match(r"⟲(\d+)", dlg)
@@ -125,7 +124,7 @@ def main():
         exc.append((6, YEL, f"{n_agents if n_agents > 1 else 1} agent{'s' if n_agents > 1 else ''} "
                     f"stuck for {stuck:.0f} min — check /tasks"))
     elif n_agents:
-        normal.append(f"{n_agents} agent{'s' if n_agents != 1 else ''} working")
+        normal.append((GREY, f"{n_agents} agent{'s' if n_agents != 1 else ''} working"))
 
     # --- precedenza di un altra sessione -------------------------------------
     if prio:
@@ -146,7 +145,7 @@ def main():
         first = body.split()[0] if body else ""
         prov = re.sub(r"[▲×].*$", "", first)
         if "▲" in body:
-            normal.append(f"{prov} working")
+            normal.append((GREY, f"{prov} working"))
         if cls in ("y", "r"):
             mm = re.search(r"(\d+)/(\d+)\s*(\S+)?", body)
             used = f" ({mm.group(1)}/{mm.group(2)})" if mm else ""
@@ -166,7 +165,7 @@ def main():
     # --- composizione ------------------------------------------------------------
     exc.sort(key=lambda x: x[0])
     head = f"{GREY}{model}{RST}"
-    line1_parts = [head] + [f"{GREY}{t}{RST}" for t in normal]
+    line1_parts = [head] + [f"{c}{t}{RST}" for c, t in normal]
     if takeover:
         line1_parts = [f"{takeover[1]}{takeover[0]}{RST}"] + [f"{DIM}{model}{RST}"]
     line2_parts = [f"{c}{t}{RST}" for _, c, t in exc]

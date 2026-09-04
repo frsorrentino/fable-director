@@ -50,7 +50,8 @@ try:
     m=d.get("model",{}).get("display_name")
     # lo spazio del display_name si CONSERVA (OPUS 5, non OPUS5): viaggia
     # come virgola nel read shell, che lo ripristina — leggibilita a costo 1 char
-    if m: model=str(m)[:12].upper().strip()
+    # "Fable 5.1 (200k)" (CC 2.1.259 aggiunge la finestra): via il suffisso tra parentesi
+    if m: model=str(m).split(" (")[0][:12].upper().strip()
     p=d.get("context_window",{}).get("used_percentage")
     if p is not None:
         pct=f"{p:.0f}"
