@@ -4,6 +4,9 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.40.x
 
+- **1.40.3 — quota percentage pinned to the first line.**
+  - Plain statusline: the five-hour quota always shows its number, `quota 21%, resets 13:00` (grey, yellow from 60%, red from 80%) instead of `quota ok until 13:00`; from 80% the second line still says `quota 92% used, resets in 40 min`. Same rule as the context percentage.
+
 - **1.40.2 — dead agents no longer count as stuck.**
   - Agents killed at the five-hour wall, by `TaskStop` or by a terminal error never emit `SubagentStop` and stayed "in flight" for three days (`30 agents stuck for 1709 min` on the 2026-09-03 workflow session). Now an agent whose transcript has been silent for an hour, whose workflow run is already completed, or that never wrote a transcript in 24 h is dead: the meter drops it from the in-flight register (counted in `dead`, last five kept with the reason), the Stop hook reaps at every main turn, and the statusline applies the same rule on screen. `stuck` now measures silence, not time since launch: an agent writing steadily for 45 minutes is `working`, not `stuck`.
 

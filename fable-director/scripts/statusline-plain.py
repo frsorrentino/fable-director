@@ -8,7 +8,7 @@ installato da GitHub senza mai parlarci, un collega junior. Se uno solo
 dovrebbe cercarla nella legenda, la riga cambia o sparisce.
 
 Input: i token gia calcolati da statusline-ctx.sh (env FD_SL_*). Output: una
-riga in stato normale ("Fable 5.1 · quota ok until 17:30 · context 26%"), le eccezioni in
+riga in stato normale ("Fable 5.1 · quota 21%, resets 17:30 · context 26%"), le eccezioni in
 ordine di priorita; piu di una eccezione = riga 2. Il colore non porta mai
 informazione da solo: la parola c e sempre.
 """
@@ -91,17 +91,16 @@ def main():
         what = "timed out (60 s)" if rc == "timeout" else f"exit {rc}"
         exc.append((2, RED, f"verification failed: {cmd.strip() or 'declared command'} ({what})"))
 
-    # --- quota 5h -------------------------------------------------------------
+    # --- quota 5h: SEMPRE in riga 1 con il numero (colore per livello); da 80
+    # anche l'allarme in riga 2 con il reset in minuti ------------------------
     if rl is not None:
+        normal.append((RED if rl >= 80 else YEL if rl >= 60 else GREY,
+                       f"quota {rl:.0f}%" + (f", resets {rlt}" if rlt else "")))
         if rl >= 80:
             mins = minutes_until(rlt)
             when = (f"resets in {mins} min" if mins is not None and mins < 120
                     else f"resets {rlt}" if rlt else "resets later")
             exc.append((3, RED, f"quota {rl:.0f}% used, {when}"))
-        elif rl >= 60:
-            normal.append((GREY, f"quota {rl:.0f}% used" + (f", resets {rlt}" if rlt else "")))
-        else:
-            normal.append((GREY, f"quota ok until {rlt}" if rlt else "quota ok"))
     # --- quota settimanale ----------------------------------------------------
     if wk is not None:
         if wk >= 80:

@@ -3,13 +3,13 @@
 **Every segment says what to do, not what it measures.** Words, no abbreviations; only exceptions. When everything is fine the line is short and quiet; the context percentage is always there, because it is your margin:
 
 ```
-Fable 5.1 · quota ok until 17:30 · context 26%                     caveman
+Fable 5.1 · quota 21%, resets 17:30 · context 26%                  caveman
 ```
 
 With agents running (a state, not an alarm — it tells you not to close the session):
 
 ```
-Fable 5.1 · quota ok until 17:30 · context 26% · 2 agents working
+Fable 5.1 · quota 21%, resets 17:30 · context 26% · 2 agents working
 ```
 
 When something needs you, the exception replaces the quiet text or goes to a second row; more than one exception = row 2, most urgent first. Colour never carries information alone: the words are always there.
@@ -18,7 +18,7 @@ When something needs you, the exception replaces the quiet text or goes to a sec
 |---|---|---|
 | `budget over 3× — post-mortem before closing` (red, first) | the task spent three times its declared estimate; closing is blocked | write the one-line post-mortem in the playbook, then `budget-close --outcome flagged` |
 | `verification failed: python3 tests/run.py (exit 1)` | the command you declared as "done" does not pass | do not report the task as finished; fix, the check re-runs after your next write |
-| `quota 92% used, resets in 40 min` (red) | five-hour plan window at 80% or more; at 100% it reads `quota 100% used` | inline work and closures only until the reset; batches wait |
+| `quota 92% used, resets in 40 min` (red, second line) | five-hour plan window at 80% or more; the first line always carries `quota N%, resets HH:MM` — grey below 60%, yellow from 60%, red from 80% | inline work and closures only until the reset; batches wait |
 | `budget checks off (transcript unreadable) — update the plugin` | the transcript format changed; spend accounting is unreliable | update fable-director |
 | `context 85% full — finish the task and start a new session` | the conversation is near the window ceiling | close at a verified boundary, distill, start fresh |
 | `1 agent stuck for 32 min — check /tasks` | a delegated agent has written nothing to its transcript for over half an hour; agents silent for an hour, or whose workflow run already completed, count as dead and disappear (they never emit a stop) | open `/tasks`, resume or stop it |

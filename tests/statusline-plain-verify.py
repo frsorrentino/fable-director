@@ -3,9 +3,9 @@
 
 Criterio: ogni segmento dice cosa fare, in parole; a riposo la riga tace.
 
-  T1 stato normale: "Fable 5.1 · quota ok until HH:MM · context 26%", nessuna sigla, una riga
+  T1 stato normale: "Fable 5.1 · quota 40%, resets HH:MM · context 26%", nessuna sigla, una riga
   T2 agenti al lavoro: "2 agents working"
-  T3 quota 5h ≥80: "quota 90% used, resets in N min"; 60-79: "quota 71% used, resets HH:MM";
+  T3 quota 5h: sempre "quota N%, resets HH:MM" in riga 1; ≥80 anche "quota 90% used, resets in N min";
      100: "quota 100% used, resets in N min" (mai "almost")
   T4 contesto: "context N%" SEMPRE in riga 1 (giallo da 60, rosso da 80); ≥80 anche
      "context 85% full — finish the task and start a new session" in riga 2
@@ -70,8 +70,8 @@ def render(s, **env):
 SIGLE = re.compile(r"\bctx\b|\b5H\b|\b7D\b|\bbdg\b|\bdlg\b|\bcmp\b|\bcache\b|\bxf\b|✦|▓|░|⟲")
 
 out = render(stdin())
-check("T1 normale: 'Fable 5.1 · quota ok until HH:MM · context 26%', una riga, nessuna sigla",
-      re.fullmatch(r"Fable 5\.1 · quota ok until \d{2}:\d{2} · context 26%", out.strip()) is not None
+check("T1 normale: 'Fable 5.1 · quota 40%, resets HH:MM · context 26%', una riga, nessuna sigla",
+      re.fullmatch(r"Fable 5\.1 · quota 40%, resets \d{2}:\d{2} · context 26%", out.strip()) is not None
       and "\n" not in out.strip() and not SIGLE.search(out), repr(out))
 
 # T2 agenti in volo
@@ -85,13 +85,14 @@ check("T2 agenti al lavoro", "2 agents working" in out and "stuck" not in out, o
 (sdir / f"{SID}.json").unlink()
 
 out80 = render(stdin(rl=90, reset_in=40 * 60)); out60 = render(stdin(rl=71)); out100 = render(stdin(rl=100, reset_in=40 * 60))
-check("T3 quota 5h: '90% used, resets in 40 min' / '71% used, resets HH:MM' / '100% used', mai 'almost'",
-      "quota 90% used, resets in 40 min" in out80 and re.search(r"quota 71% used, resets \d{2}:\d{2}", out60)
-      and "quota 100% used, resets in 40 min" in out100 and "almost" not in out80 + out100,
+check("T3 quota 5h: '90% used, resets in 40 min' / '71%, resets HH:MM' in riga 1 / '100% used', mai 'almost'",
+      re.search(r"quota 90% used, resets in (39|40) min", out80) and re.search(r"quota 71%, resets \d{2}:\d{2}", out60.partition("\n")[0])
+      and re.search(r"quota 90%, resets \d{2}:\d{2}", out80.partition("\n")[0])
+      and re.search(r"quota 100% used, resets in (39|40) min", out100) and "almost" not in out80 + out100,
       out80 + "\n" + out60 + "\n" + out100)
 out = render(stdin(pct=85)); outfull = render(stdin(pct=100)); out65 = render(stdin(pct=65, wk=72, effort="max"), COLUMNS="90")
 check("T4 contesto: percentuale sempre in riga 1 (anche a 65% su 90 colonne), frase da 80",
-      out.partition("\n")[0].startswith("Fable 5.1 · quota ok until") and "· context 85%" in out.partition("\n")[0]
+      out.partition("\n")[0].startswith("Fable 5.1 · quota 40%, resets") and "· context 85%" in out.partition("\n")[0]
       and "context 85% full — finish the task and start a new session" in out
       and "context 100% full — finish the task" in outfull and "almost" not in out + outfull
       and "· context 65%" in out65.partition("\n")[0], out + "\n" + outfull + "\n" + out65)
@@ -170,10 +171,11 @@ check("T9 precedenza di un'altra sessione", "another session has priority (incid
 out = render(stdin(pct=85, rl=90, wk=72, reset_in=40 * 60))
 l1, _, l2 = out.partition("\n")
 check("T10 piu eccezioni → riga 2 con la piu urgente prima",
-      l1.strip() == "Fable 5.1 · context 85%" and l2.startswith("└ quota 90% used, resets in 40 min") and "context 85% full" in l2, out)
+      re.fullmatch(r"Fable 5\.1 · quota 90%, resets \d{2}:\d{2} · context 85%", l1.strip()) is not None
+      and re.match(r"└ quota 90% used, resets in (39|40) min", l2) and "context 85% full" in l2, out)
 narrow = render(stdin(pct=85, rl=90, wk=72, reset_in=40 * 60), COLUMNS="60")
 check("T10b larghezza ridotta: cade la meno urgente, resta la piu urgente",
-      "quota 90% used, resets in 40 min" in narrow and "weekly" not in narrow, narrow)
+      re.search(r"quota 90% used, resets in (39|40) min", narrow) and "weekly" not in narrow, narrow)
 check("T11 nessuna sigla storica in nessuna resa plain",
       not SIGLE.search(out) and not SIGLE.search(out2) and not SIGLE.search(out80), out)
 
