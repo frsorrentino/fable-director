@@ -4,6 +4,9 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.40.x
 
+- **1.40.2 — dead agents no longer count as stuck.**
+  - Agents killed at the five-hour wall, by `TaskStop` or by a terminal error never emit `SubagentStop` and stayed "in flight" for three days (`30 agents stuck for 1709 min` on the 2026-09-03 workflow session). Now an agent whose transcript has been silent for an hour, whose workflow run is already completed, or that never wrote a transcript in 24 h is dead: the meter drops it from the in-flight register (counted in `dead`, last five kept with the reason), the Stop hook reaps at every main turn, and the statusline applies the same rule on screen. `stuck` now measures silence, not time since launch: an agent writing steadily for 45 minutes is `working`, not `stuck`.
+
 - **1.40.1 — context percentage pinned to the first line.**
   - Plain statusline: `context N%` sits on the first line at every level (grey, yellow from 60%, red from 80%); between 60% and 79% it used to be the least urgent exception on the second line, the first one dropped on a narrow terminal. From 80% the second line still says `context 85% full — finish the task and start a new session`.
   - Model title: the window suffix Claude Code 2.1.259 adds to the display name (`Fable 5.1 (200k)`) is stripped instead of truncated to `Fable 5.1 (2`.

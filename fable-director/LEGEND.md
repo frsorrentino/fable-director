@@ -21,7 +21,7 @@ When something needs you, the exception replaces the quiet text or goes to a sec
 | `quota 92% used, resets in 40 min` (red) | five-hour plan window at 80% or more; at 100% it reads `quota 100% used` | inline work and closures only until the reset; batches wait |
 | `budget checks off (transcript unreadable) — update the plugin` | the transcript format changed; spend accounting is unreliable | update fable-director |
 | `context 85% full — finish the task and start a new session` | the conversation is near the window ceiling | close at a verified boundary, distill, start fresh |
-| `1 agent stuck for 32 min — check /tasks` | a delegated agent has been running for over half an hour | open `/tasks`, resume or stop it |
+| `1 agent stuck for 32 min — check /tasks` | a delegated agent has written nothing to its transcript for over half an hour; agents silent for an hour, or whose workflow run already completed, count as dead and disappear (they never emit a stop) | open `/tasks`, resume or stop it |
 | `budget over 2.3× — reconsider the route` | spend passed twice the estimate (checkpoint) | switch route now if the plan was wrong; a reversal here is cheaper than a post-mortem at 3× |
 | `another session has priority (incident: …) — new fan-outs wait` | a session on this account opened a budget with `--priority incident` | single turns are free; fan-outs wait until it closes (2 h at most) |
 | `weekly quota 72% used, resets Thu 4` / `weekly quota 85% used, resets Fri 5` (red) | weekly plan window at 60% / 80% | plan the week; premium work first |

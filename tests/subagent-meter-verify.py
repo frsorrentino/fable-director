@@ -143,6 +143,41 @@ check("M9 hooks.json monta il misuratore su Start e Stop",
       all("subagent-meter.py" in v for v in declared.values()),
       str(declared))
 
+# ---- (1.40.2) agenti morti: fuori dal volo, contati in dead
+import time as _time
+home_d = Path(tempfile.mkdtemp(prefix="fd-meter-dead-"))
+sid_d = "sess-dead"
+sdir = home_d / "proj" / sid_d
+(sdir / "subagents" / "workflows" / "wf_done").mkdir(parents=True)
+(sdir / "workflows").mkdir()
+tp = str(sdir) + ".jsonl"
+Path(tp).write_text("")
+old = sdir / "subagents" / "agent-d1.jsonl"; old.write_text("{}\n")
+os.utime(old, (_time.time() - 7200, _time.time() - 7200))          # fermo da 2 h → morto
+fresh = sdir / "subagents" / "agent-d2.jsonl"; fresh.write_text("{}\n")   # vivo
+wdone = sdir / "subagents" / "workflows" / "wf_done" / "agent-w1.jsonl"; wdone.write_text("{}\n")
+(sdir / "workflows" / "wf_done.json").write_text(json.dumps({"status": "completed"}))  # run chiuso
+for aid in ("d1", "d2", "w1", "q1"):   # q1: nessun transcript, in coda → resta
+    run(home_d, {"hook_event_name": "SubagentStart", "session_id": sid_d, "cwd": str(home_d),
+                 "transcript_path": tp, "agent_id": aid, "agent_type": "workflow-subagent"})
+run(home_d, {"hook_event_name": "SubagentStart", "session_id": sid_d, "cwd": str(home_d),
+             "transcript_path": tp, "agent_id": "d3", "agent_type": "workflow-subagent"})
+st = json.loads((home_d / ".claude" / "fable-director" / "subagents" / f"{sid_d}.json").read_text())
+check("M8 morti fuori dal volo: transcript fermo 2h e run completato tolti, vivo/in coda/nuovo restano",
+      set(st["inflight"]) == {"d2", "q1", "d3"} and st.get("dead") == 2
+      and {x["agent_id"] for x in st.get("last_dead", [])} == {"d1", "w1"}
+      and any("silent" in x["reason"] for x in st["last_dead"])
+      and any("completed" in x["reason"] for x in st["last_dead"]), json.dumps(st))
+# reap_session (chiamata dallo Stop hook del main): senza nuovi subagent
+os.utime(fresh, (_time.time() - 7200, _time.time() - 7200))
+import importlib.util as _ilu
+os.environ["HOME"] = str(home_d)
+_spec = _ilu.spec_from_file_location("fd_meter", SCRIPT); _mm = _ilu.module_from_spec(_spec); _spec.loader.exec_module(_mm)
+n = _mm.reap_session(sid_d, tp)
+st = json.loads((home_d / ".claude" / "fable-director" / "subagents" / f"{sid_d}.json").read_text())
+check("M9 reap_session dallo Stop hook: d2 diventato silenzioso → tolto, dead=3",
+      n == 1 and set(st["inflight"]) == {"q1", "d3"} and st.get("dead") == 3, json.dumps(st))
+
 print()
 if FAILS:
     print(f"FAIL: {len(FAILS)} — " + ", ".join(FAILS))

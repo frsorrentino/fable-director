@@ -48,8 +48,9 @@ cwd = str(tmp / "proj"); Path(cwd).mkdir()
 SID = "sess-plain"
 
 
-def stdin(pct=26, rl=40, wk=46, effort=None, reset_in=2400):
+def stdin(pct=26, rl=40, wk=46, effort=None, reset_in=2400, transcript=None):
     d = {"model": {"display_name": "Fable 5.1 (200k)"}, "session_id": SID, "cwd": cwd,
+         **({"transcript_path": transcript} if transcript else {}),
          "context_window": {"used_percentage": pct, "context_window_size": 1000000},
          "rate_limits": {"five_hour": {"used_percentage": rl, "resets_at": int(time.time()) + reset_in},
                          "seven_day": {"used_percentage": wk, "resets_at": int(time.time()) + 300000}}}
@@ -129,6 +130,23 @@ since_old = (datetime.now(timezone.utc) - timedelta(minutes=32)).isoformat()
                                               "started": 1, "stopped": 0}))
 out = render(stdin())
 check("T7 agente fermo da 32 min", "1 agent stuck for 32 min — check /tasks" in out, out)
+(sdir / f"{SID}.json").unlink()
+
+# T7b agenti morti (1.40.2): transcript fermo da 2h o run completato → né stuck né working
+sess = tmp / "sess"; (sess / "subagents" / "workflows" / "wf_done").mkdir(parents=True); (sess / "workflows").mkdir()
+tp = str(sess) + ".jsonl"; Path(tp).write_text("")
+dead_f = sess / "subagents" / "agent-a.jsonl"; dead_f.write_text("{}\n")
+_old = time.time() - 7200; os.utime(dead_f, (_old, _old))
+(sess / "subagents" / "workflows" / "wf_done" / "agent-w.jsonl").write_text("{}\n")
+(sess / "workflows" / "wf_done.json").write_text(json.dumps({"status": "completed"}))
+(sess / "subagents" / "agent-b.jsonl").write_text("{}\n")
+(sdir / f"{SID}.json").write_text(json.dumps({"inflight": {"a": {"type": "x", "since": since_old},
+                                                           "w": {"type": "x", "since": since_old},
+                                                           "b": {"type": "x", "since": since_old}},
+                                              "started": 3, "stopped": 0}))
+out = render(stdin(transcript=tp))
+check("T7b agenti morti: fermo 2h e run completato fuori; il vivo con transcript fresco = '1 agent working'",
+      "stuck" not in out and "1 agent working" in out, out)
 (sdir / f"{SID}.json").unlink()
 
 # T8 grinding + effort

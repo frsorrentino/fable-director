@@ -44,6 +44,14 @@ except ImportError:
 
 STATE_DIR = Path.home() / ".claude" / "fable-director" / "subagents"
 STALE_DAYS = 3
+# (1.40.2) Agenti MORTI: un agente ucciso al muro della finestra 5h, da
+# TaskStop o da un errore terminale non emette mai SubagentStop e resterebbe
+# "in volo" per 3 giorni (misurato: "30 agents stuck for 1709 min" sulla
+# sessione del workflow del 03/09). Morto = transcript fermo da almeno
+# DEAD_SILENT_S, o run del Workflow gia' completato, o nessun transcript
+# dopo DEAD_NOFILE_S (un agente in coda non aspetta un giorno).
+DEAD_SILENT_S = 60 * 60
+DEAD_NOFILE_S = 24 * 3600
 
 
 def now_iso():
@@ -260,13 +268,128 @@ def update(path, mutate):
             fh.close()
 
 
+def session_dir_of(transcript_path):
+    if not transcript_path:
+        return None
+    p = Path(str(transcript_path))
+    return p.with_suffix("") if p.suffix == ".jsonl" else p
+
+
+def agent_transcript(sdir, aid, hint=None):
+    """Transcript dell'agente: hint dell'hook se esiste, altrimenti per id
+    sotto <sessiondir>/subagents/ (tool Agent) o .../workflows/wf_*/ (tool
+    Workflow). None se non ancora scritto (agente in coda)."""
+    try:
+        if hint and Path(str(hint)).is_file():
+            return Path(str(hint))
+        if sdir is None or not aid:
+            return None
+        c = sdir / "subagents" / f"agent-{aid}.jsonl"
+        if c.is_file():
+            return c
+        for c in (sdir / "subagents" / "workflows").glob(f"*/agent-{aid}.jsonl"):
+            return c
+    except OSError:
+        pass
+    return None
+
+
+def completed_runs(sdir):
+    done = set()
+    try:
+        if sdir is not None:
+            for wf in (sdir / "workflows").glob("wf_*.json"):
+                try:
+                    if json.loads(wf.read_text()).get("status") == "completed":
+                        done.add(wf.stem)
+                except (OSError, ValueError):
+                    pass
+    except OSError:
+        pass
+    return done
+
+
+def liveness(aid, entry, sdir, now, done_runs):
+    """('dead', motivo) | ('alive', minuti_di_silenzio) | ('unknown', minuti_dal_via)."""
+    since = 0
+    try:
+        t = datetime.fromisoformat(str(entry.get("since")).replace("Z", "+00:00"))
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+        since = int((now - t.timestamp()) // 60)
+    except (ValueError, TypeError):
+        pass
+    path = agent_transcript(sdir, aid, entry.get("transcript"))
+    if path is None:
+        if since * 60 >= DEAD_NOFILE_S:
+            return "dead", f"no transcript after {since} min"
+        return "unknown", since
+    if path.parent.name in done_runs:
+        return "dead", f"run {path.parent.name} completed"
+    try:
+        silent = int((now - path.stat().st_mtime) // 60)
+    except OSError:
+        return "unknown", since
+    if silent * 60 >= DEAD_SILENT_S:
+        return "dead", f"transcript silent for {silent} min"
+    return "alive", silent
+
+
+def reap(state, sdir, now=None):
+    """Toglie dal volo gli agenti morti; li conta in state['dead'] e tiene
+    gli ultimi 5 in state['last_dead']. Ritorna quanti ne ha tolti."""
+    now = now or time.time()
+    fl = state.get("inflight") or {}
+    if not fl:
+        return 0
+    done_runs = completed_runs(sdir)
+    n = 0
+    for aid in list(fl):
+        st, why = liveness(aid, fl[aid], sdir, now, done_runs)
+        if st != "dead":
+            continue
+        entry = fl.pop(aid)
+        n += 1
+        state["dead"] = int(state.get("dead") or 0) + 1
+        ld = state.setdefault("last_dead", [])
+        ld.append({"agent_id": aid, "agent_type": entry.get("type"),
+                   "since": entry.get("since"), "reason": why, "ts": now_iso()})
+        del ld[:-5]
+    return n
+
+
+def reap_session(session_id, transcript_path):
+    """Per lo Stop hook del main: pulizia del registro in volo a ogni turno,
+    cosi' un run morto sparisce anche se nessun altro subagent parte piu'."""
+    sid = str(session_id or "nosession")
+    safe = "".join(c if (c.isalnum() or c in "-_") else "-" for c in sid)[:120]
+    path = STATE_DIR / f"{safe}.json"
+    if not path.is_file():
+        return 0
+    sdir = session_dir_of(transcript_path)
+    out = {"n": 0}
+
+    def mutate(state):
+        out["n"] = reap(state, sdir)
+        return None
+
+    update(path, mutate)
+    return out["n"]
+
+
 def on_start(data, path):
     aid = str(data.get("agent_id") or "")
     atype = str(data.get("agent_type") or "?")
+    hint = data.get("agent_transcript_path")
+    sdir = session_dir_of(data.get("transcript_path"))
 
     def mutate(state):
+        reap(state, sdir)
         if aid:
-            state["inflight"][aid] = {"type": atype, "since": now_iso()}
+            entry = {"type": atype, "since": now_iso()}
+            if hint:
+                entry["transcript"] = str(hint)
+            state["inflight"][aid] = entry
         state["started"] += 1
         state["by_type"][atype] = int(state["by_type"].get(atype, 0)) + 1
         return None
@@ -303,8 +426,11 @@ def on_stop(data, path):
                       else "approach" if status == "needs_context"
                       else "capability")
 
+    sdir_stop = session_dir_of(data.get("transcript_path"))
+
     def mutate(state):
         state["inflight"].pop(aid, None)
+        reap(state, sdir_stop)
         state["stopped"] += 1
         if mismatch:
             state["effort_ignored"] += 1

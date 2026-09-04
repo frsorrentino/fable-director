@@ -361,12 +361,57 @@ try:
     # la riga proprio mentre il coordinatore aspetta i subagent.
     # (Nessun apostrofo in questo blocco: il python vive dentro python3 -c '...',
     #  una virgoletta singola chiuderebbe la stringa shell — regola del file.)
+    # (1.40.2) Agenti morti fuori dal conteggio: transcript fermo da 60 min,
+    # run del Workflow gia completato, o nessun transcript dopo 24 h (stessa
+    # regola di subagent-meter.py, che li toglie dal registro). stuck = minuti
+    # di SILENZIO del vivo piu silenzioso (dal via se non ha ancora un file).
+    def _fd_inflight(sgf, tp):
+        n=0; st=0
+        try:
+            fl=json.loads(sgf.read_text()).get("inflight") or {}
+            sdir=None
+            if tp:
+                _tp=Path(str(tp)); sdir=_tp.with_suffix("") if _tp.suffix==".jsonl" else _tp
+            now=time.time()
+            from datetime import datetime as _dd, timezone as _zz
+            done=set()
+            if sdir is not None:
+                for wf in (sdir/"workflows").glob("wf_*.json"):
+                    try:
+                        if json.loads(wf.read_text()).get("status")=="completed": done.add(wf.stem)
+                    except Exception: pass
+            for aid,v in fl.items():
+                since=0
+                try:
+                    t=_dd.fromisoformat(str(v.get("since")).replace("Z","+00:00"))
+                    if t.tzinfo is None: t=t.replace(tzinfo=_zz.utc)
+                    since=int((now-t.timestamp())//60)
+                except Exception: pass
+                path=None; hint=v.get("transcript")
+                if hint and Path(str(hint)).is_file(): path=Path(str(hint))
+                elif sdir is not None:
+                    c=sdir/"subagents"/f"agent-{aid}.jsonl"
+                    if c.is_file(): path=c
+                    else:
+                        for c in (sdir/"subagents"/"workflows").glob(f"*/agent-{aid}.jsonl"):
+                            path=c; break
+                if path is None:
+                    if since>=1440: continue
+                    n+=1; st=max(st,since); continue
+                if path.parent.name in done: continue
+                silent=int((now-path.stat().st_mtime)//60)
+                if silent>=60: continue
+                n+=1; st=max(st,silent)
+        except Exception: pass
+        return n,st
+    _fd_nfl=0; _fd_stuck=0
     if sid:
         try:
             _sg="".join(c if (c.isalnum() or c in "-_") else "-" for c in str(sid))[:120]
             sgf=Path.home()/".claude"/"fable-director"/"subagents"/f"{_sg}.json"
             if sgf.is_file():
-                nfl=len((json.loads(sgf.read_text()).get("inflight") or {}))
+                _fd_nfl,_fd_stuck=_fd_inflight(sgf, d.get("transcript_path"))
+                nfl=_fd_nfl
                 if nfl>0: dlg=(f"⟲{nfl}" if dlg=="-" else f"⟲{nfl},{dlg}")
         except Exception: pass
     # [BDG] = classe:testo — la classe colore (g/y/r) si decide qui, la shell
@@ -508,19 +553,8 @@ except Exception:
 # che tiene la precedenza sulla quota. Assenti → "-" (mai inventati).
 stuck="-"; vrf="-"; prio="-"
 try:
-    if sid:
-        _sg="".join(c if (c.isalnum() or c in "-_") else "-" for c in str(sid))[:120]
-        sgf=Path.home()/".claude"/"fable-director"/"subagents"/f"{_sg}.json"
-        if sgf.is_file():
-            from datetime import datetime as _d2, timezone as _z2
-            _now=_d2.now(_z2.utc); _old=0
-            for _v in (json.loads(sgf.read_text()).get("inflight") or {}).values():
-                try:
-                    _t=_d2.fromisoformat(str(_v.get("since")).replace("Z","+00:00"))
-                    if _t.tzinfo is None: _t=_t.replace(tzinfo=_z2.utc)
-                    _old=max(_old,int((_now-_t).total_seconds()//60))
-                except Exception: pass
-            if _old: stuck=str(_old)
+    # minuti di silenzio del vivo piu silenzioso (vedi _fd_inflight sopra)
+    if _fd_nfl and _fd_stuck: stuck=str(_fd_stuck)
 except Exception: pass
 try:
     if b_open:

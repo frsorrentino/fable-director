@@ -393,6 +393,17 @@ def _main():
         return
     if data.get("stop_hook_active"):
         return
+    # (1.40.2) agenti morti fuori dal registro in volo a ogni turno del main:
+    # un run ucciso al muro non fa piu' partire nessun subagent, quindi senza
+    # questo passo resterebbe "in volo" fino alla potatura a 3 giorni.
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "fd_meter", Path(__file__).with_name("subagent-meter.py"))
+        mm = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mm)
+        mm.reap_session(data.get("session_id"), data.get("transcript_path"))
+    except Exception:
+        pass
     cwd = data.get("cwd") or os.getcwd()
     # Slug: identico a cwd_slug() in fd-telemetry.py (canonico + hash)
     s = str(cwd).replace("\\", "/")
