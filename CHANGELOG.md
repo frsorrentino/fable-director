@@ -4,6 +4,11 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.40.x
 
+- **1.40.4 — hook output kept under the harness caps.**
+  - Claude Code truncates hook fields silently, mid-word, past a cap read from the 2.1.260 binary: `reason` 2000 characters / 20 lines, `systemMessage` 4000, SessionStart output 8000 / 200 lines. The kernel alone is ~6200 characters; with hindsight, the legend hint and the executor onboarding question the injected text measured ~8250, so the question at the tail was cut and its attempt burned anyway. Now `session-kernel.sh` builds the text in a buffer: the kernel always whole, short lines before long blocks, the onboarding block (shortened to ~900 characters) added only when it fits and its attempt consumed only then, a visible `[fd: … cut at the … cap]` line if anything still overflows.
+  - Stop hook: `reason` and `systemMessage` pass through the same caps with a marker, and the block instruction comes before the verify command's output, so a long test tail can never push the post-mortem order out of the message.
+  - Suite: `tests/hook-caps-verify.py` (H1–H6).
+
 - **1.40.3 — quota percentage pinned to the first line.**
   - Plain statusline: the five-hour quota always shows its number, `quota 21%, resets 13:00` (grey, yellow from 60%, red from 80%) instead of `quota ok until 13:00`; from 80% the second line still says `quota 92% used, resets in 40 min`. Same rule as the context percentage.
 

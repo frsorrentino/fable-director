@@ -365,15 +365,45 @@ _VERIFY_MSG = None
 _PRINTED = False
 
 
+# Cap dell'harness sui campi di un hook (Claude Code 2.1.260, letti dal
+# binario): reason 2000 caratteri / 20 righe, systemMessage 4000. Oltre, il
+# testo viene TRONCATO IN SILENZIO a meta' parola — l'autore dell'hook non lo
+# vede mai (misurato dalla community su claude-code#91870). Qui il taglio e'
+# esplicito e marcato, e l'istruzione di blocco sta PRIMA dell'esito verify:
+# se qualcosa cade, cade il dettaglio, non l'ordine di fare il post-mortem.
+HOOK_CAPS = {"reason": (2000, 20), "systemMessage": (4000, None)}
+CAP_MARK = " [\u2026fd: cut at the hook cap]"
+
+
+def cap_field(text, chars, lines):
+    """Taglia `text` a `chars` caratteri e `lines` righe (None = nessun tetto
+    di righe); se taglia, aggiunge CAP_MARK restando sotto `chars`."""
+    cut = False
+    if lines is not None:
+        ls = text.split("\n")
+        if len(ls) > lines:
+            text = "\n".join(ls[:lines])
+            cut = True
+    room = chars - len(CAP_MARK)
+    if len(text) > room:
+        text = text[:room]
+        cut = True
+    return text.rstrip() + CAP_MARK if cut else text
+
+
 def emit(obj):
     """UN solo JSON su stdout per turno: l'esito del verify (se c'e') viene
-    fuso nel messaggio, mai stampato come secondo oggetto."""
+    fuso nel messaggio, mai stampato come secondo oggetto. Ogni campo passa
+    dal cap dell'harness (HOOK_CAPS)."""
     global _PRINTED
     if _VERIFY_MSG:
         if "reason" in obj:
-            obj["reason"] = _VERIFY_MSG + "\n" + obj["reason"]
+            obj["reason"] = obj["reason"] + "\n" + _VERIFY_MSG
         else:
-            obj["systemMessage"] = (_VERIFY_MSG + "\n" + (obj.get("systemMessage") or "")).strip()
+            obj["systemMessage"] = ((obj.get("systemMessage") or "") + "\n" + _VERIFY_MSG).strip()
+    for key, (chars, lines) in HOOK_CAPS.items():
+        if isinstance(obj.get(key), str):
+            obj[key] = cap_field(obj[key], chars, lines)
     print(json.dumps(obj, ensure_ascii=False))
     _PRINTED = True
 
@@ -383,7 +413,7 @@ def main():
         _main()
     finally:
         if _VERIFY_MSG and not _PRINTED:
-            print(json.dumps({"systemMessage": _VERIFY_MSG}, ensure_ascii=False))
+            print(json.dumps({"systemMessage": cap_field(_VERIFY_MSG, *HOOK_CAPS["systemMessage"])}, ensure_ascii=False))
 
 
 def _main():
