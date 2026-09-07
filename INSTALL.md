@@ -80,11 +80,13 @@ Only if the plugin system is unusable:
 
 ## 6. Statusline (optional)
 
-Always shows `[MODEL]`, `[CTX %]` (conversation context window), `[5H % HH:MM]` (5-hour plan
-quota with the reset time set apart in half-light — no arrow, the "Current session" in /usage),
-`[7D % reset]` (weekly quota) and `[BDG]` (fable-director pre-budget state). On a narrow
-terminal row 1 sheds decoration before data: the caveman badge first, then the ctx gauge,
-then the reset times — quotas and alarms survive at any width.
+Plain by default since 1.39: `Fable 5.1 · quota 21%, resets 17:30 · context 26%` — model,
+5-hour plan quota with its reset time (the "Current session" in /usage) and context, always;
+everything else (weekly quota from 60%, budget past 2×, failed verification, stuck agents…)
+appears in words only when there is something to do, the least urgent dropped first on a
+narrow terminal. `--expert` restores the dense line (`[CTX %]`, `[5H % HH:MM]`, `[7D % reset]`,
+`[BDG r×·effort]`), which sheds decoration before data: the caveman badge first, then the ctx
+gauge, then the reset times — quotas and alarms survive at any width.
 
 The statusLine is NOT a component the plugin can auto-register (unlike hooks/skills/commands):
 it must be written to `settings.json`. To make the step uniform and foolproof on every machine,
@@ -134,7 +136,7 @@ for 1:1 behavior.
 - **SubagentStart/SubagentStop hooks (`subagent-meter.py`)** → counts the delegations that really
   started (nested spawns included: Claude Code ≥ 2.1.219 nests three levels by default) and compares
   each subagent's actual `effort.level` with the tier pinned in its frontmatter. Zero model tokens,
-  never blocks; feeds `dlg ⟲N` on the statusline and `/fable-director:status`.
+  never blocks; feeds `N agents working` on the statusline (`dlg ⟲N` in expert mode) and `/fable-director:status`.
 - **SessionEnd hook (`fd-telemetry.py session-summary`)** → logs to SQLite
   (`~/.claude/fable-director/telemetry.db`) token totals and cache/delegation metrics, zero model tokens.
 - **`~/.claude/delega-playbook.md`** (external, survives updates) → learned heuristics:

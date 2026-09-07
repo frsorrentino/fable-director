@@ -15,21 +15,11 @@
   <text x="70" y="105" fill="#ffffff" font-size="52" font-weight="800">See the limit coming.</text>
   <text x="70" y="152" fill="#b9a7e8" font-size="26">Plan quotas, live budget and burn-rate — in your statusline, on every turn.</text>
 
-  <!-- mock statusline: barre disegnate, niente glifi -->
+  <!-- mock statusline: riga plain (default dalla 1.39) — parole, colore solo dove qualcosa devia -->
   <rect x="70" y="215" width="1060" height="130" rx="18" fill="#0d1117" stroke="#3d2b73" stroke-width="2"/>
-  <g font-family="ui-monospace,Menlo,monospace" font-size="25">
-    <text x="100" y="266" fill="#e6edf3">FABLE 5 · ctx</text>
-    <rect x="292" y="248" width="120" height="20" rx="5" fill="#2f2159"/>
-    <rect x="292" y="248" width="34" height="20" rx="5" fill="#8A5CF6"/>
-    <text x="428" y="266" fill="#e6edf3">26% · 5H</text>
-    <text x="558" y="266" fill="#ffd28a" font-weight="700">71%</text>
-    <text x="622" y="266" fill="#9198a1">17:30 · 7D</text>
-    <text x="768" y="266" fill="#7ee2a0">46%</text>
-    <text x="100" y="316" fill="#9198a1">budget</text>
-    <rect x="200" y="298" width="90" height="20" rx="5" fill="#2f2159"/>
-    <rect x="200" y="298" width="30" height="20" rx="5" fill="#7ee2a0"/>
-    <text x="306" y="316" fill="#7ee2a0">0.7×</text>
-    <text x="372" y="316" fill="#9198a1">of estimate · delegated 41k · cache warm 47m</text>
+  <g font-family="ui-monospace,Menlo,monospace" font-size="23">
+    <text x="100" y="266"><tspan fill="#9198a1">Fable 5.1 · </tspan><tspan fill="#ffd28a" font-weight="700">quota 71%, resets 17:30</tspan><tspan fill="#9198a1"> · </tspan><tspan fill="#e6edf3">context 26%</tspan><tspan fill="#9198a1"> · 2 agents working</tspan></text>
+    <text x="100" y="316"><tspan fill="#5b4a8a">└ </tspan><tspan fill="#ffd28a">weekly quota 72% used, resets Thu 11</tspan></text>
   </g>
 
   <!-- barra quota grande -->

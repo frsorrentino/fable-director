@@ -39,7 +39,10 @@ At 3× — or with enforcement broken — the alarm **takes over** the head of t
 line, everything else dropping to half-light: plain red text in the default
 line, a solid-red block in expert mode.
 
-## The segments
+## Expert-mode segments
+
+The plain line has no segments to learn: its exception texts are the legend
+(`/fable-director:help`). The dense line of `--expert` is made of these:
 
 | Segment | What it tells you |
 |---|---|
@@ -66,9 +69,10 @@ installer also writes `refreshInterval: 5` (seconds) so the line keeps breathing
 during the wait; `FD_STATUSLINE_REFRESH=<n>` changes it, `0` turns it off.
 
 On narrow screens (real terminal width via `COLUMNS`) both rows trim by the same
-rule — **decoration goes, data stays**. Row 1 drops the `caveman` badge, then
-the `ctx` gauge, then the reset times; the model, every percentage and every
-alarm survive at any width. Row 2 drops `cache`, then `dlg`, then `xf`, and
+rule — **decoration goes, data stays**. In the plain line the `caveman` badge
+goes first, then the least urgent exception on row 2; model, quota and context
+survive at any width. In expert mode row 1 drops the badge, then the `ctx`
+gauge, then the reset times; row 2 drops `cache`, then `dlg`, then `xf`, and
 never the budget.
 
 Segments can become clickable (opt-in, off by default — some webview terminals

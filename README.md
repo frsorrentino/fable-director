@@ -141,14 +141,23 @@ The full table, the hook-by-hook lifecycle and the known limits are in
 ## The statusline
 
 ```
-✦ FABLE 5·max · ctx ▓▓▓░░░░░ 26%/1M · cmp 1 · 5H 71% 17:30 · 7D 46% 14 Jul · fail ×3 │ caveman
-└ bdg ▓░░ 0.7×·high · dlg ≡ 41k · xf gemini 2/1500 09:00 · cache ◕ 47m
+Fable 5.1 · quota 21%, resets 17:30 · context 26%                  caveman
 ```
 
-Model, context, plan quotas and live budget at a glance — so you see the rate
-limit coming **before** it hits. One rule: half-light when healthy, full words
-when broken. `/fable-director:statusline` installs it; on a phone or web client
-`/fable-director:status` prints the same state as text.
+Model, five-hour plan quota with its reset time, context — the three numbers
+that are your margin, always on screen — so you see the rate limit coming
+**before** it hits. Everything else shows up only when there is something to
+do, in words, most urgent first:
+
+```
+Fable 5.1 · quota 92%, resets 17:30 · context 83%
+└ quota 92% used, resets in 40 min · context 83% full — finish the task and start a new session
+```
+
+`/fable-director:statusline` installs it; on a phone or web client
+`/fable-director:status` prints the same state as text. The dense historic
+line (`ctx ▓▓▓░░░░░ 26%/1M · 5H 71% 17:30 · bdg ▓░░ 0.7×·high · dlg ≡ 41k`)
+is the optional **expert mode**.
 
 ![See the limit coming: plan quotas, live budget and burn-rate in your statusline on every turn. The rate limit stops being a surprise — it becomes a dashboard you glance at.](assets/readme/card4-gauge.png)
 
