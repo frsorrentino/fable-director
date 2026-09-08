@@ -76,10 +76,11 @@ your quota reading frames one at a time. Now:
 - **Silent clips are called silent.** Whether a file has audio is checked with
   `ffprobe` before anything runs. We watched a model "transcribe" the burnt-in
   subtitles of a clip with no audio track; that mistake is now impossible.
-- **Long footage goes to a free model, not to your quota.** When a sheet is not
-  enough, the clip goes to free-tier Gemini: a 10 MB video costs 3.9k tokens
-  there and zero here, under the same budget and write-perimeter rules as any
-  other delegation. Mark the job restricted and nothing leaves your machine.
+- **A long video no longer eats your afternoon's quota.** When one sheet is not
+  enough, the heavy reading goes to a free Gemini tier: a 10 MB clip costs you
+  zero Claude tokens, you see the price before it runs, and the result is
+  checked before it is used. Client material under NDA? Say so once and it
+  never leaves your machine.
 - **The second look is free.** Sheets and transcripts are cached per file;
   reopen the same clip next week and it is instant.
 
