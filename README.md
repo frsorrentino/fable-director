@@ -57,36 +57,33 @@ respected forever). No-CLI alternative and zip migration:
 
 ![Every expensive job makes a deal first: it declares a price, the gate checks it, cheap executors do the work, a hook warns at 2x and stops the turn at 3x. Small quick tasks skip all of this.](assets/readme/card5-journey.png)
 
-## New in 1.42 — video and audio, without burning your quota
+## New in 1.42 — video and audio, at zero Claude tokens
 
-A client sends a video, a voice-over script, a folder of clips to compare. Until
-now your agent either guessed or paid your quota to look at frames one by one.
-Now it works like an editor's assistant, and almost all of it costs zero model
-tokens:
+A client sends a 68-second spot, a voice-over script with timings, a folder of
+clips to compare. Until now your agent either guessed what was in them or spent
+your quota reading frames one at a time. Now:
 
-- **It looks before it asks.** One command turns any video into a contact
-  sheet with the time stamped on every frame — or one frame per cut, which is
-  an instant shot list. The top model reads a whole clip in a single glance
-  instead of a dozen expensive screenshots.
-- **It hears without paying.** Speech is transcribed on your own CPU, in
-  whatever language the file speaks, as subtitles or with word-level timing.
-  No cloud, no upload, no quota.
-- **It checks the script against the clock.** Paste a voice-over script with
-  its planned slots and get back how long each line really takes to say. The
-  "4 seconds" that needs 6 is caught before the studio session, not after.
-- **It never invents what it can't hear.** Whether a file has an audio track
-  is a fact from `ffprobe`, never a model's guess — we measured a model
-  "transcribing" the subtitles of a silent clip.
-- **Heavy footage stays off your Claude quota.** Long videos or many files go
-  to the free-tier Gemini route with the same budget, privacy and write-perimeter
-  guards as everything else; mark the job restricted and nothing leaves your
-  machine.
-- **Done once, done.** Sheets and transcripts are cached per file: the second
-  time anyone opens the same clip, it is instant.
+- **One image instead of dozens of screenshots.** A 68 s clip becomes a single
+  contact sheet with the time printed on every frame; the model reads the whole
+  video in one look. Ask for one frame per cut and you get the shot list: 19
+  cuts, one sheet, zero tokens.
+- **Speech to text on your own CPU.** 68 s of Italian speech transcribed in
+  76 s, as subtitles or JSON, word by word if you need to sync graphics.
+  Nothing is uploaded, nothing is billed.
+- **The script is timed before the studio.** Paste the voice-over with its
+  planned slots and get each line's real length: the "4 seconds" that takes
+  5.9 shows up now, not at the recording session.
+- **Silent clips are called silent.** Whether a file has audio is checked with
+  `ffprobe` before anything runs. We watched a model "transcribe" the burnt-in
+  subtitles of a clip with no audio track; that mistake is now impossible.
+- **Long footage goes to a free model, not to your quota.** When a sheet is not
+  enough, the clip goes to free-tier Gemini: a 10 MB video costs 3.9k tokens
+  there and zero here, under the same budget and write-perimeter rules as any
+  other delegation. Mark the job restricted and nothing leaves your machine.
+- **The second look is free.** Sheets and transcripts are cached per file;
+  reopen the same clip next week and it is instant.
 
-One-time setup on your machine: `media-doctor.py --setup` (it lists what is
-missing and installs only what you confirm). The agent picks the procedure up
-by itself through the `analisi-video` skill.
+Setup once: `media-doctor.py --setup`. The `analisi-video` skill drives the rest.
 
 ## How much does it save?
 
