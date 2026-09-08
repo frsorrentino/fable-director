@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.41.1-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.42.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need
 to do.** It makes your agent declare what a job should cost before it delegates,
@@ -56,6 +56,37 @@ respected forever). No-CLI alternative and zip migration:
   of every turn, not just the tokens that are easy to see.
 
 ![Every expensive job makes a deal first: it declares a price, the gate checks it, cheap executors do the work, a hook warns at 2x and stops the turn at 3x. Small quick tasks skip all of this.](assets/readme/card5-journey.png)
+
+## New in 1.42 — video and audio, without burning your quota
+
+A client sends a video, a voice-over script, a folder of clips to compare. Until
+now your agent either guessed or paid your quota to look at frames one by one.
+Now it works like an editor's assistant, and almost all of it costs zero model
+tokens:
+
+- **It looks before it asks.** One command turns any video into a contact
+  sheet with the time stamped on every frame — or one frame per cut, which is
+  an instant shot list. The top model reads a whole clip in a single glance
+  instead of a dozen expensive screenshots.
+- **It hears without paying.** Speech is transcribed on your own CPU, in
+  whatever language the file speaks, as subtitles or with word-level timing.
+  No cloud, no upload, no quota.
+- **It checks the script against the clock.** Paste a voice-over script with
+  its planned slots and get back how long each line really takes to say. The
+  "4 seconds" that needs 6 is caught before the studio session, not after.
+- **It never invents what it can't hear.** Whether a file has an audio track
+  is a fact from `ffprobe`, never a model's guess — we measured a model
+  "transcribing" the subtitles of a silent clip.
+- **Heavy footage stays off your Claude quota.** Long videos or many files go
+  to the free-tier Gemini route with the same budget, privacy and write-perimeter
+  guards as everything else; mark the job restricted and nothing leaves your
+  machine.
+- **Done once, done.** Sheets and transcripts are cached per file: the second
+  time anyone opens the same clip, it is instant.
+
+One-time setup on your machine: `media-doctor.py --setup` (it lists what is
+missing and installs only what you confirm). The agent picks the procedure up
+by itself through the `analisi-video` skill.
 
 ## How much does it save?
 

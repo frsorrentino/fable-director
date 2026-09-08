@@ -22,6 +22,11 @@ only up to its guards (budget gate, data-class, key, provider type).
   M15 cross-verify.py --init template ships gemini-media (type media)
   M16 media-doctor.py on an empty HOME → FAIL lines with the --setup command, exit 1
   M17 media-doctor.py on the real HOME → exit 0 when the venv exists (else skipped)
+  M18 soft-deps-sync.py: creates from template / adds missing once / never restores a deletion
+  M19 video-sheet.sh --scenes: one frame per cut + the cut times
+  M20 video-sheet.sh cache: second run is a CACHE: hit with the jpg copied
+  M21 transcribe.py cache: seeded transcript → STATUS ok with NO venv, srt written
+  M22 fd-telemetry.py report: media route line from a logged external_exec event
 
 Usage: python3 tests/media-tools-verify.py   (exit 0 = all green)
 """
@@ -303,6 +308,92 @@ def main():
               r.stdout + r.stderr)
     else:
         skip("M17 media-doctor on real HOME", f"no venv at {REAL_VENV}")
+
+    # M18 — soft-deps sync: create, add-once, respect deletions.
+    sync = str(SCRIPTS / "soft-deps-sync.py")
+    home5 = work / "home5"
+    home5.mkdir()
+    r1 = run([sys.executable, sync], home5, proj)
+    live_p = home5 / ".claude" / "fable-director" / "soft-deps.json"
+    created = json.loads(live_p.read_text()) if live_p.is_file() else {}
+    r2 = run([sys.executable, sync], home5, proj)
+    # user file with own entries and no media-tools → added, own entry untouched
+    live_p.write_text(json.dumps({"_schema": "mine", "my-tool": {"kind": "cli", "classes": ["x"]}}))
+    r3 = run([sys.executable, sync], home5, proj)
+    merged = json.loads(live_p.read_text())
+    # user deletes media-tools → must not come back
+    deleted = {k: v for k, v in merged.items() if k != "media-tools"}
+    live_p.write_text(json.dumps(deleted))
+    r4 = run([sys.executable, sync], home5, proj)
+    after = json.loads(live_p.read_text())
+    check("M18 soft-deps-sync: created silently / added once with a line / deletion respected",
+          r1.stdout.strip() == "" and "media-tools" in created
+          and created.get("_synced") == ["media-tools"] and r2.stdout.strip() == ""
+          and "+media-tools from the plugin template" in r3.stdout and merged.get("_schema") == "mine"
+          and merged.get("my-tool") == {"kind": "cli", "classes": ["x"]}
+          and "media-tools" in merged and r4.stdout.strip() == "" and "media-tools" not in after,
+          r1.stdout + r2.stdout + r3.stdout + r4.stdout)
+
+    # M19 — scene mode on a 3-colour concat (cuts at 2 s and 4 s).
+    cuts = work / "cuts.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-y",
+                    "-f", "lavfi", "-i", "color=red:s=320x240:d=2:r=25",
+                    "-f", "lavfi", "-i", "color=blue:s=320x240:d=2:r=25",
+                    "-f", "lavfi", "-i", "color=green:s=320x240:d=1:r=25",
+                    "-filter_complex", "[0][1][2]concat=n=3:v=1:a=0,format=yuv420p[v]",
+                    "-map", "[v]", "-c:v", "libx264", str(cuts)], check=True)
+    r = run(["bash", sheet_sh, str(cuts), "--scenes", "0.3", "--no-cache", "--out", str(proj / "s19")], home, proj)
+    sj = proj / "s19" / "cuts-scenes.jpg"
+    check("M19 video-sheet --scenes: 2 cuts at 2.0 and 4.0 s → 3x1 sheet, CACHE: off",
+          r.returncode == 0 and "scenes: 2 cuts (threshold 0.3) at 0.0, 2.0, 4.0 s" in r.stdout
+          and sj.is_file() and dims(sj) == "1200,300" and "CACHE: off" in r.stdout,
+          r.stdout + r.stderr)
+
+    # M20 — sheet cache: miss, then hit with the file copied to the new --out.
+    cache_dir = work / "mcache"
+    env_c = {"FD_MEDIA_CACHE": str(cache_dir)}
+    r1 = run(["bash", sheet_sh, str(with_a), "--out", str(proj / "c1")], home, proj, env_extra=env_c)
+    r2 = run(["bash", sheet_sh, str(with_a), "--out", str(proj / "c2")], home, proj, env_extra=env_c)
+    check("M20 video-sheet cache: miss then hit, jpg copied, same OUTPUT name",
+          "CACHE: miss" in r1.stdout and "CACHE: hit" in r2.stdout
+          and (proj / "c2" / "with-audio-sheet.jpg").is_file()
+          and field(r2.stdout, "OUTPUT").endswith("c2/with-audio-sheet.jpg")
+          and "from cache" in field(r2.stdout, "DETAIL"),
+          r1.stdout + r2.stdout + r1.stderr + r2.stderr)
+
+    # M21 — transcript cache seeded by hand: ok with no venv at all.
+    import hashlib as _h
+    sha = _h.sha1(with_a.read_bytes()).hexdigest()
+    seed = cache_dir / sha / "transcript-small-auto.json"
+    seed.parent.mkdir(parents=True, exist_ok=True)
+    seed.write_text(json.dumps({"segments": [{"start": 0.5, "end": 1.2, "text": "ciao"}],
+                                "language": "it", "language_probability": 0.9,
+                                "duration": 5.0, "model": "small"}))
+    r = run([sys.executable, transcribe, str(with_a), "--out", str(proj / "cached.srt")],
+            home, proj, env_extra=env_c)
+    srt = proj / "cached.srt"
+    check("M21 transcribe cache: seeded hit → STATUS ok without venv, srt from cache",
+          r.returncode == 0 and "CACHE: hit" in r.stdout and field(r.stdout, "STATUS") == "ok"
+          and "from cache (0 s)" in r.stdout and srt.is_file()
+          and "00:00:00,500 --> 00:00:01,200" in srt.read_text() and "ciao" in srt.read_text(),
+          r.stdout + r.stderr)
+
+    # M22 — report: a media external_exec event yields the media route line.
+    tele = str(SCRIPTS / "fd-telemetry.py")
+    home6 = work / "home6"
+    (home6 / ".claude" / "fable-director").mkdir(parents=True)
+    code = ("import importlib.util,sys; sp=importlib.util.spec_from_file_location('t', sys.argv[1]);"
+            "m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m);"
+            "m.log_event('external_exec', {'provider':'gemini-media','model':'m','kind':'media',"
+            "'billing':'free','type':'video-shotlist','inputs':1,'bytes_in':10485760,"
+            "'transport':'inline','tokens_in':4000,'tokens_out':700,'elapsed':60,'ok':True,"
+            "'check':'json-valid'})")
+    r0 = run([sys.executable, "-c", code, tele], home6, proj)
+    r = run([sys.executable, tele, "report", "--days", "1"], home6, proj)
+    check("M22 report: media route line with runs, MB, ok-rate, avg tokens",
+          r0.returncode == 0 and "media route" in r.stdout
+          and re.search(r"video-shotlist: 1 run, 1 file\(s\), 10 MB, ok-rate 1\.00, avg 4[.,]000 in / 700 out, 60 s, inline", r.stdout) is not None,
+          r0.stdout + r0.stderr + r.stdout[-1500:] + r.stderr[-500:])
 
     shutil.rmtree(work, ignore_errors=True)
     print(f"\n{len(passed)} passed, {len(failed)} failed, {len(skipped)} skipped")

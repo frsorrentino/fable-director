@@ -47,6 +47,10 @@ fd_core() {
     printf '\nPlaybook not initialized: copy %s to %s (only if missing, never overwrite).\n' "${CLAUDE_PLUGIN_ROOT}/playbook-template.md" "$PB"
   fi
 
+  # Soft-deps shipped by the plugin (media-tools): added to the user's registry
+  # once, never overwriting — one line only when something changes.
+  python3 "${CLAUDE_PLUGIN_ROOT}/scripts/soft-deps-sync.py" 2>/dev/null || true
+
   # Hint legenda one-shot: la statusline usa sigle compatte — una volta sola,
   # suggerisci al modello di indicare il comando che le spiega.
   HELP_MARK="$HOME/.claude/fable-director/help-hint-shown"

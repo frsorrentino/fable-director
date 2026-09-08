@@ -13,7 +13,7 @@ cross-verify.py --init          # writes ~/.claude/fable-director/cross-family.j
 Add a Gemini key from [AI Studio](https://aistudio.google.com/apikey), and/or
 run `codex login`. Check the result with `external-exec.py --doctor`.
 
-## Two roles, both off your Claude quota
+## Three roles, all off your Claude quota
 
 **Independent verifier.** An all-Claude ensemble shares correlated blind spots
 by construction; a different model family catches what same-family verification
@@ -32,6 +32,17 @@ required format: malformed output is rejected, never passed downstream, and an
 honest `NEEDS_CONTEXT` stops the run instead of guessing. Every call logs
 provider, type and outcome, so `report` shows where this route actually works;
 it stays per-case until that data is dense.
+
+**Media analyst** (since 1.41). `media-analyze.py` sends video, audio, images
+or PDFs to Gemini's native endpoint (inline under 19 MB, Files API above) and
+gets back a shot list, on-screen text or whatever the spec asks — with the same
+guards as the executor (open budget, `restricted` blocks, write perimeter,
+billing consent, telemetry with the provider's token counts). It is the LAST
+step of the `analisi-video` skill, not the first: contact sheets and local
+transcription cost nothing and cover most jobs. The model is told not to claim
+speech or music; `ffprobe` states whether there is audio, on an `AUDIO:` line
+the script prints before the call. Provider entry `gemini-media`
+(`external-exec.py --doctor` adds it to an existing config and says so).
 
 ## The guarantees
 

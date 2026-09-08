@@ -2,7 +2,7 @@
 """transcribe.py — local speech-to-text with faster-whisper (zero model tokens).
 
   transcribe.py <file> [--model small|medium|large-v3] [--lang it] [--out F.srt]
-                       [--json] [--venv PATH]
+                       [--json] [--words] [--no-cache] [--venv PATH]
 
 Order of checks, cheapest first — none of them touches the model:
   1. ffprobe: no audio track → STATUS: error and exit 1. The model is NEVER
@@ -19,12 +19,24 @@ language auto-detected (--lang forces it), vad_filter=True, output
 <basename>.srt in the current dir. --json writes/prints
 {"segments":[{"start","end","text"}],"duration","language","model","elapsed"}.
 
+--words adds word-level timestamps to the JSON segments
+({"words":[{"start","end","word"}]}) — for syncing graphics to words, not
+to sentences. SRT output is unchanged.
+
+Cache: the transcript is stored under ~/.claude/fable-director/media-cache/
+<sha1 of the file>/ keyed by model, language and --words; the same file in a
+later session costs zero seconds of whisper and needs no venv at all
+(CACHE: hit|miss|off line; --no-cache to bypass; FD_MEDIA_CACHE overrides
+the directory).
+
 Output (grep-able):
+  CACHE: hit|miss|off
   STATUS: ok|unavailable|error
   OUTPUT: <srt or json path | ->
   DETAIL: <language, segments, elapsed, realtime factor>
 Exit 0 only on STATUS ok.
 """
+import hashlib
 import json
 import os
 import subprocess
@@ -41,6 +53,8 @@ except Exception:
 VENV_DIR = Path.home() / ".claude" / "fable-director" / "tools" / "venv"
 VENV_PY = VENV_DIR / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
 HF_CACHE = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface")) / "hub"
+MEDIA_CACHE = Path(os.environ.get("FD_MEDIA_CACHE")
+                   or Path.home() / ".claude" / "fable-director" / "media-cache")
 MODEL_SIZE_MB = {"tiny": 75, "base": 145, "small": 470, "medium": 1500,
                  "large-v2": 3000, "large-v3": 3000, "turbo": 1600, "large-v3-turbo": 1600}
 
@@ -58,7 +72,7 @@ def die(detail, status="error", code=1):
 
 def parse_args(argv):
     opts = {"--model": "small", "--lang": None, "--out": None, "--venv": None}
-    flags = {"--json": False}
+    flags = {"--json": False, "--words": False, "--no-cache": False}
     file = None
     i = 0
     while i < len(argv):
@@ -81,7 +95,7 @@ def parse_args(argv):
             die("only one input file")
     if not file:
         die("usage: transcribe.py <file> [--model small|medium] [--lang it] "
-            "[--out F.srt] [--json]")
+            "[--out F.srt] [--json] [--words] [--no-cache]")
     return file, opts, flags
 
 
@@ -142,6 +156,26 @@ def cached(model):
     return (HF_CACHE / f"models--Systran--faster-whisper-{model}").is_dir()
 
 
+def sha1_of(path):
+    h = hashlib.sha1()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def cache_file(path, opts, flags):
+    """<media-cache>/<sha1>/transcript-<model>-<lang>[-words].json or None."""
+    if flags["--no-cache"]:
+        return None
+    try:
+        key = (f"transcript-{opts['--model']}-{opts['--lang'] or 'auto'}"
+               + ("-words" if flags["--words"] else "") + ".json")
+        return MEDIA_CACHE / sha1_of(path) / key
+    except OSError:
+        return None
+
+
 def fmt_srt_time(t):
     ms = int(round(t * 1000))
     h, ms = divmod(ms, 3600000)
@@ -163,10 +197,28 @@ def main():
             f"model not loaded. Burnt-in text is read from the contact sheet "
             f"(video-sheet.sh), never inferred as speech.")
 
+    model_name = opts["--model"]
+    cf = cache_file(path, opts, flags)
+    hit = None
+    if cf is None:
+        print("CACHE: off")
+    elif cf.is_file():
+        try:
+            hit = json.loads(cf.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            hit = None
+        print(f"CACHE: {'hit ' + str(cf.parent) if hit else 'miss'}")
+    else:
+        print("CACHE: miss")
+    if hit:
+        # Same file, same parameters: no whisper, no venv — a copy.
+        emit(path, opts, flags, hit["segments"], hit.get("language", "?"),
+             hit.get("language_probability"), hit.get("duration") or duration,
+             model_name, 0.0, 0.0, from_cache=True)
+
     ensure_faster_whisper(opts)
     from faster_whisper import WhisperModel
 
-    model_name = opts["--model"]
     if not cached(model_name):
         size = MODEL_SIZE_MB.get(model_name)
         print(f"NOTE: model '{model_name}' not in {HF_CACHE} — downloading now"
@@ -182,23 +234,46 @@ def main():
     try:
         segments_iter, info = model.transcribe(
             str(path), language=opts["--lang"], vad_filter=True,
-            beam_size=5, condition_on_previous_text=False)
-        segments = [{"start": round(s.start, 3), "end": round(s.end, 3),
-                     "text": s.text.strip()} for s in segments_iter]
+            beam_size=5, condition_on_previous_text=False,
+            word_timestamps=flags["--words"])
+        segments = []
+        for sg in segments_iter:
+            item = {"start": round(sg.start, 3), "end": round(sg.end, 3),
+                    "text": sg.text.strip()}
+            if flags["--words"]:
+                item["words"] = [{"start": round(w.start, 3), "end": round(w.end, 3),
+                                  "word": w.word.strip()} for w in (sg.words or [])]
+            segments.append(item)
     except Exception as e:
         die(f"transcription failed: {str(e)[:200]}")
     elapsed = time.time() - t1
     lang = getattr(info, "language", opts["--lang"] or "?")
     lang_p = getattr(info, "language_probability", None)
     audio_dur = getattr(info, "duration", duration) or duration
+    if cf is not None:
+        try:
+            cf.parent.mkdir(parents=True, exist_ok=True)
+            cf.write_text(json.dumps(
+                {"file": str(path), "segments": segments, "language": lang,
+                 "language_probability": (round(lang_p, 3) if lang_p else None),
+                 "duration": round(float(audio_dur), 3), "model": model_name,
+                 "elapsed": round(elapsed, 1)}, ensure_ascii=False), encoding="utf-8")
+        except OSError:
+            pass
+    emit(path, opts, flags, segments, lang, lang_p, audio_dur, model_name,
+         elapsed, load_s)
 
+
+def emit(path, opts, flags, segments, lang, lang_p, audio_dur, model_name,
+         elapsed, load_s, from_cache=False):
+    """Write SRT/JSON, print the receipt, exit 0."""
     base = path.stem
     if flags["--json"]:
         payload = {"file": str(path), "segments": segments,
                    "duration": round(float(audio_dur), 3), "language": lang,
                    "language_probability": (round(lang_p, 3) if lang_p else None),
                    "model": model_name, "elapsed": round(elapsed, 1),
-                   "model_load_s": round(load_s, 1)}
+                   "model_load_s": round(load_s, 1), "from_cache": from_cache}
         text = json.dumps(payload, ensure_ascii=False, indent=1)
         dest = opts["--out"]
     else:
@@ -217,8 +292,10 @@ def main():
     out("ok", dest or "-",
         f"language {lang}" + (f" (p={lang_p:.2f})" if lang_p else "")
         + f", {len(segments)} segments, {audio_dur:.0f} s audio, model "
-        f"{model_name} int8, {elapsed:.0f} s ({rtf:.2f}x realtime)"
+        f"{model_name} int8, "
+        + ("from cache (0 s)" if from_cache else f"{elapsed:.0f} s ({rtf:.2f}x realtime)")
         + (f", model load {load_s:.0f} s" if load_s > 5 else "")
+        + (", word timestamps" if flags["--words"] else "")
         + ("" if segments else " — NO speech detected by VAD (music/silence?)"))
     if not dest:
         print("---")

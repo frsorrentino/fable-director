@@ -1,0 +1,39 @@
+{
+  "_schema": "Registry of preferred tools (soft dependencies): the director uses the declared tool when the task matches one of its classes and the tool is available; if unavailable it tells the user — NEVER a silent fallback to an undeclared alternative. This file is yours: the plugin only ADDS entries it ships (soft-deps-template.json) that are missing here, once, and never edits or restores yours.",
+  "media-tools": {
+    "kind": "cli",
+    "classes": [
+      "video-analysis",
+      "audio-transcription",
+      "media-review",
+      "voice-timing",
+      "ocr-frames"
+    ],
+    "detect": "python3 \"$CLAUDE_PLUGIN_ROOT/scripts/media-doctor.py\" (exit 0 = ready): ffmpeg/ffprobe with drawtext, venv ~/.claude/fable-director/tools/venv with faster-whisper + edge-tts, provider gemini-media in cross-family.json",
+    "cli_zero_token": "skill fable-director:analisi-video. 1) video-sheet.sh <file> [--fps 1 | --scenes 0.3] [--out DIR] → ffprobe card + contact sheet with burnt-in timestamps (one Read of the top model); the `audio:` line decides step 2; --scenes gives one frame per cut = shot list at zero cost. 2) transcribe.py <file> [--json --words] → SRT/JSON via faster-whisper small int8 (about 1.1× realtime; --words doubles it); refuses files without an audio track before loading the model. 3) tts-timing.py --file SCRIPT → table label | slot | spoken | delta (edge-tts + ffprobe). 4) media-analyze.py --input V --spec ... --schema-json --type video-shotlist → Gemini generateContent (inline < 19 MB, Files API above): EXTERNAL route, budget-open --route external mandatory; --model gemini-2.5-flash explicit fallback on 503. Sheets and transcripts are cached per file hash (media-cache): same file later = zero seconds.",
+    "trigger_threshold": "ALWAYS ffprobe first: whether there is audio is said by ffprobe, never by a model (Gemini declared speech on a file with no audio track, 2026-09-08). Under ~10 min of total footage: sheets + whisper + top-model reading are the whole job; Gemini only for long footage or many files.",
+    "unavailable": "python3 \"$CLAUDE_PLUGIN_ROOT/scripts/media-doctor.py\" shows what is missing; --setup [--prefetch small] creates the venv and installs (explicit, ~370 MB). Tell the user; never read the video 'by eye' without saying so.",
+    "hint_keywords": [
+      "video",
+      "filmato",
+      "spot",
+      "reel",
+      "trascrizione",
+      "trascrivi",
+      "transcribe",
+      "transcription",
+      "voice over",
+      "voiceover",
+      "speaker",
+      "montaggio",
+      "storyboard",
+      "shot list",
+      "shotlist",
+      "girato",
+      "footage",
+      "sottotitoli",
+      "subtitles",
+      "audio"
+    ]
+  }
+}

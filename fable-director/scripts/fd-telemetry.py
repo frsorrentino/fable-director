@@ -1706,11 +1706,41 @@ def cmd_report(args):
             dense = "DENSO" if n >= 10 else "sparso"
             print(f"  {key}: {n} runs, {ok} ok, {bad} rejects "
                   f"(ok-rate {ok / n:.2f}) — {dense}")
-        tin = sum(x.get("chars_in") or 0 for x in ext) // 4
-        tout = sum(x.get("chars_out") or 0 for x in ext) // 4
+        # Token volume: provider usageMetadata when the event carries it
+        # (media route), chars/4 otherwise.
+        tin = sum((x.get("tokens_in") if x.get("tokens_in") is not None
+                   else (x.get("chars_in") or 0) // 4) for x in ext)
+        tout = sum((x.get("tokens_out") if x.get("tokens_out") is not None
+                    else (x.get("chars_out") or 0) // 4) for x in ext)
         print(f"  estimated external volume: ~{fmt(tin)} tokens in, ~{fmt(tout)} "
               f"tokens out — SEPARATE LEDGER, off the Claude quota (the "
               f"2×/3× budget counts Claude transcript tokens only)")
+        media = [x for x in ext if x.get("kind") == "media"]
+        if media:
+            by_t = {}
+            for x in media:
+                t = x.get("type") or "(no type)"
+                r = by_t.setdefault(t, {"n": 0, "ok": 0, "mb": 0.0, "tin": 0, "tout": 0,
+                                        "s": 0.0, "files": 0, "tr": set()})
+                r["n"] += 1
+                r["ok"] += 1 if x.get("ok") else 0
+                r["mb"] += (x.get("bytes_in") or 0) / 1048576
+                r["tin"] += x.get("tokens_in") or 0
+                r["tout"] += x.get("tokens_out") or 0
+                r["s"] += float(x.get("elapsed") or 0)
+                r["files"] += x.get("inputs") or 0
+                if x.get("transport"):
+                    r["tr"].add(x["transport"])
+            print("  media route (media-analyze.py — video/audio/image/pdf to the "
+                  "external model; the Claude route for the same job would be "
+                  "~1.5k tokens PER contact-sheet image):")
+            for t, r in sorted(by_t.items(), key=lambda kv: -kv[1]["n"]):
+                n = r["n"]
+                print(f"    {t}: {n} run{'s' if n != 1 else ''}, {r['files']} file(s), "
+                      f"{r['mb']:.0f} MB, ok-rate {r['ok'] / n:.2f}, avg "
+                      f"{fmt(r['tin'] // n)} in / {fmt(r['tout'] // n)} out, "
+                      f"{r['s'] / n:.0f} s"
+                      + (f", {'+'.join(sorted(r['tr']))}" if r["tr"] else ""))
 
     # Control arm dell'hint di rotta: il 10% dei prompt con match non riceve
     # l'hint (holdout deterministico per sessione+giorno); qui si confrontano
