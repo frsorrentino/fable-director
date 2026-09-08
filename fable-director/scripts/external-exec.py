@@ -71,6 +71,10 @@ rumorosi: --schema-*, --effort, --resume-last, --allow-truncate, --input
 (v1 text-to-image puro). 429 "limit: 0" = billing non abilitato sul
 progetto Google, messaggio dedicato.
 
+Provider "type": "media" (gemini-media): NON passa da qui — media-analyze.py
+(video/audio/immagini/pdf, stesse guardie importate da questo file). --doctor
+aggiunge la voce al config se manca, dicendolo.
+
 Output (grep-abile):
   STATUS: ok|needs_context|unavailable|error
   PROVIDER: <provider> (<model>)
@@ -255,7 +259,7 @@ def best_free_provider(cfg, usage=None):
     for name, prov in (cfg.get("providers") or {}).items():
         if not isinstance(prov, dict) or billing_of(prov) != "free":
             continue
-        if prov.get("type") == "image":
+        if prov.get("type") in ("image", "media"):
             continue
         rpd = ((prov.get("limits") or {}).get("rpd")) or 0
         used = usage.get(name, 0)
@@ -295,6 +299,47 @@ def today_usage():
     return counts
 
 
+def ensure_media_provider(cfg):
+    """Config written BEFORE media-analyze.py existed has no "type": "media"
+    entry. Add the template one (from cross-verify.py DEFAULT_CONFIG, one
+    source) and SAY so — the config is never edited silently. Skipped when
+    any media provider exists, whatever its name."""
+    provs = cfg.setdefault("providers", {})
+    if any(isinstance(p, dict) and p.get("type") == "media" for p in provs.values()):
+        return
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "cross_verify", Path(__file__).with_name("cross-verify.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        entry = mod.DEFAULT_CONFIG["providers"]["gemini-media"]
+    except Exception as e:
+        print(f"[note] no media provider in config and template unreadable "
+              f"({e}) — add a \"type\": \"media\" entry by hand for media-analyze.py")
+        return
+    entry = dict(entry)
+    # Key in the config file (not env) on a sibling provider with the same
+    # api_key_env: reuse it, and say so — same key, one place less to fill.
+    donor = next((n for n, p in provs.items() if isinstance(p, dict)
+                  and p.get("api_key") and p.get("api_key_env") == entry.get("api_key_env")), None)
+    if donor:
+        entry["api_key"] = provs[donor]["api_key"]
+    provs["gemini-media"] = entry
+    try:
+        bak = CONFIG_PATH.with_suffix(".json.bak-pre-media")
+        if not bak.exists():
+            bak.write_text(CONFIG_PATH.read_text())
+        CONFIG_PATH.write_text(json.dumps(cfg, ensure_ascii=False, indent=2))
+        print(f"[added] gemini-media (type media, {entry['model']}, billing free, "
+              f"same GEMINI_API_KEY) written to {CONFIG_PATH} — the route for "
+              f"media-analyze.py (video/audio/image/pdf)."
+              + (f" api_key copied from '{donor}'." if donor else "")
+              + f" Backup: {bak.name}. Remove the entry if unwanted.")
+    except OSError as e:
+        print(f"[note] could not write gemini-media to {CONFIG_PATH}: {e}")
+
+
 def doctor(ping=False, paid_ok=False):
     """Setup guidato + diagnosi: mai chiamate modello senza --ping."""
     here = Path(__file__).parent
@@ -327,6 +372,7 @@ Re-check:
     except (json.JSONDecodeError, OSError) as e:
         print(f"config unreadable: {e}")
         sys.exit(1)
+    ensure_media_provider(cfg)
     usage = today_usage()
     problems = 0
     for name, prov in (cfg.get("providers") or {}).items():
@@ -381,7 +427,7 @@ Re-check:
         if ping and ok and billing_of(prov) != "free" and not paid_ok:
             checks.append("ping SKIPPED (billed provider — costs real "
                           "money; add --paid-ok to consent)")
-        elif ping and ok and prov.get("type") == "image":
+        elif ping and ok and prov.get("type") in ("image", "media"):
             try:
                 key = prov.get("api_key") or os.environ.get(
                     prov.get("api_key_env", ""), "")
@@ -722,6 +768,11 @@ def main():
             + (f" ({prov['cost_note']})" if prov.get("cost_note") else "")
             + " — requires explicit user consent in this conversation; "
               "re-run with --paid-ok ONLY after the user agreed")
+    if prov.get("type") == "media":
+        out("error", name, prov.get("model", "?"), detail=(
+            f"provider '{name}' is a media provider: use media-analyze.py "
+            f"--input FILE --spec \"...\" (same guards, native generateContent)"))
+        sys.exit(1)
     is_image = prov.get("type") == "image"
     if is_image:
         for bad, val in (("--schema-json", flags["--schema-json"]),

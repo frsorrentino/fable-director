@@ -148,6 +148,23 @@ DEFAULT_CONFIG = {
                     "modelli image (verificato 2026-07-22) — serve billing "
                     "abilitato sul progetto Google. Solo su consenso "
                     "esplicito (--paid-ok)"
+        },
+        "gemini-media": {
+            "type": "media",
+            "base_url": "https://generativelanguage.googleapis.com/v1beta",
+            "model": "gemini-3.6-flash",
+            "api_key_env": "GEMINI_API_KEY",
+            "billing": "free",
+            "inline_max_mb": 19,
+            "limits": {"rpd": 1500, "rpm": 10,
+                       "reset": {"period": "daily",
+                                 "tz": "America/Los_Angeles"}},
+            "note": "video/audio/immagini/pdf via generateContent nativo "
+                    "(media-analyze.py, rotta esterna con budget aperto); "
+                    "sopra inline_max_mb usa la Files API (upload resumable, "
+                    "poi file_data.file_uri). Misurato 2026-09-08: mp4 10 MB "
+                    "55 s -> 49 s, 3.7k token in / 1.2k out. L'audio lo dice "
+                    "ffprobe, mai il modello (falso positivo misurato)"
         }
     }
 }

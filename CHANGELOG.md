@@ -2,6 +2,15 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.41.x
+
+- **1.41.0 — media tools: video, voice, OCR at zero model cost.**
+  - Four scripts in `scripts/`, same `STATUS/OUTPUT/DETAIL` lines as `external-exec.py`, exit non-zero on error, never a silent fallback. `video-sheet.sh`: ffprobe card (duration, resolution, audio tracks with codec, bitrate) plus a contact sheet with burnt-in timestamps, split into numbered sheets above 90 frames — the `audio: none|<codec> <ch>ch` line is the fact every media task starts from. `transcribe.py`: faster-whisper `small` int8 on CPU via the plugin venv (measured: 68 s of Italian speech in 76 s, first model download 63 s), SRT or JSON, refuses files without an audio track BEFORE loading the model, announces a `medium` download (~1.5 GB) instead of doing it silently. `tts-timing.py`: edge-tts read of each script block plus ffprobe duration → `label | slot | spoken | delta` table (measured: a 4 s slot needed 5.9 s of speech), voice fallback declared, offline → `unavailable`. `media-analyze.py`: video/audio/image/pdf to Gemini's native `generateContent` with the guards imported from `external-exec.py` (open budget, `--data-class restricted`, `--out` perimeter, billing fail-closed, `external_exec` telemetry with `usageMetadata` tokens); inline up to `inline_max_mb`, Files API above; `--schema-json` re-checked locally (measured: 10 MB mp4, 55 s → 75 s, 3.9k tokens in / 0.7k out, 9 shots with correct timestamps and on-screen text).
+  - The contract tells the model not to declare speech, language or music: on a file with no audio track Gemini "transcribed" the burnt-in subtitles. Audio is verified by ffprobe, printed as an `AUDIO:` line per input, never by the model.
+  - Provider `gemini-media` (`"type": "media"`, free tier, same key) in the `cross-verify.py --init` template; on an existing config `external-exec.py --doctor` adds it, copies the key from the sibling Gemini entry, keeps a backup and says so. `external-exec.py` refuses media providers and points to `media-analyze.py`; `--provider auto` skips them.
+  - Skill `analisi-video`: fixed procedure (sheets → transcription only where audio exists → voice timing → top model writes the scene table; the external route only for long footage or many files, budget open) and the deliverable layout (scene table + G/M/V/S work table). One line in `delega-efficiente`'s precedents.
+  - Suite: `tests/media-tools-verify.py` (M1–M15, synthetic ffmpeg media, no model calls).
+
 ## 1.40.x
 
 - **1.40.4 — hook output kept under the harness caps.**
