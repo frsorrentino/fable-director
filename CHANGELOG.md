@@ -4,6 +4,9 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.42.x
 
+- **1.42.1 — media section and descriptions in user terms.**
+  - README "New in 1.42" rewritten around what the reader gets, with the measured numbers (one sheet for a 68 s clip, 19 cuts = shot list, 68 s transcribed in 76 s, a 4 s slot that takes 5.9, 10 MB = 3.9k tokens off the Claude quota); plugin and marketplace descriptions carry the same line, so the installed cache shows it.
+
 - **1.42.0 — media tools for everyone who installs: shipped soft-deps, shot lists at cuts, media cache, word timing, media telemetry.**
   - `soft-deps-template.json` ships with the plugin and `soft-deps-sync.py` (SessionStart) adds its entries to the user's `~/.claude/fable-director/soft-deps.json` once, never overwriting, never restoring a deleted entry (`_synced`). Until now the media-tools registry existed on one machine only: every other install had the scripts but no route hint and no skill trigger.
   - `video-sheet.sh --scenes T`: one frame per cut (ffmpeg scene score, 0.3 clear cuts / 0.15 soft transitions) plus frame 0, and a `scenes:` line with the cut times — a shot list at zero cost (68 s spot: 19 cuts, one 8×3 sheet instead of 8×9 at fixed rate).
