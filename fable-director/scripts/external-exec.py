@@ -497,6 +497,7 @@ Re-check:
               + " · ".join(checks))
     print(f"\nresult: {'all configured' if not problems else str(problems) + ' provider(s) to fix'}"
           + ("" if ping else " (static — add --ping for a live check, 1 request per provider)"))
+    print(f"media tools (ffmpeg, whisper venv, edge-tts): python3 \"{here / 'media-doctor.py'}\"")
     sys.exit(0 if not problems else 1)
 
 

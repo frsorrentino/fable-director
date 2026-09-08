@@ -38,7 +38,8 @@ try:
 except Exception:
     pass
 
-VENV_PY = Path.home() / ".claude" / "fable-director" / "tools" / "venv" / "bin" / "python"
+VENV_DIR = Path.home() / ".claude" / "fable-director" / "tools" / "venv"
+VENV_PY = VENV_DIR / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
 HF_CACHE = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface")) / "hub"
 MODEL_SIZE_MB = {"tiny": 75, "base": 145, "small": 470, "medium": 1500,
                  "large-v2": 3000, "large-v3": 3000, "turbo": 1600, "large-v3-turbo": 1600}
@@ -121,15 +122,17 @@ def ensure_faster_whisper(opts):
         return
     except ImportError:
         pass
-    venv_py = Path(opts["--venv"]) / "bin" / "python" if opts["--venv"] else VENV_PY
+    venv_py = (Path(opts["--venv"]) / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+               if opts["--venv"] else VENV_PY)
     if os.environ.get("FD_TRANSCRIBE_REEXEC") == "1":
         die(f"faster_whisper not importable even from {venv_py} — reinstall: "
-            f"{venv_py} -m pip install faster-whisper", status="unavailable")
+            f"python3 \"{Path(__file__).with_name('media-doctor.py')}\" --setup",
+            status="unavailable")
     if not venv_py.is_file():
         die("faster-whisper not installed and no venv at "
-            f"{venv_py.parent.parent} — create it: python3 -m venv "
-            f"{venv_py.parent.parent} && {venv_py} -m pip install "
-            f"faster-whisper edge-tts (CPU only, ~370 MB)", status="unavailable")
+            f"{venv_py.parent.parent} — set it up (explicit, ~370 MB): python3 "
+            f"\"{Path(__file__).with_name('media-doctor.py')}\" --setup "
+            f"[--prefetch small]", status="unavailable")
     env = dict(os.environ, FD_TRANSCRIBE_REEXEC="1")
     os.execve(str(venv_py), [str(venv_py), str(Path(__file__).resolve())]
               + sys.argv[1:], env)

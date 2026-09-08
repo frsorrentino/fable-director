@@ -45,7 +45,9 @@ try:
 except Exception:
     pass
 
-VENV_BIN = Path.home() / ".claude" / "fable-director" / "tools" / "venv" / "bin"
+VENV_DIR = Path.home() / ".claude" / "fable-director" / "tools" / "venv"
+VENV_BIN = VENV_DIR / ("Scripts" if os.name == "nt" else "bin")
+EDGE_EXE = "edge-tts.exe" if os.name == "nt" else "edge-tts"
 FALLBACK_VOICE = "it-IT-ElsaNeural"
 NETWORK_MARKERS = ("getaddrinfo", "name or service", "temporary failure",
                    "network is unreachable", "connection refused",
@@ -116,17 +118,17 @@ def parse_blocks(text):
 def find_edge_tts(opts):
     cands = []
     if opts["--venv"]:
-        cands.append(Path(opts["--venv"]) / "bin" / "edge-tts")
-    cands += [VENV_BIN / "edge-tts"]
+        cands.append(Path(opts["--venv"]) / ("Scripts" if os.name == "nt" else "bin") / EDGE_EXE)
+    cands += [VENV_BIN / EDGE_EXE]
     w = shutil.which("edge-tts")
     if w:
         cands.append(Path(w))
     for c in cands:
         if c.is_file() and os.access(c, os.X_OK):
             return str(c)
-    die(f"edge-tts not found (looked in {VENV_BIN}, PATH) — install: python3 -m "
-        f"venv {VENV_BIN.parent} && {VENV_BIN / 'pip'} install edge-tts "
-        f"faster-whisper", status="unavailable")
+    die(f"edge-tts not found (looked in {VENV_BIN}, PATH) — set up the venv "
+        f"(explicit, ~370 MB): python3 \"{Path(__file__).with_name('media-doctor.py')}\" "
+        f"--setup", status="unavailable")
 
 
 def ffprobe_duration(path):

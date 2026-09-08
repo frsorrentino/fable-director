@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Media tools 1.41.0 — deterministic checks on the four scripts + config.
+"""Media tools 1.41.x — deterministic checks on the four scripts + doctor + config.
 
 Runs the REAL scripts on synthetic media (ffmpeg testsrc + sine, 5 s) against
 a throwaway HOME. No model is ever called: the external route is exercised
@@ -20,6 +20,8 @@ only up to its guards (budget gate, data-class, key, provider type).
   M13 external-exec.py --provider <media> → error pointing to media-analyze
   M14 external-exec.py --doctor adds gemini-media once, explicitly, with backup
   M15 cross-verify.py --init template ships gemini-media (type media)
+  M16 media-doctor.py on an empty HOME → FAIL lines with the --setup command, exit 1
+  M17 media-doctor.py on the real HOME → exit 0 when the venv exists (else skipped)
 
 Usage: python3 tests/media-tools-verify.py   (exit 0 = all green)
 """
@@ -281,6 +283,26 @@ def main():
           r.returncode == 0 and gm.get("type") == "media" and gm.get("inline_max_mb") == 19
           and gm.get("billing") == "free" and gm.get("api_key_env") == "GEMINI_API_KEY",
           r.stdout + r.stderr)
+
+    # M16 — doctor reports, never installs: empty HOME → venv FAIL + setup command.
+    doctor = str(SCRIPTS / "media-doctor.py")
+    home4 = work / "home4"
+    home4.mkdir()
+    r = run([sys.executable, doctor], home4, proj)
+    check("M16 media-doctor: empty HOME → [FAIL] venv with --setup command, exit 1, nothing created",
+          r.returncode == 1 and "[FAIL] venv: missing" in r.stdout and "--setup" in r.stdout
+          and "[FAIL] gemini-media" in r.stdout and "required piece(s) missing" in r.stdout
+          and not (home4 / ".claude" / "fable-director" / "tools").exists(),
+          r.stdout + r.stderr)
+
+    # M17 — real HOME: ready when the venv exists.
+    if (REAL_VENV / "bin" / "python").is_file():
+        r = run([sys.executable, doctor], Path.home(), proj)
+        check("M17 media-doctor: real HOME with venv → [OK ] venv, ffmpeg drawtext OK",
+              "[OK ] venv" in r.stdout and "[OK ] ffmpeg" in r.stdout and "drawtext OK" in r.stdout,
+              r.stdout + r.stderr)
+    else:
+        skip("M17 media-doctor on real HOME", f"no venv at {REAL_VENV}")
 
     shutil.rmtree(work, ignore_errors=True)
     print(f"\n{len(passed)} passed, {len(failed)} failed, {len(skipped)} skipped")
