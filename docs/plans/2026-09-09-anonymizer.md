@@ -129,7 +129,17 @@ Tempo columns+rules: 20 ms per 300 righe. Sul tabellare `columns` è indispensab
 
 **Buchi dichiarati della fase E** (verificati nella documentazione degli hook, da riverificare a ogni versione di Claude Code): i file citati con `@` nel prompt, `CLAUDE.md` e il contesto di sistema non passano dagli hook; le immagini non si toccano (bloccate o passano intere); ciò che è già nel contesto non si toglie più (il filtro va acceso prima della sessione, `status` lo dice); strumenti MCP solo via `updatedMCPToolOutput`, da provare su chrome-bridge; le fughe indirette («il sindaco del paese») restano a una persona. Si mitigano con i blocchi a monte, non si chiudono.
 
-## 7. Decisioni aperte (di Franz)
+## 7. Decisioni — prese da Franz il 2026-09-10 (00:05)
+
+1. Classe dati: `restricted` resta un muro; nasce `confidential` = Claude lavora solo su testo pulito (prompt, output degli strumenti, file). Modalità normale dei progetti cliente.
+2. Guardia: avvisa nel plugin pubblico; `guard: deny` come scelta di agenzia in `.fd-anonymizer.json`.
+3. Corpus con verità nota: lo annota il modello (i 12 documenti esterni più ~20 documenti reali dei progetti: contratti, email, ticket, output di query), Franz revisiona a campione; si rimisura a ogni modifica delle regole e a ogni release che tocca il motore (`anonymizer test` nella suite).
+4. Modello NER: si decide in fase C con i numeri sul corpus (`gliner_multi_pii` ONNX contro `GLiNER2-PII-multi` convertito).
+5. Motore dentro il plugin (`fable-director/anonymizer/`), CLI autonoma fin dal primo giorno; il proxy dell'agenzia lo importerà.
+
+Prossimo passo: fase A in una sessione nuova (brainstorming → piano di implementazione → codice con test), budget aperto con `--data-class restricted` perché il corpus è materiale cliente.
+
+Le domande com'erano prima della decisione:
 
 1. **Classe dati**: `restricted` cambia significato (brief) oppure nuova classe `confidential` (modalità di lavoro con masker acceso) e `restricted` resta un muro (raccomandato, e coerente con la fase E).
 2. **Guardia**: avviso o rifiuto quando il modulo è spento e il testo contiene PII diretti. Raccomandato: avviso nel plugin pubblico, rifiuto come scelta di agenzia in `.fd-anonymizer.json`.
