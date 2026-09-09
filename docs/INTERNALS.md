@@ -244,13 +244,23 @@ field on hook stdin.
 - **`experimental.cacheTtl: 1h` on `fd-verifier`**: not adopted. 24
   verifications lifetime give no measurement, and the host documents the 1h
   TTL as ignored on usage-credit plans.
+- **Confirmed by Anthropic (2026-09-08, *Reducing cost and improving
+  performance with Claude Platform*)**: cache reads at $0.25/MTok on 5.1; a
+  mid-conversation effort change breaks the cache except on Opus 5 and Fable
+  5.1 (no host hook for effort: advisory in the kernel, `model-switch.py`
+  covers model switches only); the prompt-cache TTL is the wall for long tool
+  calls and subagents (Claude Code: 1h). `maxEffortLevel` (2.1.267) caps every
+  request, pinned agents included — measured 2026-09-09: `medium` cap,
+  `fd-verifier` at `medium`, `effort_ignored` logged — a second cause the meter
+  names besides old hosts ignoring the frontmatter.
 
 ## Known limits
 
 - **Claude Code versions.** The statusline needs ≥ 2.1.x for `context_window`
   and `rate_limits`; older versions omit those segments without an error. Older
   versions may also ignore the `effort` frontmatter on `fd-executor` and
-  `fd-verifier`, so those agents inherit the session effort. Since 1.29.0 that
+  `fd-verifier`, so those agents inherit the session effort; a `maxEffortLevel`
+  cap below the pinned tier has the same effect on any version. Since 1.29.0 that
   degradation is no longer silent where `SubagentStop` exists — the meter logs
   `effort_ignored`. Effort coherence is warn-only by design.
 - **Nested delegations.** A subagent spawning subagents runs under the **same**

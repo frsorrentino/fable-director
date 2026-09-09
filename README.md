@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.43.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.43.1-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need
 to do.** It makes your agent declare what a job should cost before it delegates,
@@ -154,6 +154,47 @@ tables, variance (±33% on the read-heavy shape), the run that died on a session
 limit, and what the harness *can't* measure: **[benchmarks/](benchmarks/)**. One
 of the four shapes came out at **−5.1%**; it's in there too.
 
+## What Anthropic confirmed (2026-09-08)
+
+Anthropic's own note on cost, [*Reducing cost and improving performance with
+Claude Platform*](https://x.com/ClaudeDevs/status/2097369738968195513), lands on the same levers the plugin already
+measures. Where each one lives here:
+
+- **Cache reads on Claude Fable 5.1 cost $0.25/MTok** (four times less than
+  elsewhere) → `model-economics.json` 0.025×: the number behind the fork-parity
+  and turn-economy rules.
+- **Changing effort mid-conversation breaks the cache like a model switch**,
+  except on Opus 5 and Fable 5.1 → the kernel says to make either change where
+  the cache is already lost (after a compaction, at a handoff boundary);
+  `model-switch.py` warns on model switches — the host has no hook for effort
+  yet.
+- **Tool calls and subagents that outlive the cache TTL expire the parent's
+  cache** → Claude Code runs a 1-hour TTL; the playbook sizes multi-wave
+  workflows to that wall.
+- **A stronger model at low effort beats a weaker one at high effort** within
+  a family (Fable 5.1 low = Fable 5 high at a third of the cost) → effort is
+  pinned by role (`fd-executor` low, `fd-verifier` high), never raised
+  everywhere; across families the measured executor choice stands (`sonnet`
+  low = 5.1 low in eq, 5.5× the dollars).
+- **`/claude-api prompt-audit`**, the audit the note introduces, run on this
+  plugin's own kernel, skills and agents (2026-09-09): no verification rituals,
+  no scratchpads, no dated thinking settings; two contradictions fixed in
+  1.43.1.
+
+### Where it sits next to `/claude-api`
+
+`/claude-api cost-optimize` and `hillclimb` work on application code that
+calls the Claude API, measured against an eval; `prompt-audit` cleans prompts
+and skills. fable-director governs Claude Code sessions: what a job may cost
+before it delegates, who executes it, what gets verified, what the session
+actually paid. Complementary, not competing: run `prompt-audit` on your skills
+(this plugin did), keep `cost-optimize` for your API code, let fable-director
+hold the line inside the session.
+
+Telemetry reads the JSONL transcripts on your machine. For an organization
+with an Admin API key, the usage and cost reports can sit next to them for the
+org-wide view: on the list, not shipped.
+
 ## What is actually enforced
 
 The distinction matters, so it's stated plainly: **hooks enforce, policy
@@ -232,6 +273,12 @@ gracefully when absent.
 
 Claude Code ≥ 2.1.x (for the `context_window` / `rate_limits` statusline fields;
 older versions degrade silently), `python3` and `bash` on the PATH.
+
+`maxEffortLevel` (Claude Code ≥ 2.1.267) caps every request, pinned agents
+included — measured: with `maxEffortLevel: medium` the verifier pinned `high`
+ran at `medium` and `subagent-meter` logged `effort_ignored`. Keep the cap at
+or above `high`, or set it per model under `modelSettings` so the verifier's
+model keeps its tier.
 
 ## License
 

@@ -47,8 +47,8 @@ lavoro è trascrivere, non ragionare.
    `DONE` / `DONE_WITH_CONCERNS` / `NEEDS_CONTEXT` / `BLOCKED` / `ABSTAIN`.
    Hai il permesso esplicito di ABSTAIN quando sei incerto: un'astensione
    onesta vale più di un output plausibile ma sbagliato.
-8. **Economia del codice.** L'obiettivo non è scrivere poco: è pensare più a
-   lungo per scrivere solo ciò che serve — meno ridondanza, più qualità.
+8. **Economia del codice.** L'obiettivo non è scrivere poco: è scrivere solo
+   ciò che serve — meno ridondanza, più qualità.
    Dove il contratto lascia libertà di implementazione, prendi il gradino
    più basso che passa la Verification: riuso di ciò che esiste nel codebase
    > stdlib > feature nativa della piattaforma > dipendenza già installata >
