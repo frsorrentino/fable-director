@@ -7,7 +7,7 @@ Cornice: il piano «Pixel Anonymizer» dell'agenzia (2 settembre 2026, approvato
 
 fable-director governa il costo; questo modulo governa i dati che escono dalla macchina sulla **rotta esterna** (`external-exec.py`, `cross-verify.py`, `media-analyze.py`, prefissi di famiglia). Il nome è «anonymizer», la tecnica è la pseudonimizzazione: i valori restano sulla macchina in una mappa, il fornitore riceve segnaposto stabili, l'output torna con i valori.
 
-Fuori perimetro in questa fase: il masker dentro Claude Code (prompt e tool result verso Anthropic). Gli hook di oggi rimuovono (`updatedPrompt`/`updatedToolResult`) ma i Function Hooks (#91870) sono un prototipo dietro flag: si aspetta che escano, come deciso il 09/09.
+Direzione confermata da Franz il 09/09 (sera): il modulo copre anche ciò che Claude Code manda ad Anthropic (prompt, output degli strumenti, file scritti), con gli hook disponibili oggi (`updatedPrompt`, `updatedToolResult`, `updatedInput`) e predisposto ai Function Hooks (#91870, prototipo dietro flag) quando usciranno: fase E in §6, regola di separazione in §2b.
 
 Spento di default. Nessun valore personale nei log: solo conteggi e categorie.
 
@@ -32,9 +32,22 @@ Cascata nell'ordine: ogni motore vede il testo già ridotto dal precedente, cos�
 | Guardia | `scripts/pii-guard.py` (PreToolUse, matcher `Bash`) | se il comando invoca uno script della rotta esterna e il testo in uscita contiene PII diretti secondo `rules`, avvisa (default) o nega (`guard: deny`) quando il modulo è spento |
 | Registro | evento `anonymizer` in telemetria | motore, categorie e conteggi, tempo, `restored: n` — mai i valori |
 
+### 2b. Motore e adattatori: la regola che rende indolore il passaggio ai Function Hooks
+
+Il motore (`anonymizer/engine.py`) espone tre funzioni pure e nient'altro: `redact(text, map, config) -> text`, `restore(text, map) -> text`, `scan(text, config) -> counts`. Non sa che esistono hook, `external-exec.py` o Claude Code. Gli adattatori sono file sottili che leggono il payload di un evento e chiamano quelle tre funzioni:
+
+| Adattatore | Oggi (hook a processo) | Domani (Function Hooks) |
+|---|---|---|
+| prompt in uscita | `scripts/anon-prompt.py` su `UserPromptSubmit` → `updatedPrompt` | modulo TS su `turn.start`, stessa chiamata `redact` via processo residente |
+| output strumenti | `scripts/anon-toolresult.py` su `PostToolUse` (Bash, Read, Grep, WebFetch; MCP via `updatedMCPToolOutput`) → `updatedToolResult` | middleware sul risultato, stesso `redact` |
+| ritorno nei file e comandi | `scripts/anon-toolinput.py` su `PreToolUse` (Write, Edit, Bash) → `updatedInput` | middleware sull'input, stesso `restore` |
+| rotta esterna | innesto in `external-exec.py` / `cross-verify.py` | invariato |
+
+Con gli hook a processo ogni chiamata paga lo spawn di Python (67-94 ms misurati su questo Chromebook), tre volte a turno: il motore va caricato in un **processo residente** (`anonymizer/daemon.py`, socket Unix in `~/.claude/fable-director/anonymizer/`, avviato al primo uso, spento dopo N minuti di inattività) e gli adattatori diventano client da pochi millisecondi. Lo stesso demone serve i Function Hooks quando arriveranno: cambia solo chi bussa al socket. Il NER, se abilitato, vive nel demone e si scarica dopo il timeout, mai residente a vuoto.
+
 Integrazione in `external-exec.py`: flag `--anonymize on|off|auto` (auto = config); prima della chiamata `redact` su spec e input, dopo la chiamata `restore` sull'output prima di `--out`. Stesso innesto in `cross-verify.py`; `media-analyze.py` manda file binari: solo blocco, niente redazione (fase 4 del piano dell'agenzia).
 
-Classe dati: il brief chiede che `restricted` diventi «esce solo pseudonimizzato». Oggi `restricted` è un muro (README: «`--data-class restricted` blocks the external routes»). Proposta: tenere il muro e aggiungere `--data-class confidential` = esce solo dopo `redact`, con evento a registro. Cambiare il significato di una classe promessa nel README a chi ha già installato il plugin è la cosa da evitare. Decisione di Franz (§7).
+Classe dati: con il masker in Claude Code la classe diventa la modalità di lavoro del progetto: `confidential` = Claude lavora, ma solo su testo pulito (prompt, output, file); `restricted` = muro per sanitario e giudiziario, come nel piano dell'agenzia. Il brief chiede che `restricted` diventi «esce solo pseudonimizzato». Oggi `restricted` è un muro (README: «`--data-class restricted` blocks the external routes»). Proposta: tenere il muro e aggiungere `--data-class confidential` = esce solo dopo `redact`, con evento a registro. Cambiare il significato di una classe promessa nel README a chi ha già installato il plugin è la cosa da evitare. Decisione di Franz (§7).
 
 ## 3. Configurazione
 
@@ -111,10 +124,14 @@ Tempo columns+rules: 20 ms per 300 righe. Sul tabellare `columns` è indispensab
 | B | innesto in `external-exec.py` e `cross-verify.py`, guardia PreToolUse, classe dati, evento a registro, `report` con blocco anonymizer | una run esterna vera con `--anonymize on`: nel prompt inviato nessun valore del dizionario, output restituito con i valori | mezza giornata |
 | C | wrapper ONNX di GLiNER, misura contro la libreria torch (venv usa-e-getta) sui 32 documenti, confronto `gliner_multi_pii` vs `GLiNER2-PII-multi` sui nomi italiani | nomi: recall ≥ 95%, precisione ≥ 90% con dizionario; tempo per documento sul Chromebook; RAM di picco | 1 giorno |
 | D | generatore del dizionario lato gestionale (clienti, referenti, domini → `.fd-anonymizer.json` per progetto); aggiornamento del piano dell'agenzia e della sua guida IA | dizionario rigenerabile con un comando; piano dell'agenzia allineato | mezza giornata |
+| E | masker in Claude Code: demone residente, tre adattatori hook (§2b), mappa per `session_id` che sopravvive alla compattazione, lista bianca per progetto (nomi di variabili, classi, URL, marchi, comuni), blocchi a monte (cartelle con export, URL di back office), comando `rivela` (traduce in locale una risposta con segnaposto), NER solo su prompt e `Read` di file dati, mai sugli output di Bash | una sessione vera su un progetto cliente con `confidential`: nel transcript nessun valore del dizionario né match delle regole; i file scritti da Claude contengono i valori giusti; latenza aggiunta per turno < 30 ms con demone caldo | 2 giorni |
+| F | migrazione ai Function Hooks quando escono dal prototipo: gli adattatori a processo diventano un modulo in-process che parla con lo stesso demone; nessuna modifica al motore | stessa prova della fase E, latenza < 5 ms | mezza giornata, data ignota |
+
+**Buchi dichiarati della fase E** (verificati nella documentazione degli hook, da riverificare a ogni versione di Claude Code): i file citati con `@` nel prompt, `CLAUDE.md` e il contesto di sistema non passano dagli hook; le immagini non si toccano (bloccate o passano intere); ciò che è già nel contesto non si toglie più (il filtro va acceso prima della sessione, `status` lo dice); strumenti MCP solo via `updatedMCPToolOutput`, da provare su chrome-bridge; le fughe indirette («il sindaco del paese») restano a una persona. Si mitigano con i blocchi a monte, non si chiudono.
 
 ## 7. Decisioni aperte (di Franz)
 
-1. **Classe dati**: `restricted` cambia significato (brief) oppure nuova classe `confidential` e `restricted` resta un muro (raccomandato).
+1. **Classe dati**: `restricted` cambia significato (brief) oppure nuova classe `confidential` (modalità di lavoro con masker acceso) e `restricted` resta un muro (raccomandato, e coerente con la fase E).
 2. **Guardia**: avviso o rifiuto quando il modulo è spento e il testo contiene PII diretti. Raccomandato: avviso nel plugin pubblico, rifiuto come scelta di agenzia in `.fd-anonymizer.json`.
 3. **Corpus con verità nota**: chi annota i 20 documenti aggiuntivi e con quale cadenza si rimisura (il piano dell'agenzia prevede 200 documenti a regime).
 4. **Modello NER**: `gliner_multi_pii-v1` (ONNX pronto, italiano non dichiarato ma multilingue) o `GLiNER2-PII-multi` (italiano dichiarato, solo torch, conversione ONNX da fare). Si decide in fase C con i numeri.
