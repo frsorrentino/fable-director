@@ -114,7 +114,7 @@ def main():
     if pct is not None:
         normal.append((RED if pct >= 80 else YEL if pct >= 60 else GREY, f"context {pct:.0f}%"))
         if pct >= 80:
-            exc.append((5, RED, f"context {pct:.0f}% full — finish the task and start a new session"))
+            exc.append((5, RED, f"context {pct:.0f}% full — /fable-director:handoff, then a new session"))
 
     # --- agenti (E5) -----------------------------------------------------------
     m = re.match(r"⟲(\d+)", dlg)

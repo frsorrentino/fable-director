@@ -8,7 +8,7 @@ Criterio: ogni segmento dice cosa fare, in parole; a riposo la riga tace.
   T3 quota 5h: sempre "quota N%, resets HH:MM" in riga 1; ≥80 anche "quota 90% used, resets in N min";
      100: "quota 100% used, resets in N min" (mai "almost")
   T4 contesto: "context N%" SEMPRE in riga 1 (giallo da 60, rosso da 80); ≥80 anche
-     "context 85% full — finish the task and start a new session" in riga 2
+     "context 85% full — /fable-director:handoff, then a new session" in riga 2
   T5 budget 2×: "budget over 2.3× — reconsider the route"; 3× flagged: testo rosso, nessuno sfondo
      "budget over 3× — post-mortem before closing"
   T6 verify fallito: "verification failed: python3 tests/run.py (exit 1)"
@@ -93,8 +93,8 @@ check("T3 quota 5h: '90% used, resets in 40 min' / '71%, resets HH:MM' in riga 1
 out = render(stdin(pct=85)); outfull = render(stdin(pct=100)); out65 = render(stdin(pct=65, wk=72, effort="max"), COLUMNS="90")
 check("T4 contesto: percentuale sempre in riga 1 (anche a 65% su 90 colonne), frase da 80",
       out.partition("\n")[0].startswith("Fable 5.1 · quota 40%, resets") and "· context 85%" in out.partition("\n")[0]
-      and "context 85% full — finish the task and start a new session" in out
-      and "context 100% full — finish the task" in outfull and "almost" not in out + outfull
+      and "context 85% full — /fable-director:handoff, then a new session" in out
+      and "context 100% full — /fable-director:handoff" in outfull and "almost" not in out + outfull
       and "· context 65%" in out65.partition("\n")[0], out + "\n" + outfull + "\n" + out65)
 
 # T5 budget 2× e 3×

@@ -200,6 +200,17 @@ def solved_elsewhere(prompt_lower, cwd):
 def main():
     data = json.load(sys.stdin)
     prompt = str(data.get("prompt") or "")
+    # (1.43) Handoff proposal: the Stop hook left a marker at a verified
+    # boundary; one line here tells the model to ask the user, once.
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "fd_handoff", Path(__file__).with_name("handoff.py"))
+        hm = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(hm)
+        hm.cmd_prompt(data)
+    except Exception:
+        pass
     # slash command o prompt troppo corto: mai un task da instradare
     if len(prompt) < MIN_PROMPT_LEN or prompt.lstrip().startswith("/"):
         return

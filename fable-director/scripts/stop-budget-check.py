@@ -434,6 +434,17 @@ def _main():
         mm.reap_session(data.get("session_id"), data.get("transcript_path"))
     except Exception:
         pass
+    # (1.43) Handoff: a verified boundary in this turn + context over the
+    # threshold → marker for the next prompt. Lives in handoff.py; runs
+    # BEFORE the early returns below (a closed budget is exactly its case).
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "fd_handoff", Path(__file__).with_name("handoff.py"))
+        hm = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(hm)
+        hm.cmd_boundary(data)
+    except Exception:
+        pass
     cwd = data.get("cwd") or os.getcwd()
     # Slug: identico a cwd_slug() in fd-telemetry.py (canonico + hash)
     s = str(cwd).replace("\\", "/")

@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.42.1-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.43.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need
 to do.** It makes your agent declare what a job should cost before it delegates,
@@ -54,6 +54,10 @@ respected forever). No-CLI alternative and zip migration:
   says so at session start, on the project where it happened.
 - **You see what you actually spend** — the telemetry counts the real cost
   of every turn, not just the tokens that are easy to see.
+- **A long session ends on your terms, not at the wall** — when a task closes
+  and the context is getting heavy, the agent asks whether to write a two-page
+  handoff and start fresh; the next session reads it at startup instead of
+  re-paying the whole context (a cold reopen measured 296k tokens).
 
 ![Every expensive job makes a deal first: it declares a price, the gate checks it, cheap executors do the work, a hook warns at 2x and stops the turn at 3x. Small quick tasks skip all of this.](assets/readme/card5-journey.png)
 

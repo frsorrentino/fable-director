@@ -2,6 +2,15 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.43.x
+
+- **1.43.0 — handoff: the session ends on your terms.**
+  - The kernel already said it: at a verified boundary a ~2k-token distillate on disk plus a fresh session beats continuing (81 long sessions, 72.5% of the cost after a recognizable boundary, net ~52%) — and a cold reopen of a 93% session measured 296k tokens re-cached (~$5.93 at list price). Now it is operational. Stop hook: when THIS turn closed a task (budget closed ok, `--verify` passed, or a `git commit` landed) and the context is past 60% (then 80%; `handoff.json` `threshold_pct`), a marker is left — never with an open budget, once per band. Next real prompt: one `[fd-handoff]` line tells the model to ask, in one sentence, "save a handoff and restart fresh, or go on here?" — slash commands and one-word replies keep the marker for the real prompt, 30 minutes at most.
+  - `/fable-director:handoff [--here]`: writes the distillate in seven fixed sections (task and outcome, decisions and why, verified facts, open items, paths, what to invoke next, date and what invalidates it) to `~/.claude/fable-director/handoffs/<cwd>/<date>.md`, or to the project's `docs/handoff-<date>.md` with `--here`. Refused while a budget is open: mid-task the reasoning in context is load-bearing. `handoff.py --prepare/--written` do the deterministic parts and log `handoff_written`.
+  - SessionStart: one short line names the newest handoff for the cwd (store or `docs/`, < 14 days), before the long blocks and inside the hook cap (onboarding block still delivered). Statusline from 80%: `context N% full — /fable-director:handoff, then a new session`.
+  - Kernel "Planned expiry" names the command (same byte budget); skill § Session boundaries points at it; `report` gains a Handoff block (proposed per band, written, average size) and says plainly that the ~52% needs ≥ 5 written handoffs before it is a verdict.
+  - Suite: `tests/handoff-verify.py` (H1–H10).
+
 ## 1.42.x
 
 - **1.42.1 — media section and descriptions in user terms.**

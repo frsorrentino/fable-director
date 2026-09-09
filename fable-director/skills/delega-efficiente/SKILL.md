@@ -133,7 +133,7 @@ Recurring deterministic transform → promote to a script instead (zero cost, fi
 
 ## Session boundaries
 
-Near context limit or handing off: write a resume note (state, run ids, journal paths, next command) to a repo file, commit. Persist reusable scripts to the repo, not /tmp.
+At a verified boundary in a long session: `/fable-director:handoff` writes the resume note (decisions, verified facts, open items, run ids and paths, what to invoke next) to `~/.claude/fable-director/handoffs/<cwd>/<date>.md` (`--here` for the repo's `docs/`); the next session in that cwd is pointed at it at startup. Refused with an open budget. Persist reusable scripts to the repo, not /tmp.
 
 ## Never delegate
 

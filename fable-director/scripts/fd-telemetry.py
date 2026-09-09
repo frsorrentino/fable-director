@@ -1742,6 +1742,22 @@ def cmd_report(args):
                       f"{r['s'] / n:.0f} s"
                       + (f", {'+'.join(sorted(r['tr']))}" if r["tr"] else ""))
 
+    # Handoff (1.43): proposte e scritte. Il ~52% del kernel è una stima da
+    # confermare qui con >= 5 handoff seguiti da una sessione nello stesso cwd.
+    hp = [p for e, p in events if e == "handoff_proposed"]
+    hw = [p for e, p in events if e == "handoff_written"]
+    if hp or hw:
+        bands = {}
+        for x in hp:
+            bands[str(x.get("band"))] = bands.get(str(x.get("band")), 0) + 1
+        print(f"\nHandoff: {len(hp)} proposed at a verified boundary"
+              + (f" (bands {', '.join(f'{b}%: {n}' for b, n in sorted(bands.items()))})" if bands else "")
+              + f", {len(hw)} written"
+              + (f" (~{sum(int(x.get('bytes') or 0) for x in hw) // 4 // len(hw)} tokens avg)" if hw else ""))
+        if len(hw) < 5:
+            print("  verdict on the ~52% saving needs >= 5 written handoffs followed by "
+                  "a session in the same cwd — not yet")
+
     # Control arm dell'hint di rotta: il 10% dei prompt con match non riceve
     # l'hint (holdout deterministico per sessione+giorno); qui si confrontano
     # i due bracci. Numeri SOLO sopra soglia di sufficienza — sotto, medie di

@@ -51,6 +51,10 @@ fd_core() {
   # once, never overwriting — one line only when something changes.
   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/soft-deps-sync.py" 2>/dev/null || true
 
+  # Handoff from a previous session in this cwd (< 14 days): one line <= 110
+  # chars, the file does the rest.
+  printf '%s' "$FD_INPUT" | python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff.py" --resume-line 2>/dev/null || true
+
   # Hint legenda one-shot: la statusline usa sigle compatte — una volta sola,
   # suggerisci al modello di indicare il comando che le spiega.
   HELP_MARK="$HOME/.claude/fable-director/help-hint-shown"

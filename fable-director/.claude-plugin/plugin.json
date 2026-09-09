@@ -1,7 +1,7 @@
 {
   "name": "fable-director",
   "description": "Keeps Claude Code from spending your quota on work the top model didn't need to do: declared pre-budgets with deterministic 2x/3x enforcement, cheap-executor routing, objective token telemetry. Small one-offs pay a 5-20% premium (measured) - built for sessions that delegate. New in 1.42: reads video and audio for you at zero Claude tokens - a whole clip in one contact-sheet image, transcription on your CPU, voice-over timing checked before the studio; long footage on free-tier Gemini.",
-  "version": "1.42.1",
+  "version": "1.43.0",
   "author": {
     "name": "Francesco Sorrentino",
     "email": "info@francescosorrentino.com"
