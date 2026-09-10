@@ -1,0 +1,64 @@
+diff --git a/claude-master/skills/screen-layout/SKILL.md b/claude-master/skills/screen-layout/SKILL.md
+index b96e32d..ceac6f6 100644
+--- a/claude-master/skills/screen-layout/SKILL.md
++++ b/claude-master/skills/screen-layout/SKILL.md
+@@ -1,6 +1,6 @@
+ ---
+ name: screen-layout
+-description: Use when the user asks to arrange, tile, split, merge, move or lay out the Claude session windows on the screen or monitors (ChromeOS Terminal via chrome-bridge) — "affianca le sessioni", "mettile in colonne", "unisci in schede", "sposta a destra/sinistra/sul monitor", "layout mattina", "quali monitor vedi". English: "tile the sessions", "merge the tabs", "move to the right monitor", "save this layout".
++description: Use when the user wants the Claude session windows arranged on the screen or monitors (ChromeOS Terminal via chrome-bridge) — tiled side by side, merged into tabs, moved to another monitor, or a named layout saved or restored; Italian or English ("affianca le sessioni", "unisci in schede", "tile the sessions", "move to the right monitor").
+ ---
+ 
+ # Disporre le sessioni sullo schermo (claude-master tile / merge / move / layout)
+diff --git a/claude-master/skills/sessions/SKILL.md b/claude-master/skills/sessions/SKILL.md
+index 145251f..a170825 100644
+--- a/claude-master/skills/sessions/SKILL.md
++++ b/claude-master/skills/sessions/SKILL.md
+@@ -1,13 +1,13 @@
+ ---
+ name: sessions
+-description: Use when the user asks to open, launch, start, list, close, restart or talk to a Claude Code session in another folder or account, to forward a screenshot/report to a project's session, to wait for another session, or to restore sessions after a reboot. Italian triggers "lancia claude in", "apri una sessione in/su", "avvia una sessione nella cartella", "crea la cartella X e lancia una sessione", "quali sessioni girano", "chiudi la sessione", "riavvia la sessione", "manda questo a", "segnala a", "novità da". English triggers "launch a session in", "open a session on", "which sessions are running", "close the session", "restart this session", "send this to the session", "report to".
++description: Use when the user wants to manage Claude Code sessions on this machine — open or launch one in another folder or account, list which are running, close or restart one, send a message or a screenshot/report to a project's session, wait for another session, or restore sessions after a reboot. Italian or English phrasing alike ("lancia claude in", "quali sessioni girano", "segnala a", "launch a session in", "which sessions are running").
+ ---
+ 
+ # Sessioni Claude su questa macchina (claude-master)
+ 
+ Tutto passa da un solo comando, `claude-master` (alias italiani da config: `lancia`, `sessioni`,
+-`chiudi`, `parla-con`, `segnala`, `riavvia`, `attacca`, `quote`). Le regole qui sotto sono state
+-pagate sul campo: valgono più dei comandi.
++`chiudi`, `parla-con`, `segnala`, `riavvia`, `attacca`, `quote`). Le regole qui sotto valgono più
++dei comandi.
+ 
+ ## Aprire una sessione su un'altra cartella
+ 
+@@ -38,7 +38,7 @@ il percorso completo.
+   il caso normale è una sessione pulita
+ - `--resume <id>` quando le conversazioni della cartella sono **più di una**: `--continue` prende
+   sempre la più recente, e con due sessioni sulla stessa cartella le porta entrambe sulla stessa
+-  conversazione lasciando l'altra orfana (successo il 2026-08-24). Un id inesistente **non dà
++  conversazione lasciando l'altra orfana. Un id inesistente **non dà
+   errore** in Claude: apre una conversazione vuota che sembra una ripresa riuscita; `launch` si
+   ferma prima e stampa gli id veri con peso e data
+ - `--profile <nome>`: argomenti, modello, effort, variabili d'ambiente da `profiles.<nome>` in
+@@ -118,9 +118,9 @@ Le foto arrivate via Remote Control hanno già un percorso su disco: passalo a `
+ `close` rifiuta le sessioni **attaccate**: se qualcuno la guarda, la sta usando. Una sessione
+ **non può chiudere sé stessa**: un kill da un tool arriva a turno aperto e lascia nel transcript
+ una chiamata senza risposta, che `--continue` poi riprende monca. Con tmux usa sempre
+-`-t =NOME` per `has-session` e `kill-session` (senza `=` aggancia per prefisso: l'08/09/2026 è
+-morta `fable-director-2` al posto di `fable-director`); `capture-pane`, `send-keys` e
+-`set-option` invece vogliono il nome nudo.
++`-t =NOME` per `has-session` e `kill-session` (senza `=` aggancia per prefisso: `-t fable-director`
++può uccidere `fable-director-2`); `capture-pane`, `send-keys` e `set-option` invece vogliono il
++nome nudo.
+ 
+ ## Riavviare la sessione corrente
+ 
+@@ -128,7 +128,7 @@ Quando cambia ciò che si legge solo all'avvio (settings, hook, `additionalDirec
+ 
+     claude-master restart arm                     riparte con --continue a fine turno
+     claude-master restart arm --clean             contesto azzerato, memoria intatta (prima: stato su disco)
+-    claude-master restart arm --switch-account    stessa conversazione sull'altro account (T51)
++    claude-master restart arm --switch-account    stessa conversazione sull'altro account
+ 
+ Arma e basta: la chiusura la esegue lo Stop hook a turno finito, l'unico istante sicuro.
+ Esito e link in `restart.log` (config): la sessione che li stamperebbe è morta prima che la
