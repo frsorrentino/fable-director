@@ -82,7 +82,11 @@ wording, production writes without a backup.
   against the declared budget. Warns once at 2×; at 3× **blocks the turn** until
   the post-mortem lands in the playbook.
 - 📉 **`SessionEnd` (telemetry)** — logs session totals to SQLite in the
-  background. Every closed task leaves a local receipt (estimate vs actual,
+  background. Declared with an explicit `timeout: 30`: a SessionEnd hook with
+  no timeout of its own was cancelled at 1.5 s until Claude Code 2.1.268
+  (`CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS` was ignored for it), and the
+  summary of an 88 MB transcript takes ~3 s — in 30 days of local data 4 of 9
+  sessions above 20 MB had no summary row. Every closed task leaves a local receipt (estimate vs actual,
   verification contract, perimeter, amendments) under
   `~/.claude/fable-director/receipts/`.
 
@@ -90,7 +94,7 @@ wording, production writes without a backup.
 
 | Enforced locally | Advisory to the model | Leaves your machine |
 |---|---|---|
-| The `PreToolUse` gate denies `Agent`/`Task`/`Workflow` delegation with no open machine-readable pre-budget. The Stop hook warns at 2× and blocks at 3×. `external-exec.py` verifies an open budget itself. The perimeter hook denies `Write`/`Edit` outside the declared `--paths`, and always denies your `never_write` patterns. `--data-class restricted` blocks external routes. | The routing axes, the never-delegate rules, script promotion, the verification ladder and the playbook are policy: they guide decisions but don't mechanically force a route or a quality judgment. | External Gemini/Codex routes are opt-in. When used, the claim, rubric, context, spec and input content you supply are sent to that provider. |
+| The `PreToolUse` gate denies `Agent`/`Task`/`Workflow` delegation with no open machine-readable pre-budget. Every denial reads like a Claude Code 2.1.268 auto-mode denial: `[fable-director rule: <name>]` first, the safer route in the body, and a tail asking the model to finish unrelated work before stopping. The Stop hook warns at 2× and blocks at 3×. `external-exec.py` verifies an open budget itself. The perimeter hook denies `Write`/`Edit` outside the declared `--paths`, and always denies your `never_write` patterns. `--data-class restricted` blocks external routes. | The routing axes, the never-delegate rules, script promotion, the verification ladder and the playbook are policy: they guide decisions but don't mechanically force a route or a quality judgment. | External Gemini/Codex routes are opt-in. When used, the claim, rubric, context, spec and input content you supply are sent to that provider. |
 
 Budget enforcement is local and depends on Claude Code providing a readable
 transcript with the expected schema. Telemetry and the playbook stay under

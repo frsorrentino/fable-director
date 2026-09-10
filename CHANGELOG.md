@@ -4,6 +4,10 @@ Full release history. The README shows only the latest few entries.
 
 ## Unreleased
 
+- **Claude Code 2.1.268 (2026-09-10) reviewed, four changes.**
+  - `SessionEnd` hook declared with `timeout: 30`. Until 2.1.268 a SessionEnd hook without its own timeout was cancelled at 1.5 s even with `CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS` set; the summary of an 88 MB transcript takes ~3 s, and in the last 30 days 4 of 9 local sessions above 20 MB had no `session_summary` row (13 of 78 below). The explicit timeout works on every version.
+  - Every gate denial (`pre-delegation-gate.py`: no budget, stale, flagged, quota guard, window fit, priority hold; `perimeter-gate.py`: `deny_git`, `never_write`, declared perimeter) now follows the shape of the 2.1.268 auto-mode denials: `[fable-director rule: <name>]` first, the safer route in the body, and a tail asking the model to finish the work that does not depend on the call before stopping to ask — capped under the harness limit. Suite: `tests/deny-schema-verify.py` (D1–D4).
+  - Reviewed with nothing to change: no code path depends on `--print` vs interactive (hooks read the event on stdin either way); no text names TodoWrite or the Task tools (offered only with `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` on Fable 5.x and Opus 5 from 2.1.268); no workaround for `$` in compaction summaries or for the resume order after `/compact`; no explanation of the MEMORY.md truncation warning; no `WebFetch` rule suggested for Artifact reads.
 - `cross-verify.py --init` defaults: Codex provider on `gpt-6-astra` (needs Codex CLI >= 0.154; `gpt-6-pro` is not in the ChatGPT plan), measured 2026-09-10. Existing `cross-family.json` files are untouched: the user config always wins over these defaults. Gemini default stays `gemini-3.6-flash` (3.7/3.8-flash still unstable on the free tier).
 
 ## 1.44.x

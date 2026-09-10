@@ -67,12 +67,29 @@ except Exception:
     pass
 
 
-def deny(reason):
+_LAST_RULE = None  # set by log_deny right before each deny()
+
+DENY_TAIL = ("\nTry the safer route named above, and finish the work that does not "
+             "depend on this call before stopping to ask the user.")
+
+
+def deny(reason, rule=None):
+    """Same shape as Claude Code 2.1.268 auto-mode denials: the rule that
+    blocked the call is named first, the safer route is in the body, and the
+    tail asks the model to finish unrelated work before stopping. Capped
+    under the harness limit (2000 chars / 20 lines, hook-caps-verify)."""
+    rule = rule or _LAST_RULE or "gate"
+    text = f"[fable-director rule: {rule}] {reason}{DENY_TAIL}"
+    lines = text.splitlines()
+    if len(lines) > 18:
+        text = "\n".join(lines[:17] + ["…"])
+    if len(text) > 1900:
+        text = text[:1896] + " […]"
     print(json.dumps({
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "deny",
-            "permissionDecisionReason": reason,
+            "permissionDecisionReason": text,
         }
     }, ensure_ascii=False))
 
@@ -92,6 +109,9 @@ def matches(abs_path, rel_path, patterns):
 
 
 def log_deny(kind, payload):
+    global _LAST_RULE
+    lvl = (payload or {}).get('level') if isinstance(payload, dict) else None
+    _LAST_RULE = 'perimeter' if lvl == 'budget' else (lvl or 'perimeter')
     """Best-effort: telemetria oggettiva, mai bloccante. Insert-with-retry
     single-sourced in fd-telemetry.log_event (review 1.35.1)."""
     try:

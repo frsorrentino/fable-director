@@ -131,7 +131,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/fd-telemetry.py\" session-summary"
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/fd-telemetry.py\" session-summary",
+            "timeout": 30
           }
         ]
       }

@@ -137,7 +137,7 @@ for 1:1 behavior.
   started (nested spawns included: Claude Code ≥ 2.1.219 nests three levels by default) and compares
   each subagent's actual `effort.level` with the tier pinned in its frontmatter. Zero model tokens,
   never blocks; feeds `N agents working` on the statusline (`dlg ⟲N` in expert mode) and `/fable-director:status`.
-- **SessionEnd hook (`fd-telemetry.py session-summary`)** → logs to SQLite
+- **SessionEnd hook (`fd-telemetry.py session-summary`, `timeout: 30`)** → logs to SQLite
   (`~/.claude/fable-director/telemetry.db`) token totals and cache/delegation metrics, zero model tokens.
 - **`~/.claude/delega-playbook.md`** (external, survives updates) → learned heuristics:
   `[candidate]` → confirmed on the 2nd occurrence; `[seed]` entries; `(uses/ok/ko)` counters;
