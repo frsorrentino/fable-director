@@ -19,6 +19,17 @@ list of exception texts is in the legend (`/fable-director:help`). The dense
 historic line with `ctx`, `5H`, `bdg`, `dlg` and `cache` is the **expert
 mode**: `statusline-install.sh --expert` (back with `--plain`).
 
+Healthy, then with two things to do (a second row, most urgent first):
+
+```
+Fable 5.1 · quota 21%, resets 17:30 · context 26%                  caveman
+```
+
+```
+Fable 5.1 · quota 92%, resets 17:30 · context 83%
+└ quota 92% used, resets in 40 min · context 83% full — finish the task and start a new session
+```
+
 **Turn it on:** `/fable-director:statusline`, then restart Claude Code.
 Idempotent, backs up `settings.json`, won't touch a third-party statusLine
 already there; `--remove` takes it out.
