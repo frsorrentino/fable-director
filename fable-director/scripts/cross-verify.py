@@ -111,14 +111,15 @@ DEFAULT_CONFIG = {
                                "--skip-git-repo-check",
                                "--output-last-message", "{output_file}"],
             "schema_args": ["--output-schema", "{schema_file}"],
-            "model": "gpt-5.6-terra",
+            "model": "gpt-6-astra",
             "effort": "high",
             "timeout": 600,
             "auth_check": ["codex", "login", "status"],
             "billing": "free",
-            "note": "richiede Codex CLI >=0.144 (npm i -g @openai/codex@latest) + login "
-                    "ChatGPT (quota finestra 5h; nessuna API di lettura quota). Alternative "
-                    "built-in: gpt-5.6-sol (detail), gpt-5.6-luna (repeatable). "
+            "note": "richiede Codex CLI >=0.154 (npm i -g @openai/codex@latest) + login "
+                    "ChatGPT (quota finestra 5h; nessuna API di lettura quota; gpt-6-pro "
+                    "non e' incluso nel piano ChatGPT). Alternative built-in: gpt-6-terra, "
+                    "gpt-6-sol (detail), gpt-6-luna (repeatable). "
                     "{model}/{effort} default dai campi omonimi; external-exec.py li "
                     "sovrascrive con --model/--effort (batch massivi → low, verify resta "
                     "high). resume_command/schema_args: --resume-last / --schema-file di "

@@ -2,6 +2,10 @@
 
 Full release history. The README shows only the latest few entries.
 
+## Unreleased
+
+- `cross-verify.py --init` defaults: Codex provider on `gpt-6-astra` (needs Codex CLI >= 0.154; `gpt-6-pro` is not in the ChatGPT plan), measured 2026-09-10. Existing `cross-family.json` files are untouched: the user config always wins over these defaults. Gemini default stays `gemini-3.6-flash` (3.7/3.8-flash still unstable on the free tier).
+
 ## 1.44.x
 
 - **1.44.0 — anonymizer phase A: the engine and its CLI.**
