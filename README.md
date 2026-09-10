@@ -17,7 +17,7 @@ not for you.
 
 | [![Your agent watches the whole video: one contact sheet, one look, zero Claude tokens; speech to text on your own CPU.](assets/readme/card7-media.png)](#video-and-audio-at-zero-claude-tokens) | [![What leaves the machine carries placeholders, not people: values stay in a local map, the model sees [PERSONA_1] [TEL_1] [CF_1] [IBAN_1], restore puts every value back byte-exact.](assets/readme/card8-anonymizer.png)](#anonymizer-placeholders-not-people) |
 |---|---|
-| **1.42 — video and audio** at zero Claude tokens: contact sheets, local transcription, timed scripts, free tier for the long clips. [Read more ↓](#video-and-audio-at-zero-claude-tokens) | **1.44 — anonymizer**: pseudonymise what leaves the machine, byte-exact restore, Italian pack with check digits, exports by column. [Read more ↓](#anonymizer-placeholders-not-people) |
+| **1.42 — video and audio** at zero Claude tokens: contact sheets, local transcription, timed scripts, free tier for the long clips. [Read more ↓](#video-and-audio-at-zero-claude-tokens) | **1.44 — anonymizer**: pseudonymise what leaves the machine, byte-exact restore, Italian pack with check digits, exports by column. Phase A, a CLI, off by default; the hook into the external routes comes next. [Read more ↓](#anonymizer-placeholders-not-people) |
 
 ## Quickstart
 
@@ -60,13 +60,20 @@ respected forever). No-CLI alternative and zip migration:
   handoff and start fresh; the next session reads it at startup instead of
   re-paying the whole context (a cold reopen measured 296k tokens).
 
+What a governed job looks like: you ask for the 240 reviews to be classified;
+the agent declares a price (`budget-open`, ~60k tokens, one canary first),
+delegates the batch to a cheap pinned executor, checks the canary before the
+rest, and the Stop hook warns at 2× and blocks the turn at 3× until a
+post-mortem is written. A small quick task skips all of this.
+
 ## How much does it save?
 
 ![Most of your AI bill is invisible: measured on 2,389 real sessions, only 10% is the answers you read — 18% is new context being cached, and 72% is your context re-sent on every single turn. fable-director measures all of it.](assets/readme/card1-iceberg.png)
 
 **The honest one-sentence answer:** it doesn't save tokens on every task — it
-makes spend predictable, verified and disciplined, and on read-heavy loads it
-cuts about a quarter of the tokens without giving up quality.
+makes spend predictable, verified and disciplined; on read-heavy loads the
+tokens are neutral and the quality is higher, and the real savings come from
+the jobs it scripts or routes off your quota.
 
 Measured by running the **same tasks with and without the plugin**, several
 times each, counting real tokens and real dollars:
@@ -120,12 +127,8 @@ Fable 5.1 · quota 21%, resets 17:30 · context 26%                  caveman
 Model, five-hour plan quota with its reset time, context — the three numbers
 that are your margin, always on screen — so you see the rate limit coming
 **before** it hits. Everything else shows up only when there is something to
-do, in words, most urgent first:
-
-```
-Fable 5.1 · quota 92%, resets 17:30 · context 83%
-└ quota 92% used, resets in 40 min · context 83% full — finish the task and start a new session
-```
+do, in words, most urgent first (`quota 92% used, resets in 40 min · context
+83% full — finish the task and start a new session`).
 
 ![See the limit coming: plan quotas, live budget and burn-rate in your statusline on every turn. The rate limit stops being a surprise — it becomes a dashboard you glance at.](assets/readme/card4-gauge.png)
 
@@ -143,48 +146,30 @@ your quota reading frames one at a time. Now:
   contact sheet with the time printed on every frame; one frame per cut gives
   the shot list — 19 cuts, one sheet, zero tokens.
 - **Speech to text on your own CPU.** 68 s of Italian speech transcribed in
-  76 s, as subtitles or word-level JSON. Nothing uploaded, nothing billed.
-- **The script is timed before the studio.** The "4 seconds" that takes 5.9
-  shows up now, not at the recording session.
-- **Silent clips are called silent.** `ffprobe` checks for an audio track
-  before anything runs — no more "transcribing" burnt-in subtitles.
+  76 s, as subtitles or word-level JSON; the voice-over script is timed before
+  the studio. Nothing uploaded, nothing billed.
 - **A long video no longer eats your afternoon's quota.** When one sheet is not
-  enough, the heavy reading goes to a free Gemini tier at zero Claude tokens;
-  you see the price before it runs and the result is checked before it is used.
-  Material under NDA never leaves your machine — say so once.
-- **The second look is free.** Sheets and transcripts are cached per file.
+  enough, the heavy reading goes to a free tier at zero Claude tokens; you see
+  the price before it runs, the result is checked before use, and material
+  under NDA never leaves your machine.
+- **Checked and cached.** Silent clips are called silent before anything runs;
+  sheets and transcripts are cached per file, so the second look is free.
 
 Setup once: `media-doctor.py --setup`. The `analisi-video` skill drives the rest.
 
 ## Anonymizer: placeholders, not people
 
-What leaves the machine should carry placeholders, not people. Since 1.44 the
-`anonymizer` package pseudonymises text: values stay in a local map
-(`~/.claude/fable-director/anonymizer/maps/<name>.json`, mode 0600), the text
-carries stable `[EMAIL_3]`, `[PERSONA_7]`, `[IBAN_1]` placeholders, and
-`restore` puts the values back into the answer, byte-exact. Three engines,
-stdlib only: **rules** (Italian pack with check digits: CF, P.IVA, IBAN, cards,
-plates, phones with context, addresses, birth dates with context, protocol
-numbers, public IPs, domains), **columns** (CSV/TSV/JSON exports: the whole
-cell of a known header is one placeholder — WooCommerce, Contact Form 7, Brevo,
-Mailchimp, PrestaShop, plus your own headers), **dictionary** (your clients,
-contacts and domains from a per-project `.fd-anonymizer.json`).
-
-```
-anonymizer.py scan FILE...            counts only, nothing written
-anonymizer.py redact FILE --map NAME  text with placeholders; map created or extended
-anonymizer.py restore FILE --map NAME the inverse
-anonymizer.py test [--strict]         scores against annotated corpora
-anonymizer.py status [--purge]        config, profiles, dictionary, maps and their age
-```
-
-Off by default; nothing personal in logs or reports (counts and categories
-only). Phase A is the CLI: the hook into the external routes, the
-`confidential` data class and the PreToolUse guard come next, the NER for
-names after that — until then names outside your dictionary and outside a
-known column are **not** seen (measured: 0 of 6 in prose; formatted categories
-99.75% recall, 100% precision on 43 real and synthetic documents). Demo and
-plan: **[docs/anonymizer-demo.md](docs/anonymizer-demo.md)**,
+Since 1.44 the `anonymizer` package pseudonymises text before it leaves the
+machine: values stay in a local map (mode 0600), the text carries stable
+`[EMAIL_3]`, `[PERSONA_7]`, `[IBAN_1]` placeholders, and `restore` puts every
+value back, byte-exact. Three engines, stdlib only: **rules** (Italian pack
+with check digits), **columns** (CSV/TSV/JSON exports, one placeholder per
+cell of a known header), **dictionary** (your clients, contacts and domains,
+per project). Off by default; nothing personal in logs or reports. Phase A is
+the CLI (`scan`, `redact`, `restore`, `test`, `status`): the hook into the
+external routes comes next, the NER for names after that — until then a name
+outside your dictionary and outside a known column is **not** seen. Demo,
+commands, measurements and plan: **[docs/anonymizer-demo.md](docs/anonymizer-demo.md)**,
 **[docs/plans/2026-09-09-anonymizer.md](docs/plans/2026-09-09-anonymizer.md)**.
 
 ## External free-tier models
@@ -221,7 +206,9 @@ gracefully when absent.
 ## Requirements
 
 Claude Code ≥ 2.1.x (for the `context_window` / `rate_limits` statusline fields;
-older versions degrade silently), `python3` and `bash` on the PATH. Keep
+older versions degrade silently), `python3` and `bash` on the PATH; `ffmpeg`
+and `ffprobe` only for the video and audio tools (`media-doctor.py` checks
+them). Keep
 `maxEffortLevel` at or above `high`, or set it per model: a lower cap silently
 overrides the verifier's pinned tier
 ([INTERNALS](docs/INTERNALS.md#claude-fable-51-and-claude-code-21257--what-changed-what-didnt-2026-09)).

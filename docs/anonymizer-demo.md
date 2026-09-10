@@ -1,5 +1,7 @@
 # Anonymizer — demo da terminale (fase A)
 
+Comandi: `scan` (conteggi, nessuna scrittura), `redact FILE --map NAME`, `restore FILE --map NAME`, `test [--strict]` (metriche sui corpora annotati), `status [--purge]`. Misure di fase A (categorie con formato: precisione 1,000, recall 0,9975 su 43 documenti; nomi in prosa 0/6 senza NER): `docs/plans/2026-09-09-anonymizer.md` §8.
+
 Sequenza pronta da incollare. Mostra prima/dopo, la mappa dei segnaposto e il ripristino verificato byte per byte. Sostituisci `MAIL` con il tuo testo (una mail di un cliente, un export CSV): se non ne hai uno a portata, il primo blocco ne copia uno sintetico dal corpus pubblico.
 
 ```bash
