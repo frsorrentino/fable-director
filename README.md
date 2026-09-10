@@ -248,6 +248,36 @@ outright.
 
 Setup and guarantees: **[docs/EXTERNAL-MODELS.md](docs/EXTERNAL-MODELS.md)**.
 
+## Anonymizer (phase A: the engine and its CLI)
+
+What leaves the machine should carry placeholders, not people. The
+`anonymizer` package pseudonymises text: values stay in a local map
+(`~/.claude/fable-director/anonymizer/maps/<name>.json`, mode 0600), the text
+carries stable `[EMAIL_3]`, `[PERSONA_7]`, `[IBAN_1]` placeholders, and
+`restore` puts the values back into the answer, byte-exact. Three engines,
+stdlib only: **rules** (Italian pack with check digits: CF, P.IVA, IBAN, cards,
+plates, phones with context, addresses, birth dates with context, protocol
+numbers, public IPs, domains), **columns** (CSV/TSV/JSON exports: the whole
+cell of a known header is one placeholder — WooCommerce, Contact Form 7, Brevo,
+Mailchimp, PrestaShop, plus your own headers), **dictionary** (your clients,
+contacts and domains from a per-project `.fd-anonymizer.json`).
+
+```
+anonymizer.py scan FILE...            counts only, nothing written
+anonymizer.py redact FILE --map NAME  text with placeholders; map created or extended
+anonymizer.py restore FILE --map NAME the inverse
+anonymizer.py test [--strict]         scores against annotated corpora
+anonymizer.py status [--purge]        config, profiles, dictionary, maps and their age
+```
+
+Off by default; nothing personal in logs or reports (counts and categories
+only). Phase A is the CLI: the hook into the external routes, the
+`confidential` data class and the PreToolUse guard come in phase B, the NER for
+names in phase C — until then names outside your dictionary and outside a
+known column are **not** seen (measured: 0 of 6 in prose; formatted categories
+99.75% recall, 100% precision on 43 real and synthetic documents). Plan:
+[docs/plans/2026-09-09-anonymizer.md](docs/plans/2026-09-09-anonymizer.md).
+
 ## Soft dependencies
 
 Works on its own. These optional companions save further tokens and degrade
@@ -266,6 +296,7 @@ gracefully when absent.
 - [docs/INTERNALS.md](docs/INTERNALS.md) — routing axes, hooks, components, what it learns, known limits
 - [docs/STATUSLINE.md](docs/STATUSLINE.md) — every segment and alarm state
 - [docs/EXTERNAL-MODELS.md](docs/EXTERNAL-MODELS.md) — Gemini and Codex setup
+- [docs/plans/2026-09-09-anonymizer.md](docs/plans/2026-09-09-anonymizer.md) — anonymizer: architecture, phases, measurements
 - [benchmarks/](benchmarks/) — full measurement data
 - [INSTALL.md](INSTALL.md) · [ONBOARDING.md](ONBOARDING.md) · [CHANGELOG.md](CHANGELOG.md)
 

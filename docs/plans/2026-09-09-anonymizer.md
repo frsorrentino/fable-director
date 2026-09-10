@@ -120,7 +120,7 @@ Tempo columns+rules: 20 ms per 300 righe. Sul tabellare `columns` è indispensab
 
 | Fase | Consegna | Accettazione | Stima |
 |---|---|---|---|
-| A | `rules(it)`, `columns`, `dictionary`, mappa e `restore`, CLI `scan/redact/restore/test`, corpus con verità nota (i 12 documenti + 20 annotati a mano) | recall ≥ 99% sulle categorie con formato, precisione ≥ 90%; `restore(redact(x)) == x` su tutto il corpus | 1 giorno |
+| A | `rules(it)`, `columns`, `dictionary`, mappa e `restore`, CLI `scan/redact/restore/test`, corpus con verità nota (i 12 documenti + 20 annotati a mano) | recall ≥ 99% sulle categorie con formato, precisione ≥ 90%; `restore(redact(x)) == x` su tutto il corpus | 1 giorno — **FATTA il 10/09/2026** (sessione notturna, 00:14-05:00): vedi §8 |
 | B | innesto in `external-exec.py` e `cross-verify.py`, guardia PreToolUse, classe dati, evento a registro, `report` con blocco anonymizer | una run esterna vera con `--anonymize on`: nel prompt inviato nessun valore del dizionario, output restituito con i valori | mezza giornata |
 | C | wrapper ONNX di GLiNER, misura contro la libreria torch (venv usa-e-getta) sui 32 documenti, confronto `gliner_multi_pii` vs `GLiNER2-PII-multi` sui nomi italiani | nomi: recall ≥ 95%, precisione ≥ 90% con dizionario; tempo per documento sul Chromebook; RAM di picco | 1 giorno |
 | D | generatore del dizionario lato gestionale (clienti, referenti, domini → `.fd-anonymizer.json` per progetto); aggiornamento del piano dell'agenzia e della sua guida IA | dizionario rigenerabile con un comando; piano dell'agenzia allineato | mezza giornata |
@@ -138,6 +138,23 @@ Tempo columns+rules: 20 ms per 300 righe. Sul tabellare `columns` è indispensab
 5. Motore dentro il plugin (`fable-director/anonymizer/`), CLI autonoma fin dal primo giorno; il proxy dell'agenzia lo importerà.
 
 Prossimo passo: fase A in una sessione nuova (brainstorming → piano di implementazione → codice con test), budget aperto con `--data-class restricted` perché il corpus è materiale cliente.
+
+## 8. Fase A — consegnata (2026-09-10)
+
+Codice in `fable-director/anonymizer/` (pacchetto stdlib) e `scripts/anonymizer.py`; design in `docs/superpowers/specs/2026-09-10-anonymizer-fase-a-design.md`, piano in `docs/superpowers/plans/2026-09-10-anonymizer-fase-a.md`. Scelte prese in brainstorming: corpus reale pescato dalle cartelle pixelfarm; segnaposto `[CAT_N]` con lettera di variante per una seconda forma dello stesso valore (round-trip esatto); motore a raccolta di span con sostituzione unica (offset stabili, il NER di fase C entra come produttore in più). Categoria in più rispetto al piano: `SECRET` per le colonne `passwd`/`secure_key`/token degli export PrestaShop.
+
+**Corpus.** Pubblico, dentro il plugin (`anonymizer/corpus-public/`, 10 documenti sintetici generati con seed: check digit validi, persone inventate, domini `.example`, intestazioni vere di Brevo/PrestaShop/WooCommerce/pixelbox). Privato, fuori repo in `~/.claude/fable-director/anonymizer-corpus/` (chmod 700, chiave `corpus.private_dir`, voci di `.gitignore` come rete): i 12 documenti esterni più 21 reali (13 export: dossier e solleciti clienti, report FiC, registro domini, newsletter Brevo/Mailchimp, rivenditori, clienti PrestaShop admin e grezzi, prodotti; 8 di prosa: modello email solleciti, procedure preventivi, kb giuridica). Annotati dal modello: intestazioni degli export riviste colonna per colonna, prosa letta per intero, documenti lunghi rivisti per span predetti e righe candidate; `reviewed: true` con nota `review`. Franz revisiona a campione. Dizionario del corpus generato dal dossier clienti (301 ORG, 349 domini): anteprima della fase D.
+
+**Misura** (`anonymizer.py test`, 43 documenti):
+
+| Corpus | Categorie con formato | Round-trip |
+|---|---|---|
+| pubblico (10) | precisione 1,000, recall 1,000 | esatto |
+| privato (33) | precisione 1,000, recall 0,9975 (2 protocolli elencati dopo «e» senza «prot.») | esatto |
+
+Informative: PERSONA 326/331, ORG 278/282 — quasi tutto da colonne e dizionario; **in prosa 0 nomi su 6** (4 occorrenze di 2 persone dello staff, 1 referente di un cliente; più 3 occorrenze di 2 aziende clienti fuori dizionario): il numero da battere in fase C. Velocità ≈ 1 ms/KB. Regole corrette sul corpus: indirizzo con virgola prima del civico, CAP+comune senza provincia (con lista di parole non-comune), protocolli fino a 12 cifre, `git@github.com:` non è un'email, «cod. atto» non introduce una P.IVA, host infrastrutturali in whitelist di default, intestazioni con accenti e parentesi.
+
+**Aperto per la fase B**: la guardia e l'innesto in `external-exec.py`; l'evento `anonymizer` a registro; «Franz» e i nomi dei collaboratori dell'agenzia in whitelist di progetto o no (oggi annotati come PERSONA).
 
 Le domande com'erano prima della decisione:
 
