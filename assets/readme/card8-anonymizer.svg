@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif">
+  <defs>
+    <linearGradient id="bg8" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a1420"/>
+      <stop offset="1" stop-color="#3d1f2e"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg8)"/>
+  <rect x="70" y="52" width="86" height="34" rx="17" fill="#ffb3c6"/>
+  <text x="113" y="76" fill="#2a1420" font-size="20" font-weight="800" text-anchor="middle">NEW</text>
+  <text x="172" y="78" fill="#ffb3c6" font-size="22" font-weight="700">1.44 · anonymizer</text>
+
+  <text x="70" y="140" fill="#ffffff" font-size="50" font-weight="800">What leaves the machine carries</text>
+  <text x="70" y="192" fill="#ffffff" font-size="50" font-weight="800">placeholders, not people.</text>
+
+  <!-- before (every value is invented) -->
+  <rect x="70" y="226" width="500" height="270" rx="16" fill="#1a0d14" stroke="#5a2f44" stroke-width="2"/>
+  <text x="94" y="260" fill="#c98aa3" font-size="18" font-weight="700">ON YOUR MACHINE</text>
+  <g font-family="ui-monospace,Menlo,monospace" font-size="21" fill="#e6edf3">
+    <text x="94" y="300">Buongiorno, sono <tspan fill="#ff8fa8">Cosimo Ferraguti</tspan>,</text>
+    <text x="94" y="334">cell. <tspan fill="#ff8fa8">347 612 3421</tspan>, CF</text>
+    <text x="94" y="368"><tspan fill="#ff8fa8">FRRCSM71E03D122E</tspan>. Bonifico</text>
+    <text x="94" y="402">su <tspan fill="#ff8fa8">IT60 X054 2811 1010 0000</tspan></text>
+    <text x="94" y="436"><tspan fill="#ff8fa8">0123 456</tspan>; scrivetemi a</text>
+    <text x="94" y="470"><tspan fill="#ff8fa8">c.ferraguti@example.it</tspan>.</text>
+  </g>
+
+  <polygon points="590,346 640,346 640,328 680,363 640,398 640,380 590,380" fill="#ffb3c6"/>
+
+  <!-- after -->
+  <rect x="700" y="226" width="430" height="270" rx="16" fill="#1a0d14" stroke="#5a2f44" stroke-width="2"/>
+  <text x="724" y="260" fill="#c98aa3" font-size="18" font-weight="700">WHAT THE MODEL SEES</text>
+  <g font-family="ui-monospace,Menlo,monospace" font-size="21" fill="#e6edf3">
+    <text x="724" y="300">Buongiorno, sono <tspan fill="#7ee2a0">[PERSONA_1]</tspan>,</text>
+    <text x="724" y="334">cell. <tspan fill="#7ee2a0">[TEL_1]</tspan>, CF</text>
+    <text x="724" y="368"><tspan fill="#7ee2a0">[CF_1]</tspan>. Bonifico</text>
+    <text x="724" y="402">su <tspan fill="#7ee2a0">[IBAN_1]</tspan>; scrivetemi a</text>
+    <text x="724" y="436"><tspan fill="#7ee2a0">[EMAIL_1]</tspan>.</text>
+  </g>
+
+  <!-- padlock (SVG path, no emoji) + map line -->
+  <rect x="70" y="518" width="1060" height="56" rx="14" fill="#0d1117" stroke="#5a2f44" stroke-width="2"/>
+  <g transform="translate(94,534)" fill="none" stroke="#ffb3c6" stroke-width="2.5">
+    <path d="M5 11 V7.5 a6 6 0 0 1 12 0 V11"/>
+    <rect x="1" y="11" width="20" height="14" rx="3" fill="#ffb3c6" stroke="none"/>
+  </g>
+  <text x="128" y="555" font-family="ui-monospace,Menlo,monospace" font-size="21"><tspan fill="#9198a1">map </tspan><tspan fill="#e6edf3">~/.claude/…/maps/client.json</tspan><tspan fill="#9198a1"> mode 0600 · </tspan><tspan fill="#7ee2a0" font-weight="700">restore</tspan><tspan fill="#e6edf3"> puts every value back, byte-exact</tspan></text>
+
+  <text x="70" y="610" fill="#ffb3c6" font-size="24" font-weight="700">Italian pack with check digits · CSV/JSON exports by column · your own dictionary · stdlib only</text>
+</svg>

@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif">
+  <defs>
+    <linearGradient id="bg7" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0f1f2e"/>
+      <stop offset="1" stop-color="#16304a"/>
+    </linearGradient>
+    <linearGradient id="frame" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2a4a6b"/>
+      <stop offset="1" stop-color="#1b3550"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg7)"/>
+  <rect x="70" y="52" width="86" height="34" rx="17" fill="#7ee2a0"/>
+  <text x="113" y="76" fill="#0f1f2e" font-size="20" font-weight="800" text-anchor="middle">NEW</text>
+  <text x="172" y="78" fill="#7ee2a0" font-size="22" font-weight="700">1.42 · video and audio</text>
+
+  <text x="70" y="140" fill="#ffffff" font-size="50" font-weight="800">Your agent watches the whole video.</text>
+  <text x="70" y="186" fill="#9dc4f5" font-size="26">One contact sheet, one look, zero Claude tokens. Speech to text on your own CPU.</text>
+
+  <!-- contact sheet mock: 2 rows x 6 frames with timecodes -->
+  <rect x="70" y="222" width="640" height="300" rx="16" fill="#0b1622" stroke="#2f5170" stroke-width="2"/>
+  <g font-family="ui-monospace,Menlo,monospace" font-size="16" fill="#e6edf3">
+    <rect x="88" y="240" width="96" height="120" rx="6" fill="url(#frame)"/><text x="92" y="354">00:00</text>
+    <rect x="192" y="240" width="96" height="120" rx="6" fill="url(#frame)"/><text x="196" y="354">00:03</text>
+    <rect x="296" y="240" width="96" height="120" rx="6" fill="url(#frame)"/><text x="300" y="354">00:07</text>
+    <rect x="400" y="240" width="96" height="120" rx="6" fill="url(#frame)"/><text x="404" y="354">00:12</text>
+    <rect x="504" y="240" width="96" height="120" rx="6" fill="url(#frame)"/><text x="508" y="354">00:18</text>
+    <rect x="608" y="240" width="84" height="120" rx="6" fill="url(#frame)"/><text x="612" y="354">00:24</text>
+    <rect x="88" y="376" width="96" height="120" rx="6" fill="url(#frame)"/><text x="92" y="490">00:31</text>
+    <rect x="192" y="376" width="96" height="120" rx="6" fill="url(#frame)"/><text x="196" y="490">00:39</text>
+    <rect x="296" y="376" width="96" height="120" rx="6" fill="url(#frame)"/><text x="300" y="490">00:45</text>
+    <rect x="400" y="376" width="96" height="120" rx="6" fill="url(#frame)"/><text x="404" y="490">00:52</text>
+    <rect x="504" y="376" width="96" height="120" rx="6" fill="url(#frame)"/><text x="508" y="490">01:01</text>
+    <rect x="608" y="376" width="84" height="120" rx="6" fill="url(#frame)"/><text x="612" y="490">01:08</text>
+  </g>
+  <g fill="#7ee2a0" opacity="0.85">
+    <polygon points="126,286 126,314 150,300"/>
+    <polygon points="334,286 334,314 358,300"/>
+    <polygon points="542,422 542,450 566,436"/>
+  </g>
+
+  <!-- right column: three numbers, each caption under 40 chars -->
+  <g font-size="22" fill="#e6edf3">
+    <text x="750" y="262" fill="#7ee2a0" font-size="44" font-weight="800">1 image</text>
+    <text x="750" y="294">19 cuts, one sheet, one look</text>
+    <text x="750" y="362" fill="#7ee2a0" font-size="44" font-weight="800">0 uploads</text>
+    <text x="750" y="394">68 s of speech in 76 s, on your CPU</text>
+    <text x="750" y="462" fill="#7ee2a0" font-size="44" font-weight="800">0 tokens</text>
+    <text x="750" y="494">free tier for long clips; NDA stays home</text>
+  </g>
+
+  <text x="70" y="580" font-size="28"><tspan fill="#ffffff" font-weight="700">Spots, voice-overs, clip folders — </tspan><tspan fill="#9dc4f5">read once, cached, checked before use.</tspan></text>
+</svg>
