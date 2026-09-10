@@ -1,0 +1,79 @@
+{
+ "doc": "legal-spec",
+ "annotator": "generator",
+ "reviewed": true,
+ "spans": [
+  {
+   "start": 48,
+   "end": 73,
+   "cat": "ORG",
+   "text": "Officine Zampolini S.r.l."
+  },
+  {
+   "start": 81,
+   "end": 92,
+   "cat": "PIVA",
+   "text": "18159083015"
+  },
+  {
+   "start": 106,
+   "end": 159,
+   "cat": "INDIRIZZO",
+   "text": "Viale della Repubblica 18, 89100 Reggio Calabria (RC)"
+  },
+  {
+   "start": 178,
+   "end": 200,
+   "cat": "PERSONA",
+   "text": "Baldassarre Pellizzari"
+  },
+  {
+   "start": 205,
+   "end": 221,
+   "cat": "CF",
+   "text": "HCRNBS57D21U696Q"
+  },
+  {
+   "start": 234,
+   "end": 251,
+   "cat": "PERSONA",
+   "text": "Ortensia Vanzetti"
+  },
+  {
+   "start": 271,
+   "end": 281,
+   "cat": "DATA_NASCITA",
+   "text": "02/10/1987"
+  },
+  {
+   "start": 296,
+   "end": 314,
+   "cat": "INDIRIZZO",
+   "text": "Via dei Platani 57"
+  },
+  {
+   "start": 338,
+   "end": 347,
+   "cat": "PROTOCOLLO",
+   "text": "4471/2026"
+  },
+  {
+   "start": 374,
+   "end": 382,
+   "cat": "PROTOCOLLO",
+   "text": "812/2025"
+  },
+  {
+   "start": 404,
+   "end": 437,
+   "cat": "IBAN",
+   "text": "IT53 B824 6281 9482 1993 5181 909"
+  },
+  {
+   "start": 450,
+   "end": 484,
+   "cat": "ORG",
+   "text": "Studio Legale Vanzetti e Associati"
+  }
+ ]
+}

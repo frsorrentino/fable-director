@@ -1,0 +1,11 @@
+Customer e-mail*	Lastname*	Firstname*	Company	VAT number	Address 1*	Postcode	City*	Mobile Phone	Orders
+gelsomina.ferraguti@panificiocorradengo.example	Ferraguti	Gelsomina		85280841488	Corso Umberto I 92	88100	Milano	389 897 9236	6
+cosimo.lombardozzi@panificiocorradengo.example	Lombardozzi	Cosimo			Corso Umberto I 133	89100	Cosenza	323 128 5577	8
+gelsomina.scarafoni@quarantaimpianti.example	Scarafoni	Gelsomina			Piazza San Francesco 21	88100	Crotone	349 581 4222	6
+cosimo.ferraguti@quarantaimpianti.example	Ferraguti	Cosimo			Viale della Repubblica 168	87100	Crotone	335 497 4265	8
+vittorina.zampolini@vanzettilex.example	Zampolini	Vittorina	Agriturismo Le Tre Querce S.n.c.		Contrada Fontanelle 41	88100	Catanzaro	323 254 8624	3
+anselmo.lombardozzi@tre-querce.example	Lombardozzi	Anselmo			Vicolo Stretto 34	88900	Crotone	333 639 3281	7
+cosimo.scarafoni@zampolini-officine.example	Scarafoni	Cosimo	Studio Legale Vanzetti e Associati		Piazza San Francesco 67	20121	Reggio Calabria	336 162 6796	8
+anselmo.quaranta@tre-querce.example	Quaranta	Anselmo			Vicolo Stretto 39	20121	Milano	322 993 8211	3
+anselmo.vanzetti@panificiocorradengo.example	Vanzetti	Anselmo	Agriturismo Le Tre Querce S.n.c.		Vicolo Stretto 16	87100	Milano	387 668 8905	2
+clelia.vanzetti@panificiocorradengo.example	Vanzetti	Clelia	Officine Zampolini S.r.l.		Viale della Repubblica 144	88900	Crotone	376 433 9282	9

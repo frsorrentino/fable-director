@@ -1,0 +1,289 @@
+{
+ "doc": "export-brevo",
+ "annotator": "generator",
+ "reviewed": true,
+ "spans": [
+  {
+   "start": 37,
+   "end": 80,
+   "cat": "EMAIL",
+   "text": "teodora.tortorella@quarantaimpianti.example"
+  },
+  {
+   "start": 81,
+   "end": 88,
+   "cat": "PERSONA",
+   "text": "Teodora"
+  },
+  {
+   "start": 89,
+   "end": 99,
+   "cat": "PERSONA",
+   "text": "Tortorella"
+  },
+  {
+   "start": 114,
+   "end": 161,
+   "cat": "EMAIL",
+   "text": "ortensia.brancaleone@zampolini-officine.example"
+  },
+  {
+   "start": 162,
+   "end": 170,
+   "cat": "PERSONA",
+   "text": "Ortensia"
+  },
+  {
+   "start": 171,
+   "end": 182,
+   "cat": "PERSONA",
+   "text": "Brancaleone"
+  },
+  {
+   "start": 184,
+   "end": 194,
+   "cat": "DATA_NASCITA",
+   "text": "20/02/1981"
+  },
+  {
+   "start": 203,
+   "end": 248,
+   "cat": "EMAIL",
+   "text": "cosimo.tortorella@panificiocorradengo.example"
+  },
+  {
+   "start": 249,
+   "end": 255,
+   "cat": "PERSONA",
+   "text": "Cosimo"
+  },
+  {
+   "start": 256,
+   "end": 266,
+   "cat": "PERSONA",
+   "text": "Tortorella"
+  },
+  {
+   "start": 268,
+   "end": 278,
+   "cat": "DATA_NASCITA",
+   "text": "28/08/1955"
+  },
+  {
+   "start": 287,
+   "end": 330,
+   "cat": "EMAIL",
+   "text": "ludovico.zampolini@quarantaimpianti.example"
+  },
+  {
+   "start": 331,
+   "end": 339,
+   "cat": "PERSONA",
+   "text": "Ludovico"
+  },
+  {
+   "start": 340,
+   "end": 349,
+   "cat": "PERSONA",
+   "text": "Zampolini"
+  },
+  {
+   "start": 350,
+   "end": 362,
+   "cat": "TEL",
+   "text": "337 938 8053"
+  },
+  {
+   "start": 376,
+   "end": 415,
+   "cat": "EMAIL",
+   "text": "ortensia.brancaleone@tre-querce.example"
+  },
+  {
+   "start": 416,
+   "end": 424,
+   "cat": "PERSONA",
+   "text": "Ortensia"
+  },
+  {
+   "start": 425,
+   "end": 436,
+   "cat": "PERSONA",
+   "text": "Brancaleone"
+  },
+  {
+   "start": 438,
+   "end": 448,
+   "cat": "DATA_NASCITA",
+   "text": "06/03/1964"
+  },
+  {
+   "start": 450,
+   "end": 484,
+   "cat": "EMAIL",
+   "text": "cosimo.vanzetti@tre-querce.example"
+  },
+  {
+   "start": 485,
+   "end": 491,
+   "cat": "PERSONA",
+   "text": "Cosimo"
+  },
+  {
+   "start": 492,
+   "end": 500,
+   "cat": "PERSONA",
+   "text": "Vanzetti"
+  },
+  {
+   "start": 502,
+   "end": 512,
+   "cat": "DATA_NASCITA",
+   "text": "10/01/1959"
+  },
+  {
+   "start": 525,
+   "end": 568,
+   "cat": "EMAIL",
+   "text": "clelia.brancaleone@quarantaimpianti.example"
+  },
+  {
+   "start": 569,
+   "end": 575,
+   "cat": "PERSONA",
+   "text": "Clelia"
+  },
+  {
+   "start": 576,
+   "end": 587,
+   "cat": "PERSONA",
+   "text": "Brancaleone"
+  },
+  {
+   "start": 591,
+   "end": 636,
+   "cat": "EMAIL",
+   "text": "clelia.lombardozzi@zampolini-officine.example"
+  },
+  {
+   "start": 637,
+   "end": 643,
+   "cat": "PERSONA",
+   "text": "Clelia"
+  },
+  {
+   "start": 644,
+   "end": 655,
+   "cat": "PERSONA",
+   "text": "Lombardozzi"
+  },
+  {
+   "start": 656,
+   "end": 668,
+   "cat": "TEL",
+   "text": "391 501 7521"
+  },
+  {
+   "start": 669,
+   "end": 679,
+   "cat": "DATA_NASCITA",
+   "text": "04/08/1990"
+  },
+  {
+   "start": 692,
+   "end": 736,
+   "cat": "EMAIL",
+   "text": "teodora.scarafoni@zampolini-officine.example"
+  },
+  {
+   "start": 737,
+   "end": 744,
+   "cat": "PERSONA",
+   "text": "Teodora"
+  },
+  {
+   "start": 745,
+   "end": 754,
+   "cat": "PERSONA",
+   "text": "Scarafoni"
+  },
+  {
+   "start": 765,
+   "end": 815,
+   "cat": "EMAIL",
+   "text": "baldassarre.lombardozzi@zampolini-officine.example"
+  },
+  {
+   "start": 816,
+   "end": 827,
+   "cat": "PERSONA",
+   "text": "Baldassarre"
+  },
+  {
+   "start": 828,
+   "end": 839,
+   "cat": "PERSONA",
+   "text": "Lombardozzi"
+  },
+  {
+   "start": 840,
+   "end": 852,
+   "cat": "TEL",
+   "text": "392 254 9791"
+  },
+  {
+   "start": 853,
+   "end": 863,
+   "cat": "DATA_NASCITA",
+   "text": "12/10/1951"
+  },
+  {
+   "start": 872,
+   "end": 909,
+   "cat": "EMAIL",
+   "text": "cosimo.lombardozzi@tre-querce.example"
+  },
+  {
+   "start": 910,
+   "end": 916,
+   "cat": "PERSONA",
+   "text": "Cosimo"
+  },
+  {
+   "start": 917,
+   "end": 928,
+   "cat": "PERSONA",
+   "text": "Lombardozzi"
+  },
+  {
+   "start": 929,
+   "end": 941,
+   "cat": "TEL",
+   "text": "352 455 6966"
+  },
+  {
+   "start": 951,
+   "end": 988,
+   "cat": "EMAIL",
+   "text": "ludovico.ferraguti@tre-querce.example"
+  },
+  {
+   "start": 989,
+   "end": 997,
+   "cat": "PERSONA",
+   "text": "Ludovico"
+  },
+  {
+   "start": 998,
+   "end": 1007,
+   "cat": "PERSONA",
+   "text": "Ferraguti"
+  },
+  {
+   "start": 1008,
+   "end": 1020,
+   "cat": "TEL",
+   "text": "330 247 2674"
+  }
+ ]
+}

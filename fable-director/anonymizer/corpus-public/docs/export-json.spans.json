@@ -1,0 +1,151 @@
+{
+ "doc": "export-json",
+ "annotator": "generator",
+ "reviewed": true,
+ "spans": [
+  {
+   "start": 23,
+   "end": 70,
+   "cat": "EMAIL",
+   "text": "gelsomina.scarafoni@panificiocorradengo.example"
+  },
+  {
+   "start": 88,
+   "end": 97,
+   "cat": "PERSONA",
+   "text": "Gelsomina"
+  },
+  {
+   "start": 114,
+   "end": 123,
+   "cat": "PERSONA",
+   "text": "Scarafoni"
+  },
+  {
+   "start": 136,
+   "end": 152,
+   "cat": "TEL",
+   "text": "+39 363 303 3289"
+  },
+  {
+   "start": 204,
+   "end": 252,
+   "cat": "EMAIL",
+   "text": "baldassarre.vanzetti@panificiocorradengo.example"
+  },
+  {
+   "start": 270,
+   "end": 281,
+   "cat": "PERSONA",
+   "text": "Baldassarre"
+  },
+  {
+   "start": 298,
+   "end": 306,
+   "cat": "PERSONA",
+   "text": "Vanzetti"
+  },
+  {
+   "start": 319,
+   "end": 335,
+   "cat": "TEL",
+   "text": "+39 321 172 5187"
+  },
+  {
+   "start": 387,
+   "end": 432,
+   "cat": "EMAIL",
+   "text": "vittorina.vanzetti@zampolini-officine.example"
+  },
+  {
+   "start": 450,
+   "end": 459,
+   "cat": "PERSONA",
+   "text": "Vittorina"
+  },
+  {
+   "start": 476,
+   "end": 484,
+   "cat": "PERSONA",
+   "text": "Vanzetti"
+  },
+  {
+   "start": 497,
+   "end": 513,
+   "cat": "TEL",
+   "text": "+39 368 991 9289"
+  },
+  {
+   "start": 565,
+   "end": 602,
+   "cat": "EMAIL",
+   "text": "anselmo.scarafoni@vanzettilex.example"
+  },
+  {
+   "start": 620,
+   "end": 627,
+   "cat": "PERSONA",
+   "text": "Anselmo"
+  },
+  {
+   "start": 644,
+   "end": 653,
+   "cat": "PERSONA",
+   "text": "Scarafoni"
+  },
+  {
+   "start": 666,
+   "end": 682,
+   "cat": "TEL",
+   "text": "+39 325 570 4036"
+  },
+  {
+   "start": 734,
+   "end": 780,
+   "cat": "EMAIL",
+   "text": "gelsomina.ferraguti@zampolini-officine.example"
+  },
+  {
+   "start": 798,
+   "end": 807,
+   "cat": "PERSONA",
+   "text": "Gelsomina"
+  },
+  {
+   "start": 824,
+   "end": 833,
+   "cat": "PERSONA",
+   "text": "Ferraguti"
+  },
+  {
+   "start": 846,
+   "end": 862,
+   "cat": "TEL",
+   "text": "+39 353 472 6389"
+  },
+  {
+   "start": 914,
+   "end": 962,
+   "cat": "EMAIL",
+   "text": "baldassarre.scarafoni@zampolini-officine.example"
+  },
+  {
+   "start": 980,
+   "end": 991,
+   "cat": "PERSONA",
+   "text": "Baldassarre"
+  },
+  {
+   "start": 1008,
+   "end": 1017,
+   "cat": "PERSONA",
+   "text": "Scarafoni"
+  },
+  {
+   "start": 1030,
+   "end": 1046,
+   "cat": "TEL",
+   "text": "+39 359 323 6842"
+  }
+ ]
+}

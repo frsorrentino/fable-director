@@ -7,3 +7,9 @@ __pycache__/
 **/statusline-last.json
 # release zips live fuori dal repo
 *.zip
+
+# anonymizer: real-document corpora never enter the repository
+corpus-private/
+*.private.*
+corpus/reale/
+anonymizer-corpus/

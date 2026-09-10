@@ -1,0 +1,11 @@
+2026-09-01 12:00:11 nginx[1000]: 198.171.195.22 -> 10.0.7.72 GET /wp-login.php 200 user=clelia.scarafoni@panificiocorradengo.example
+2026-09-02 12:01:11 nginx[1001]: 51.2.46.68 -> 10.0.1.37 GET /wp-login.php 200 user=ortensia.lombardozzi@zampolini-officine.example
+2026-09-03 12:02:11 nginx[1002]: 203.11.153.78 -> 10.0.3.22 GET /wp-login.php 200 user=anselmo.quaranta@panificiocorradengo.example
+2026-09-04 12:03:11 nginx[1003]: 51.199.166.185 -> 10.0.7.39 GET /wp-login.php 200 user=gelsomina.lombardozzi@panificiocorradengo.example
+2026-09-05 12:04:11 nginx[1004]: 198.219.71.233 -> 10.0.8.193 GET /wp-login.php 200 user=clelia.lombardozzi@zampolini-officine.example
+2026-09-06 12:05:11 nginx[1005]: 51.117.43.8 -> 10.0.0.35 GET /wp-login.php 200 user=baldassarre.corradengo@tre-querce.example
+2026-09-07 12:06:11 nginx[1006]: 203.25.9.161 -> 10.0.8.175 GET /wp-login.php 200 user=cosimo.ferraguti@vanzettilex.example
+2026-09-08 12:07:11 nginx[1007]: 198.233.35.192 -> 10.0.8.230 GET /wp-login.php 200 user=clelia.corradengo@quarantaimpianti.example
+2026-09-09 12:08:11 nginx[1008]: 198.242.129.208 -> 10.0.1.217 GET /wp-login.php 200 user=gelsomina.scarafoni@panificiocorradengo.example
+2026-09-01 12:09:11 nginx[1009]: 198.235.252.217 -> 10.0.6.20 GET /wp-login.php 200 user=ludovico.tortorella@zampolini-officine.example
+2026-09-09 12:10:00 cron: backup ok, 1.2 GB, upstream 4.5.6.7 again 4.5.6.7 (v1.2.3 is a version, 2.1.267 too)

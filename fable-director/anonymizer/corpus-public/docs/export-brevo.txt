@@ -1,0 +1,14 @@
+EMAIL;NOME;COGNOME;SMS;BIRTHDAY;TAGS
+teodora.tortorella@quarantaimpianti.example;Teodora;Tortorella;;;Rivenditori
+ortensia.brancaleone@zampolini-officine.example;Ortensia;Brancaleone;;20/02/1981;Clienti
+cosimo.tortorella@panificiocorradengo.example;Cosimo;Tortorella;;28/08/1955;Clienti
+ludovico.zampolini@quarantaimpianti.example;Ludovico;Zampolini;337 938 8053;;Rivenditori
+ortensia.brancaleone@tre-querce.example;Ortensia;Brancaleone;;06/03/1964;
+cosimo.vanzetti@tre-querce.example;Cosimo;Vanzetti;;10/01/1959;Rivenditori
+clelia.brancaleone@quarantaimpianti.example;Clelia;Brancaleone;;;
+clelia.lombardozzi@zampolini-officine.example;Clelia;Lombardozzi;391 501 7521;04/08/1990;Rivenditori
+teodora.scarafoni@zampolini-officine.example;Teodora;Scarafoni;;;Clienti
+baldassarre.lombardozzi@zampolini-officine.example;Baldassarre;Lombardozzi;392 254 9791;12/10/1951;Clienti
+cosimo.lombardozzi@tre-querce.example;Cosimo;Lombardozzi;352 455 6966;;Clienti
+ludovico.ferraguti@tre-querce.example;Ludovico;Ferraguti;330 247 2674;;
+;;;;;

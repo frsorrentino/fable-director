@@ -1,0 +1,139 @@
+{
+ "doc": "server-log",
+ "annotator": "generator",
+ "reviewed": true,
+ "spans": [
+  {
+   "start": 33,
+   "end": 47,
+   "cat": "IP",
+   "text": "198.171.195.22"
+  },
+  {
+   "start": 88,
+   "end": 132,
+   "cat": "EMAIL",
+   "text": "clelia.scarafoni@panificiocorradengo.example"
+  },
+  {
+   "start": 166,
+   "end": 176,
+   "cat": "IP",
+   "text": "51.2.46.68"
+  },
+  {
+   "start": 217,
+   "end": 264,
+   "cat": "EMAIL",
+   "text": "ortensia.lombardozzi@zampolini-officine.example"
+  },
+  {
+   "start": 298,
+   "end": 311,
+   "cat": "IP",
+   "text": "203.11.153.78"
+  },
+  {
+   "start": 352,
+   "end": 396,
+   "cat": "EMAIL",
+   "text": "anselmo.quaranta@panificiocorradengo.example"
+  },
+  {
+   "start": 430,
+   "end": 444,
+   "cat": "IP",
+   "text": "51.199.166.185"
+  },
+  {
+   "start": 485,
+   "end": 534,
+   "cat": "EMAIL",
+   "text": "gelsomina.lombardozzi@panificiocorradengo.example"
+  },
+  {
+   "start": 568,
+   "end": 582,
+   "cat": "IP",
+   "text": "198.219.71.233"
+  },
+  {
+   "start": 624,
+   "end": 669,
+   "cat": "EMAIL",
+   "text": "clelia.lombardozzi@zampolini-officine.example"
+  },
+  {
+   "start": 703,
+   "end": 714,
+   "cat": "IP",
+   "text": "51.117.43.8"
+  },
+  {
+   "start": 755,
+   "end": 796,
+   "cat": "EMAIL",
+   "text": "baldassarre.corradengo@tre-querce.example"
+  },
+  {
+   "start": 830,
+   "end": 842,
+   "cat": "IP",
+   "text": "203.25.9.161"
+  },
+  {
+   "start": 884,
+   "end": 920,
+   "cat": "EMAIL",
+   "text": "cosimo.ferraguti@vanzettilex.example"
+  },
+  {
+   "start": 954,
+   "end": 968,
+   "cat": "IP",
+   "text": "198.233.35.192"
+  },
+  {
+   "start": 1010,
+   "end": 1052,
+   "cat": "EMAIL",
+   "text": "clelia.corradengo@quarantaimpianti.example"
+  },
+  {
+   "start": 1086,
+   "end": 1101,
+   "cat": "IP",
+   "text": "198.242.129.208"
+  },
+  {
+   "start": 1143,
+   "end": 1190,
+   "cat": "EMAIL",
+   "text": "gelsomina.scarafoni@panificiocorradengo.example"
+  },
+  {
+   "start": 1224,
+   "end": 1239,
+   "cat": "IP",
+   "text": "198.235.252.217"
+  },
+  {
+   "start": 1280,
+   "end": 1326,
+   "cat": "EMAIL",
+   "text": "ludovico.tortorella@zampolini-officine.example"
+  },
+  {
+   "start": 1381,
+   "end": 1388,
+   "cat": "IP",
+   "text": "4.5.6.7"
+  },
+  {
+   "start": 1395,
+   "end": 1402,
+   "cat": "IP",
+   "text": "4.5.6.7"
+  }
+ ]
+}

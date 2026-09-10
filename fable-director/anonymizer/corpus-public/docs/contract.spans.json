@@ -1,0 +1,91 @@
+{
+ "doc": "contract",
+ "annotator": "generator",
+ "reviewed": true,
+ "spans": [
+  {
+   "start": 28,
+   "end": 52,
+   "cat": "ORG",
+   "text": "Quaranta Impianti S.p.A."
+  },
+  {
+   "start": 88,
+   "end": 99,
+   "cat": "PIVA",
+   "text": "19254499205"
+  },
+  {
+   "start": 113,
+   "end": 160,
+   "cat": "INDIRIZZO",
+   "text": "Via dei Platani 125, 89100 Reggio Calabria (RC)"
+  },
+  {
+   "start": 164,
+   "end": 181,
+   "cat": "PERSONA",
+   "text": "Anselmo Scarafoni"
+  },
+  {
+   "start": 188,
+   "end": 204,
+   "cat": "CF",
+   "text": "IVDWGV81E23Q392Y"
+  },
+  {
+   "start": 214,
+   "end": 224,
+   "cat": "DATA_NASCITA",
+   "text": "15/08/1979"
+  },
+  {
+   "start": 239,
+   "end": 276,
+   "cat": "INDIRIZZO",
+   "text": "Vicolo Stretto 52, 88900 Crotone (KR)"
+  },
+  {
+   "start": 284,
+   "end": 321,
+   "cat": "EMAIL",
+   "text": "anselmo.scarafoni@vanzettilex.example"
+  },
+  {
+   "start": 327,
+   "end": 337,
+   "cat": "TEL",
+   "text": "097 595918"
+  },
+  {
+   "start": 399,
+   "end": 408,
+   "cat": "TARGA",
+   "text": "AK 569 CT"
+  },
+  {
+   "start": 458,
+   "end": 485,
+   "cat": "IBAN",
+   "text": "IT51O4633191284529841537760"
+  },
+  {
+   "start": 493,
+   "end": 520,
+   "cat": "IBAN",
+   "text": "DE85 2077 6426 5651 5055 61"
+  },
+  {
+   "start": 611,
+   "end": 618,
+   "cat": "PROTOCOLLO",
+   "text": "2026/77"
+  },
+  {
+   "start": 633,
+   "end": 635,
+   "cat": "PROTOCOLLO",
+   "text": "91"
+  }
+ ]
+}

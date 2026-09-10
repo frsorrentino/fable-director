@@ -1,0 +1,6 @@
+cliente,vat,email,pec,domini
+Officine Zampolini S.r.l.,93141705868,info@zampolini-officine.example,,zampolini-officine.example | zampolini-officine.test
+Panificio Corradengo di Ilario Corradengo,49208312402,info@panificiocorradengo.example,,panificiocorradengo.example | panificiocorradengo.test
+Studio Legale Vanzetti e Associati,23448347825,info@vanzettilex.example,,vanzettilex.example | vanzettilex.test
+Agriturismo Le Tre Querce S.n.c.,45040008836,info@tre-querce.example,,tre-querce.example | tre-querce.test
+Quaranta Impianti S.p.A.,87371678688,info@quarantaimpianti.example,,quarantaimpianti.example | quarantaimpianti.test

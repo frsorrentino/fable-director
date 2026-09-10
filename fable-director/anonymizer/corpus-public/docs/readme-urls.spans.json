@@ -1,0 +1,31 @@
+{
+ "doc": "readme-urls",
+ "annotator": "generator",
+ "reviewed": true,
+ "spans": [
+  {
+   "start": 293,
+   "end": 311,
+   "cat": "DOMINIO",
+   "text": "tre-querce.example"
+  },
+  {
+   "start": 352,
+   "end": 370,
+   "cat": "DOMINIO",
+   "text": "tre-querce.example"
+  },
+  {
+   "start": 469,
+   "end": 482,
+   "cat": "IP",
+   "text": "93.184.216.34"
+  },
+  {
+   "start": 493,
+   "end": 515,
+   "cat": "EMAIL",
+   "text": "dev@tre-querce.example"
+  }
+ ]
+}

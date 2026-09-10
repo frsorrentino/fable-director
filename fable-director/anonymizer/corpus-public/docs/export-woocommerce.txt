@@ -1,0 +1,9 @@
+order_id,billing_first_name,billing_last_name,billing_email,billing_phone,billing_address_1,billing_city,billing_postcode,status
+8411,Cosimo,Tortorella,cosimo.tortorella@quarantaimpianti.example,388 926 8832,"Corso Umberto I 179",Milano,87100,wc-completed
+8332,Clelia,Scarafoni,clelia.scarafoni@panificiocorradengo.example,373 224 7428,"Piazza San Francesco 19",Catanzaro,89100,wc-completed
+5960,Ilario,Scarafoni,ilario.scarafoni@zampolini-officine.example,339 833 6999,"Piazza San Francesco 36",Reggio Calabria,88100,wc-completed
+8983,Ilario,Zampolini,ilario.zampolini@panificiocorradengo.example,348 265 8070,"Viale della Repubblica 87",Reggio Calabria,88100,wc-completed
+2510,Baldassarre,Brancaleone,baldassarre.brancaleone@vanzettilex.example,322 446 8514,"Contrada Fontanelle 5",Reggio Calabria,87100,wc-completed
+5840,Clelia,Lombardozzi,clelia.lombardozzi@quarantaimpianti.example,328 215 4744,"Via dei Platani 68",Cosenza,88900,wc-completed
+3122,Vittorina,Tortorella,vittorina.tortorella@tre-querce.example,353 515 3447,"Vicolo Stretto 147",Reggio Calabria,87100,wc-completed
+1942,Ilario,Tortorella,ilario.tortorella@panificiocorradengo.example,374 174 5406,"Contrada Fontanelle 23",Cosenza,88900,wc-completed

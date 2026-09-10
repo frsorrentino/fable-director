@@ -1,0 +1,97 @@
+{
+ "doc": "email-thread",
+ "annotator": "generator",
+ "reviewed": true,
+ "spans": [
+  {
+   "start": 4,
+   "end": 20,
+   "cat": "PERSONA",
+   "text": "Cosimo Ferraguti"
+  },
+  {
+   "start": 22,
+   "end": 63,
+   "cat": "EMAIL",
+   "text": "cosimo.ferraguti@quarantaimpianti.example"
+  },
+  {
+   "start": 78,
+   "end": 116,
+   "cat": "EMAIL",
+   "text": "assistenza@panificiocorradengo.example"
+  },
+  {
+   "start": 143,
+   "end": 170,
+   "cat": "DOMINIO",
+   "text": "panificiocorradengo.example"
+  },
+  {
+   "start": 238,
+   "end": 250,
+   "cat": "TEL",
+   "text": "374 895 6146"
+  },
+  {
+   "start": 275,
+   "end": 286,
+   "cat": "TEL",
+   "text": "0486 714006"
+  },
+  {
+   "start": 304,
+   "end": 324,
+   "cat": "PERSONA",
+   "text": "Ludovico Brancaleone"
+  },
+  {
+   "start": 337,
+   "end": 353,
+   "cat": "TEL",
+   "text": "+39 358 354 3945"
+  },
+  {
+   "start": 369,
+   "end": 381,
+   "cat": "TEL",
+   "text": "351 183 5919"
+  },
+  {
+   "start": 508,
+   "end": 549,
+   "cat": "ORG",
+   "text": "Panificio Corradengo di Ilario Corradengo"
+  },
+  {
+   "start": 563,
+   "end": 574,
+   "cat": "PIVA",
+   "text": "87574911860"
+  },
+  {
+   "start": 576,
+   "end": 621,
+   "cat": "INDIRIZZO",
+   "text": "Piazza San Francesco 39, 88100 Catanzaro (CZ)"
+  },
+  {
+   "start": 653,
+   "end": 672,
+   "cat": "CARTA",
+   "text": "4760 1895 5597 9718"
+  },
+  {
+   "start": 719,
+   "end": 728,
+   "cat": "TARGA",
+   "text": "CJ 585 ZC"
+  },
+  {
+   "start": 746,
+   "end": 762,
+   "cat": "PERSONA",
+   "text": "Cosimo Ferraguti"
+  }
+ ]
+}

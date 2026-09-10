@@ -1,0 +1,343 @@
+{
+ "doc": "export-woocommerce",
+ "annotator": "generator",
+ "reviewed": true,
+ "spans": [
+  {
+   "start": 134,
+   "end": 140,
+   "cat": "PERSONA",
+   "text": "Cosimo"
+  },
+  {
+   "start": 141,
+   "end": 151,
+   "cat": "PERSONA",
+   "text": "Tortorella"
+  },
+  {
+   "start": 152,
+   "end": 194,
+   "cat": "EMAIL",
+   "text": "cosimo.tortorella@quarantaimpianti.example"
+  },
+  {
+   "start": 195,
+   "end": 207,
+   "cat": "TEL",
+   "text": "388 926 8832"
+  },
+  {
+   "start": 209,
+   "end": 228,
+   "cat": "INDIRIZZO",
+   "text": "Corso Umberto I 179"
+  },
+  {
+   "start": 230,
+   "end": 236,
+   "cat": "CAP_COMUNE",
+   "text": "Milano"
+  },
+  {
+   "start": 237,
+   "end": 242,
+   "cat": "CAP_COMUNE",
+   "text": "87100"
+  },
+  {
+   "start": 261,
+   "end": 267,
+   "cat": "PERSONA",
+   "text": "Clelia"
+  },
+  {
+   "start": 268,
+   "end": 277,
+   "cat": "PERSONA",
+   "text": "Scarafoni"
+  },
+  {
+   "start": 278,
+   "end": 322,
+   "cat": "EMAIL",
+   "text": "clelia.scarafoni@panificiocorradengo.example"
+  },
+  {
+   "start": 323,
+   "end": 335,
+   "cat": "TEL",
+   "text": "373 224 7428"
+  },
+  {
+   "start": 337,
+   "end": 360,
+   "cat": "INDIRIZZO",
+   "text": "Piazza San Francesco 19"
+  },
+  {
+   "start": 362,
+   "end": 371,
+   "cat": "CAP_COMUNE",
+   "text": "Catanzaro"
+  },
+  {
+   "start": 372,
+   "end": 377,
+   "cat": "CAP_COMUNE",
+   "text": "89100"
+  },
+  {
+   "start": 396,
+   "end": 402,
+   "cat": "PERSONA",
+   "text": "Ilario"
+  },
+  {
+   "start": 403,
+   "end": 412,
+   "cat": "PERSONA",
+   "text": "Scarafoni"
+  },
+  {
+   "start": 413,
+   "end": 456,
+   "cat": "EMAIL",
+   "text": "ilario.scarafoni@zampolini-officine.example"
+  },
+  {
+   "start": 457,
+   "end": 469,
+   "cat": "TEL",
+   "text": "339 833 6999"
+  },
+  {
+   "start": 471,
+   "end": 494,
+   "cat": "INDIRIZZO",
+   "text": "Piazza San Francesco 36"
+  },
+  {
+   "start": 496,
+   "end": 511,
+   "cat": "CAP_COMUNE",
+   "text": "Reggio Calabria"
+  },
+  {
+   "start": 512,
+   "end": 517,
+   "cat": "CAP_COMUNE",
+   "text": "88100"
+  },
+  {
+   "start": 536,
+   "end": 542,
+   "cat": "PERSONA",
+   "text": "Ilario"
+  },
+  {
+   "start": 543,
+   "end": 552,
+   "cat": "PERSONA",
+   "text": "Zampolini"
+  },
+  {
+   "start": 553,
+   "end": 597,
+   "cat": "EMAIL",
+   "text": "ilario.zampolini@panificiocorradengo.example"
+  },
+  {
+   "start": 598,
+   "end": 610,
+   "cat": "TEL",
+   "text": "348 265 8070"
+  },
+  {
+   "start": 612,
+   "end": 637,
+   "cat": "INDIRIZZO",
+   "text": "Viale della Repubblica 87"
+  },
+  {
+   "start": 639,
+   "end": 654,
+   "cat": "CAP_COMUNE",
+   "text": "Reggio Calabria"
+  },
+  {
+   "start": 655,
+   "end": 660,
+   "cat": "CAP_COMUNE",
+   "text": "88100"
+  },
+  {
+   "start": 679,
+   "end": 690,
+   "cat": "PERSONA",
+   "text": "Baldassarre"
+  },
+  {
+   "start": 691,
+   "end": 702,
+   "cat": "PERSONA",
+   "text": "Brancaleone"
+  },
+  {
+   "start": 703,
+   "end": 746,
+   "cat": "EMAIL",
+   "text": "baldassarre.brancaleone@vanzettilex.example"
+  },
+  {
+   "start": 747,
+   "end": 759,
+   "cat": "TEL",
+   "text": "322 446 8514"
+  },
+  {
+   "start": 761,
+   "end": 782,
+   "cat": "INDIRIZZO",
+   "text": "Contrada Fontanelle 5"
+  },
+  {
+   "start": 784,
+   "end": 799,
+   "cat": "CAP_COMUNE",
+   "text": "Reggio Calabria"
+  },
+  {
+   "start": 800,
+   "end": 805,
+   "cat": "CAP_COMUNE",
+   "text": "87100"
+  },
+  {
+   "start": 824,
+   "end": 830,
+   "cat": "PERSONA",
+   "text": "Clelia"
+  },
+  {
+   "start": 831,
+   "end": 842,
+   "cat": "PERSONA",
+   "text": "Lombardozzi"
+  },
+  {
+   "start": 843,
+   "end": 886,
+   "cat": "EMAIL",
+   "text": "clelia.lombardozzi@quarantaimpianti.example"
+  },
+  {
+   "start": 887,
+   "end": 899,
+   "cat": "TEL",
+   "text": "328 215 4744"
+  },
+  {
+   "start": 901,
+   "end": 919,
+   "cat": "INDIRIZZO",
+   "text": "Via dei Platani 68"
+  },
+  {
+   "start": 921,
+   "end": 928,
+   "cat": "CAP_COMUNE",
+   "text": "Cosenza"
+  },
+  {
+   "start": 929,
+   "end": 934,
+   "cat": "CAP_COMUNE",
+   "text": "88900"
+  },
+  {
+   "start": 953,
+   "end": 962,
+   "cat": "PERSONA",
+   "text": "Vittorina"
+  },
+  {
+   "start": 963,
+   "end": 973,
+   "cat": "PERSONA",
+   "text": "Tortorella"
+  },
+  {
+   "start": 974,
+   "end": 1013,
+   "cat": "EMAIL",
+   "text": "vittorina.tortorella@tre-querce.example"
+  },
+  {
+   "start": 1014,
+   "end": 1026,
+   "cat": "TEL",
+   "text": "353 515 3447"
+  },
+  {
+   "start": 1028,
+   "end": 1046,
+   "cat": "INDIRIZZO",
+   "text": "Vicolo Stretto 147"
+  },
+  {
+   "start": 1048,
+   "end": 1063,
+   "cat": "CAP_COMUNE",
+   "text": "Reggio Calabria"
+  },
+  {
+   "start": 1064,
+   "end": 1069,
+   "cat": "CAP_COMUNE",
+   "text": "87100"
+  },
+  {
+   "start": 1088,
+   "end": 1094,
+   "cat": "PERSONA",
+   "text": "Ilario"
+  },
+  {
+   "start": 1095,
+   "end": 1105,
+   "cat": "PERSONA",
+   "text": "Tortorella"
+  },
+  {
+   "start": 1106,
+   "end": 1151,
+   "cat": "EMAIL",
+   "text": "ilario.tortorella@panificiocorradengo.example"
+  },
+  {
+   "start": 1152,
+   "end": 1164,
+   "cat": "TEL",
+   "text": "374 174 5406"
+  },
+  {
+   "start": 1166,
+   "end": 1188,
+   "cat": "INDIRIZZO",
+   "text": "Contrada Fontanelle 23"
+  },
+  {
+   "start": 1190,
+   "end": 1197,
+   "cat": "CAP_COMUNE",
+   "text": "Cosenza"
+  },
+  {
+   "start": 1198,
+   "end": 1203,
+   "cat": "CAP_COMUNE",
+   "text": "88900"
+  }
+ ]
+}

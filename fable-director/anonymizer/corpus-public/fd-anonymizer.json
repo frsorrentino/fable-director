@@ -1,0 +1,34 @@
+{
+ "dictionary": {
+  "PERSONA": [
+   "Teodora Vanzetti",
+   "Ilario Corradengo",
+   "Vittorina Pellizzari",
+   "Cosimo Scarafoni",
+   "Gelsomina Tortorella",
+   "Baldassarre Brancaleone",
+   "Ortensia Zampolini",
+   "Ludovico Ferraguti",
+   "Clelia Quaranta",
+   "Anselmo Lombardozzi"
+  ],
+  "ORG": [
+   "Officine Zampolini S.r.l.",
+   "Panificio Corradengo di Ilario Corradengo",
+   "Studio Legale Vanzetti e Associati",
+   "Agriturismo Le Tre Querce S.n.c.",
+   "Quaranta Impianti S.p.A."
+  ],
+  "DOMINIO": [
+   "zampolini-officine.example",
+   "panificiocorradengo.example",
+   "vanzettilex.example",
+   "tre-querce.example",
+   "quarantaimpianti.example"
+  ]
+ },
+ "whitelist": [
+  "Pixelfarm",
+  "Crostini"
+ ]
+}

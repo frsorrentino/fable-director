@@ -1,0 +1,8 @@
+[
+ {"id": 0, "email": "gelsomina.scarafoni@panificiocorradengo.example", "first_name": "Gelsomina", "last_name": "Scarafoni", "phone": "+39 363 303 3289", "rating": 4, "note": "ok"},
+ {"id": 1, "email": "baldassarre.vanzetti@panificiocorradengo.example", "first_name": "Baldassarre", "last_name": "Vanzetti", "phone": "+39 321 172 5187", "rating": 4, "note": "ok"},
+ {"id": 2, "email": "vittorina.vanzetti@zampolini-officine.example", "first_name": "Vittorina", "last_name": "Vanzetti", "phone": "+39 368 991 9289", "rating": 3, "note": "ok"},
+ {"id": 3, "email": "anselmo.scarafoni@vanzettilex.example", "first_name": "Anselmo", "last_name": "Scarafoni", "phone": "+39 325 570 4036", "rating": 2, "note": "ok"},
+ {"id": 4, "email": "gelsomina.ferraguti@zampolini-officine.example", "first_name": "Gelsomina", "last_name": "Ferraguti", "phone": "+39 353 472 6389", "rating": 5, "note": "ok"},
+ {"id": 5, "email": "baldassarre.scarafoni@zampolini-officine.example", "first_name": "Baldassarre", "last_name": "Scarafoni", "phone": "+39 359 323 6842", "rating": 2, "note": "ok"}
+]

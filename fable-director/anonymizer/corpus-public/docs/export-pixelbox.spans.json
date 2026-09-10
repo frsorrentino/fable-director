@@ -1,0 +1,157 @@
+{
+ "doc": "export-pixelbox",
+ "annotator": "generator",
+ "reviewed": true,
+ "spans": [
+  {
+   "start": 29,
+   "end": 54,
+   "cat": "ORG",
+   "text": "Officine Zampolini S.r.l."
+  },
+  {
+   "start": 55,
+   "end": 66,
+   "cat": "PIVA",
+   "text": "93141705868"
+  },
+  {
+   "start": 67,
+   "end": 98,
+   "cat": "EMAIL",
+   "text": "info@zampolini-officine.example"
+  },
+  {
+   "start": 100,
+   "end": 126,
+   "cat": "DOMINIO",
+   "text": "zampolini-officine.example"
+  },
+  {
+   "start": 129,
+   "end": 152,
+   "cat": "DOMINIO",
+   "text": "zampolini-officine.test"
+  },
+  {
+   "start": 153,
+   "end": 194,
+   "cat": "ORG",
+   "text": "Panificio Corradengo di Ilario Corradengo"
+  },
+  {
+   "start": 195,
+   "end": 206,
+   "cat": "PIVA",
+   "text": "49208312402"
+  },
+  {
+   "start": 207,
+   "end": 239,
+   "cat": "EMAIL",
+   "text": "info@panificiocorradengo.example"
+  },
+  {
+   "start": 241,
+   "end": 268,
+   "cat": "DOMINIO",
+   "text": "panificiocorradengo.example"
+  },
+  {
+   "start": 271,
+   "end": 295,
+   "cat": "DOMINIO",
+   "text": "panificiocorradengo.test"
+  },
+  {
+   "start": 296,
+   "end": 330,
+   "cat": "ORG",
+   "text": "Studio Legale Vanzetti e Associati"
+  },
+  {
+   "start": 331,
+   "end": 342,
+   "cat": "PIVA",
+   "text": "23448347825"
+  },
+  {
+   "start": 343,
+   "end": 367,
+   "cat": "EMAIL",
+   "text": "info@vanzettilex.example"
+  },
+  {
+   "start": 369,
+   "end": 388,
+   "cat": "DOMINIO",
+   "text": "vanzettilex.example"
+  },
+  {
+   "start": 391,
+   "end": 407,
+   "cat": "DOMINIO",
+   "text": "vanzettilex.test"
+  },
+  {
+   "start": 408,
+   "end": 440,
+   "cat": "ORG",
+   "text": "Agriturismo Le Tre Querce S.n.c."
+  },
+  {
+   "start": 441,
+   "end": 452,
+   "cat": "PIVA",
+   "text": "45040008836"
+  },
+  {
+   "start": 453,
+   "end": 476,
+   "cat": "EMAIL",
+   "text": "info@tre-querce.example"
+  },
+  {
+   "start": 478,
+   "end": 496,
+   "cat": "DOMINIO",
+   "text": "tre-querce.example"
+  },
+  {
+   "start": 499,
+   "end": 514,
+   "cat": "DOMINIO",
+   "text": "tre-querce.test"
+  },
+  {
+   "start": 515,
+   "end": 539,
+   "cat": "ORG",
+   "text": "Quaranta Impianti S.p.A."
+  },
+  {
+   "start": 540,
+   "end": 551,
+   "cat": "PIVA",
+   "text": "87371678688"
+  },
+  {
+   "start": 552,
+   "end": 581,
+   "cat": "EMAIL",
+   "text": "info@quarantaimpianti.example"
+  },
+  {
+   "start": 583,
+   "end": 607,
+   "cat": "DOMINIO",
+   "text": "quarantaimpianti.example"
+  },
+  {
+   "start": 610,
+   "end": 631,
+   "cat": "DOMINIO",
+   "text": "quarantaimpianti.test"
+  }
+ ]
+}
