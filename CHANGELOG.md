@@ -2,9 +2,9 @@
 
 Full release history. The README shows only the latest few entries.
 
-## Unreleased
+## 1.44.x
 
-- **Anonymizer, phase A — the engine and its CLI (no release yet).**
+- **1.44.0 — anonymizer phase A: the engine and its CLI.**
   - `fable-director/anonymizer/`: stdlib package with three pure functions (`scan`, `redact`, `restore`) behind engines `columns`, `rules` (packs `base` and `it` with check digits) and `dictionary`; spans on the original text, one merge (longest wins, then engine order), one replacement with stable `[CAT_N]` placeholders; `restore` byte-exact through variant letters for a second surface form of the same entity. Map files 0600 under `~/.claude/fable-director/anonymizer/maps/`.
   - `scripts/anonymizer.py`: `scan`, `redact`, `restore`, `test`, `status`, the usual `STATUS:/OUTPUT:/DETAIL:`; never a value in a report. Config `~/.claude/fable-director/anonymizer.json` + per-project `.fd-anonymizer.json`.
   - Corpus with known truth: 10 synthetic documents shipped in `anonymizer/corpus-public/` (generator with seed, valid check digits, invented people), plus a private corpus of real documents outside any repository (`corpus.private_dir`, `.gitignore` safety entries). Measured on 43 documents: formatted categories precision 1.000, recall 0.9975; names in prose 0 of 6 (phase C).
