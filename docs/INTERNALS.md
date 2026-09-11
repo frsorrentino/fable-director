@@ -136,7 +136,7 @@ plugin (`~/.claude/delega-playbook.md`), so updates never erase what it learned.
 | **`SessionEnd` hook (telemetry)** | Logs tokens and cache/delegation metrics to SQLite; reaps per-session registries |
 | **`SubagentStart`/`SubagentStop`** | Counts delegations as they start — nested included — and measures the effort each subagent really ran with |
 | **Playbook** | Learned heuristics that survive updates |
-| **`session-cost-report.py`** | Token report from the real JSONL transcripts |
+| **`session-cost-report.py`** | Token report from the real JSONL transcripts; friction proxies (tool errors, corrections, edit churn) and cost per turn by session depth, `--since` for a depth-standardized before/after |
 | **Statusline + installer** | `/fable-director:statusline`, idempotent and merge-safe |
 | **Anonymizer** (`anonymizer/`, phase A) | Pseudonymisation engine and CLI; see the section below |
 

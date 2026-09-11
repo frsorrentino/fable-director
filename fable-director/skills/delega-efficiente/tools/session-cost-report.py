@@ -20,6 +20,7 @@ vengono lette da lì. Oltre ai totali stampa le metriche derivate di cache e
 delega (allarmi, non target: ottimizzarle al ribasso è Goodhart reentry).
 """
 import json
+import re
 import os
 import sys
 from collections import defaultdict
@@ -45,6 +46,19 @@ def _fdt():
         return mod
     except Exception:
         return None
+
+
+BANDS = ["1-25", "26-50", "51-100", "101-200", "201-400", "401-800", "801+"]
+
+
+def depth_band(n):
+    for b in BANDS:
+        if b.endswith("+"):
+            return b
+        lo, hi = b.split("-")
+        if int(lo) <= n <= int(hi):
+            return b
+    return BANDS[-1]
 
 
 def find_usage(obj, model_hint=None, in_tool_result=False):
@@ -119,6 +133,7 @@ def main():
     budget = None
     budget_input = None
     session_filter = None
+    since = None   # --since YYYY-MM-DD: confronto prima/dopo (turni per profondità)
     dirs = []
     while args:
         a = args.pop(0)
@@ -128,6 +143,8 @@ def main():
             budget_input = int(args.pop(0))
         elif a == "--session":
             session_filter = args.pop(0)
+        elif a == "--since":
+            since = datetime.fromisoformat(args.pop(0)).replace(tzinfo=timezone.utc)
         else:
             dirs.append(Path(a))
     budget_task = None
@@ -167,8 +184,23 @@ def main():
 
     scoped = defaultdict(int)   # solo record >= declared_at (per il pre-budget)
     scoped_no_ts = 0
+    fdt = _fdt()
+    # Attrito e costo per turno per profondità (metodo: makinggainz/
+    # claude-code-measure-efficiency, 2026-08). Ogni turno del main thread
+    # porta (ts, eq, banda di profondità, periodo); i subagent vanno al turno
+    # che li ha lanciati (l'ultimo turno main precedente nel tempo).
+    corr_re = getattr(fdt, "CORRECTION_RE", None) if fdt else None
+    if corr_re is None:
+        corr_re = re.compile(r"(?i)\b(non funziona|sbagliat[oaie]|rivedi|rifai|hai saltato|annulla|revert|undo|"
+                             r"that'?s wrong|does ?n'?t work|you missed|wrong)\b")
+    fr = {"before": defaultdict(int), "after": defaultdict(int)}
+    edits_by_file = {"before": defaultdict(int), "after": defaultdict(int)}
+    main_turns = []     # (ts, eq, band, period)
+    sub_costs = []      # (ts, eq)
     for f in files:
         kind = "subagent" if "agent" in f.name else "main"
+        session_start = None
+        turn_idx = 0
         with open(f, errors="replace") as fh:
             for line in fh:
                 line = line.strip()
@@ -179,6 +211,46 @@ def main():
                 except json.JSONDecodeError:
                     bad_lines += 1
                     continue
+                rts = None
+                try:
+                    rts = datetime.fromisoformat(str(rec.get("timestamp")).replace("Z", "+00:00"))
+                    if rts.tzinfo is None:
+                        rts = rts.replace(tzinfo=timezone.utc)
+                except (ValueError, TypeError):
+                    pass
+                if session_start is None and rts is not None:
+                    session_start = rts
+                period = "after" if (since is not None and session_start is not None
+                                     and session_start >= since) else "before"
+                # attrito
+                msg = rec.get("message") or {}
+                content = msg.get("content")
+                if rec.get("type") == "user" and isinstance(content, list):
+                    fr[period]["tool_errors"] += sum(
+                        1 for b in content if isinstance(b, dict)
+                        and b.get("type") == "tool_result" and b.get("is_error"))
+                if rec.get("type") == "user" and not rec.get("isMeta") and not rec.get("isSidechain"):
+                    if isinstance(content, str):
+                        ht = content.strip()
+                    elif isinstance(content, list) and not any(
+                            isinstance(b, dict) and b.get("type") == "tool_result" for b in content):
+                        ht = " ".join(str(b.get("text") or "") for b in content
+                                      if isinstance(b, dict) and b.get("type") == "text").strip()
+                    else:
+                        ht = ""
+                    if ht and not ht.startswith("<"):
+                        fr[period]["human_turns"] += 1
+                        if corr_re.search(ht):
+                            fr[period]["corrections"] += 1
+                if rec.get("type") == "assistant" and isinstance(content, list):
+                    for b in content:
+                        if isinstance(b, dict) and b.get("type") == "tool_use":
+                            fr[period]["tool_calls"] += 1
+                            if b.get("name") in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
+                                fp = str((b.get("input") or {}).get("file_path") or
+                                         (b.get("input") or {}).get("notebook_path") or "")
+                                if fp:
+                                    edits_by_file[period][(f.name, fp)] += 1
                 in_scope = True
                 if declared is not None:
                     try:
@@ -199,13 +271,21 @@ def main():
                         per_file[(kind, f.name)][k] += v
                         if in_scope:
                             scoped[k] += v
+                    if fdt and rts is not None:
+                        eq = fdt.eq_tokens(usage.get("input_tokens") or 0, usage.get("output_tokens") or 0,
+                                           usage.get("cache_read_input_tokens") or 0,
+                                           usage.get("cache_creation_input_tokens") or 0, model=model)
+                        if kind == "main":
+                            turn_idx += 1
+                            main_turns.append([rts, eq, depth_band(turn_idx), period])
+                        else:
+                            sub_costs.append((rts, eq))
 
     def fmt(n):
         return f"{n:,}".replace(",", ".")
 
     print(f"# Report token — {len(files)} transcript, "
           f"{bad_lines} righe illeggibili (ignorate)\n")
-    fdt = _fdt()
     eq_col = f" {'eq':>12} {'cr×':>5}" if fdt else ""
     print(f"{'modello':<40} {'input':>12} {'output':>12} {'cache_read':>12} {'cache_new':>12}{eq_col}")
     tot = defaultdict(int)
@@ -259,6 +339,74 @@ def main():
             alarms.append("coordination_cost > 1: orchestratore spende più dei subagenti")
     for a in alarms:
         print(f"⚠ {a}")
+
+    # Attrito — proxy di rework, non correttezza.
+    def fr_line(d, ed):
+        tc, te = d["tool_calls"], d["tool_errors"]
+        ht, co = d["human_turns"], d["corrections"]
+        edits = sum(ed.values())
+        churn = sum(n - 1 for n in ed.values() if n > 1)
+        return (f"tool error rate {(100 * te / tc) if tc else 0:.1f}% ({te}/{tc})   "
+                f"correction rate {(100 * co / ht) if ht else 0:.1f}% ({co}/{ht} turni umani)   "
+                f"edit churn {(100 * churn / edits) if edits else 0:.1f}% ({churn}/{edits})")
+    print("\n## Attrito (proxy di rework dal transcript, non correttezza)")
+    if since is None:
+        print(fr_line(fr["before"], edits_by_file["before"]))
+    else:
+        print(f"prima di {since.date()}: " + fr_line(fr["before"], edits_by_file["before"]))
+        print(f"da {since.date()}:      " + fr_line(fr["after"], edits_by_file["after"]))
+
+    # Costo per turno per profondità (eq): il cache read al turno N dipende
+    # da N; confrontare periodi con mix di profondità diverso senza
+    # standardizzare confonde efficienza e lunghezza delle sessioni.
+    if main_turns:
+        if sub_costs:
+            import bisect
+            main_turns.sort(key=lambda t: t[0])
+            keys = [t[0] for t in main_turns]
+            for sts, seq in sub_costs:
+                i = bisect.bisect_right(keys, sts) - 1
+                if i >= 0:
+                    main_turns[i][1] += seq
+        print("\n## Costo per turno per profondità (eq; subagent attribuiti al turno che li lancia)")
+        by = {}
+        for _, eq, band, period in main_turns:
+            by.setdefault((period, band), []).append(eq)
+        periods = ["before", "after"] if since is not None else ["before"]
+        head = f"{'banda':<9}" + "".join(f"{'turni':>8}{'eq/turno':>12}" for _ in periods)
+        if since is not None:
+            head += "   (prima | da " + str(since.date()) + ")"
+        print(head)
+        for band in BANDS:
+            cells = []
+            for pr in periods:
+                v = by.get((pr, band), [])
+                cells.append(f"{len(v):>8}{(fmt(int(sum(v) / len(v))) if v else '-'):>12}")
+            print(f"{band:<9}" + "".join(cells))
+        raw = {pr: [t[1] for t in main_turns if t[3] == pr] for pr in periods}
+        for pr in periods:
+            if raw[pr]:
+                print(f"{'media ' + ('prima' if pr == 'before' else 'dopo'):<9}{len(raw[pr]):>8}"
+                      f"{fmt(int(sum(raw[pr]) / len(raw[pr]))):>12}")
+        if since is not None and raw["before"] and raw["after"]:
+            # standardizzazione diretta: eq/turno del dopo, ripesato sul mix
+            # di profondità del prima (bande senza dati nel dopo: escluse dal peso)
+            w = {b: len(by.get(("before", b), [])) for b in BANDS}
+            num = den = 0
+            for b in BANDS:
+                a = by.get(("after", b), [])
+                if a and w[b]:
+                    num += w[b] * (sum(a) / len(a))
+                    den += w[b]
+            m_b = sum(raw["before"]) / len(raw["before"])
+            m_a = sum(raw["after"]) / len(raw["after"])
+            print(f"costo/turno grezzo: prima {fmt(int(m_b))}, dopo {fmt(int(m_a))} "
+                  f"({(m_a / m_b - 1) * 100:+.1f}%)")
+            if den:
+                std = num / den
+                print(f"standardizzato sul mix di profondità del prima: {fmt(int(std))} "
+                      f"({(std / m_b - 1) * 100:+.1f}%) — bande con dati su entrambi i lati: "
+                      f"{sum(1 for b in BANDS if by.get(('after', b)) and w[b])}/{len(BANDS)}")
 
     # Pre-budget: coi dati del budget file il confronto è scoped a
     # declared_at (come lo Stop hook); con --budget manuale resta sui totali.

@@ -2,6 +2,16 @@
 
 Full release history. The README shows only the latest few entries.
 
+## Unreleased
+
+- **Competitor review 2026-09-11 — five adoptions, none of them a feature copied, all of them measurement.** Report: `docs/concorrenti-2026-09-11.md` (21 repos checked since Sept 1, new repos searched; adoptions and rejections with reasons).
+  - `session-cost-report.py`: **friction proxies** from the transcripts — tool error rate (`tool_result.is_error`), correction rate on real human turns (injected reminders, tool results and meta turns excluded; Italian and English correction language), edit churn on the same file — and **cost per turn by session depth** (seven fixed bands, eq at the row model's cache rate, subagent cost attributed to the main turn that launched it). `--since YYYY-MM-DD` compares two periods and prints the after-period cost per turn **standardized on the before-period depth mix**, so a plugin version can be compared without the confound of session length. Method and its published correction: makinggainz/claude-code-measure-efficiency.
+  - `session-summary` writes the same `friction` counts per session; `report` aggregates them (friction, not correctness).
+  - `/fable-director:status`: a `today` row — sessions closed today, eq and, with `pricing.json`, list-price dollars; a comparison figure for a subscription user, never a bill (from claude-hud's `showDailyCost`).
+  - Anonymizer suite A11: seven pathological inputs, each rule must stay under one second (ruflo fixed ReDoS in its PII regexes the same week; ours measured 224 ms worst case).
+  - `benchmarks/README.md`: the denominator is declared in every comparison (output tokens vs turns at matched depth), sessions bucketed by first-record timestamp, subagent files grouped under their session.
+  - Suite: `tests/friction-depth-verify.py` (P1–P4).
+
 ## 1.44.x
 
 - **1.44.1 — Claude Code 2.1.268 recepito, default Codex aggiornato.**

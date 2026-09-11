@@ -14,6 +14,14 @@ It compares the same task run by Claude Code **without** and **with** the fable-
 - Tokens read from the `claude -p` JSON output (`.usage`, `.total_cost_usd`) — no estimates.
 - Deterministic fixtures (fixed seed) regenerated before each run.
 - **N runs per side** (default 3): report the mean and spread, not a single run.
+- **Denominator declared.** Cost per unit of work depends on the unit, and no unit is
+  neutral: output tokens respond to any intervention that changes verbosity, a turn is not a
+  fixed amount of work. Every comparison names its denominator, and when the intervention
+  touches verbosity both are reported (cost per output token *and* cost per turn at matched
+  session depth). Sessions are bucketed by the timestamp of their first record, never by
+  file mtime (a resume rewrites it), and a session's subagent files are grouped under its
+  session id, never counted as sessions. (Method lesson from makinggainz/claude-code-measure-efficiency,
+  whose published correction of 2026-08-14 shows both mistakes inflating a result.)
 
 ## Tasks (4 shapes)
 

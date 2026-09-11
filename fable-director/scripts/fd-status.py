@@ -271,6 +271,37 @@ def main():
     except Exception:
         pass
 
+    # Today's spend: sessions closed today (session_summary rows), in eq and,
+    # with pricing.json, at list price. A comparison figure for a subscription
+    # user, never a bill (idea from claude-hud's showDailyCost, 2026-09).
+    try:
+        con = sqlite3.connect(BASE / "telemetry.db", timeout=0.5)
+        con.execute("PRAGMA busy_timeout=500")
+        day0 = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z")
+        n_s = eq_sum = out_sum = 0
+        for (pl,) in con.execute(
+                "SELECT payload FROM events WHERE event='session_summary' AND ts >= ?", (day0,)):
+            try:
+                p = json.loads(pl or "{}")
+            except json.JSONDecodeError:
+                continue
+            n_s += 1
+            eq_sum += int(p.get("eq_tokens") or 0)
+            out_sum += int(p.get("output_tokens") or 0)
+        con.close()
+        if n_s:
+            seg = f"{n_s} session{'s' if n_s != 1 else ''} closed, {eq_sum / 1e6:.1f}M eq"
+            try:
+                per_mtok = float(json.loads((BASE / "pricing.json").read_text())
+                                 .get("input_usd_per_mtok"))
+                seg += f" ≈ ${eq_sum / 1e6 * per_mtok:,.0f} at list price"
+            except Exception:
+                pass
+            seg += " — comparison, not a bill (UTC day; open sessions not counted)"
+            add("today", seg)
+    except Exception:
+        pass
+
     # External executors/verifiers today (cross-family verification +
     # external_exec). Config present but zero calls → today's free credit
     # is dormant (it resets daily): a signal, not a fault.

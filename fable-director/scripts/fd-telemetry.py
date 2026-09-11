@@ -387,6 +387,44 @@ def find_usage(obj, in_subagent=False, model=None):
 CACHE_RESET_THRESHOLD = 10_000  # cache_read "alto" prima di un reset sospetto
 WRITE_TOOLS = {"Edit", "Write", "NotebookEdit"}  # prima azione irreversibile
 
+# Attrito (proxy di rework, non di correttezza — makinggainz/claude-code-
+# measure-efficiency, 2026-08): turni umani VERI che contengono linguaggio di
+# correzione. Esclusi tool_result, promemoria iniettati (<system-reminder>),
+# output di comandi (<local-command…>), record isMeta/sidechain.
+CORRECTION_RE = re.compile(
+    r"(?i)\b(non (?:funziona|va bene|era questo|\u00e8 quello)|sbagliat[oaie]|rivedi|rifai|rifallo|"
+    r"hai (?:saltato|dimenticato|rotto)|annulla|torna indietro|ripristina|revert|undo|"
+    r"that'?s wrong|does ?n'?t work|doesn'?t work|you (?:missed|broke|forgot)|not what i asked|wrong)\b")
+
+
+def human_turn_text(rec):
+    """Testo di un turno umano vero, o None."""
+    if rec.get("type") != "user" or rec.get("isMeta") or rec.get("isSidechain"):
+        return None
+    c = (rec.get("message") or {}).get("content")
+    if isinstance(c, str):
+        t = c
+    elif isinstance(c, list):
+        if any(isinstance(b, dict) and b.get("type") == "tool_result" for b in c):
+            return None
+        t = " ".join(str(b.get("text") or "") for b in c if isinstance(b, dict) and b.get("type") == "text")
+    else:
+        return None
+    t = t.strip()
+    if not t or t.startswith("<"):
+        return None
+    return t
+
+
+def tool_errors_in(rec):
+    """tool_result con is_error in un record user (0 altrove)."""
+    if rec.get("type") != "user":
+        return 0
+    c = (rec.get("message") or {}).get("content")
+    if not isinstance(c, list):
+        return 0
+    return sum(1 for b in c if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("is_error"))
+
 
 def find_tool_uses(obj, in_subagent=False):
     """(nome, input) dei tool_use nel main loop (sottoalberi toolUseResult
@@ -485,6 +523,7 @@ def sum_transcript(path):
     effort_mix = {}
     effort_seen = set()
     rw = rework_new()
+    tool_calls = tool_errors = human_turns = corrections = 0
     try:
         fh = open(path, errors="replace")
     except OSError:
@@ -504,8 +543,15 @@ def sum_transcript(path):
                 first_ts = first_ts or ts
                 last_ts = ts
             n_calls_rec = 0
+            tool_errors += tool_errors_in(rec)
+            ht = human_turn_text(rec)
+            if ht is not None:
+                human_turns += 1
+                if CORRECTION_RE.search(ht):
+                    corrections += 1
             for name, tin in find_tool_uses(rec):
                 n_calls_rec += 1
+                tool_calls += 1
                 tool_counts[name] = tool_counts.get(name, 0) + 1
                 run_len = run_len + 1 if name == last_tool else 1
                 last_tool = name
@@ -572,6 +618,13 @@ def sum_transcript(path):
     rew = rework_stats(rw)
     if rew:
         stats["rework"] = rew
+    # Attrito: tre proxy deterministici (errori dei tool, correzioni umane,
+    # churn degli Edit sullo stesso file). Misurano attrito, non correttezza.
+    touch = (rw or {}).get("touch") or {}
+    stats["friction"] = {"tool_calls": tool_calls, "tool_errors": tool_errors,
+                         "human_turns": human_turns, "corrections": corrections,
+                         "edits": sum(touch.values()),
+                         "edit_churn": sum(n - 1 for n in touch.values() if n > 1)}
     return main, sub, n_sub, cache_resets, first_ts, last_ts, stats
 
 
@@ -1959,6 +2012,20 @@ def cmd_report(args):
     # nelle tool call ma nei re-edit, perché ogni ritorno su un file già
     # scritto rispedisce la conversazione cresciuta. Metrica auto-scritta
     # da session-summary/Stop hook — mai autostima del modello.
+    fr = [p.get("friction") for e, p in events if e == "session_summary"]
+    fr = [f for f in fr if isinstance(f, dict)]
+    if fr:
+        tc = sum(f.get("tool_calls") or 0 for f in fr)
+        te = sum(f.get("tool_errors") or 0 for f in fr)
+        ht = sum(f.get("human_turns") or 0 for f in fr)
+        co = sum(f.get("corrections") or 0 for f in fr)
+        ed = sum(f.get("edits") or 0 for f in fr)
+        ch = sum(f.get("edit_churn") or 0 for f in fr)
+        print(f"\nFriction — rework proxies from the transcripts ({len(fr)} sessions; "
+              f"friction, not correctness): tool error rate "
+              f"{(100 * te / tc) if tc else 0:.1f}% ({te}/{tc}), correction rate "
+              f"{(100 * co / ht) if ht else 0:.1f}% of {ht} human turns, edit churn "
+              f"{(100 * ch / ed) if ed else 0:.1f}% ({ch} repeat edits / {ed})")
     rew = [p.get("rework") for e, p in events if e == "session_summary"]
     rew = [r for r in rew if isinstance(r, dict) and r.get("write_touches")]
     if rew:

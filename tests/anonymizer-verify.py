@@ -15,6 +15,7 @@ against a throwaway HOME. No client data: every fixture is synthetic
   A8  test --strict passes thresholds; report leaks no corpus value
   A9  CLI: STATUS on every command, scan writes no map, redact/restore --out, status --purge
   A10 performance <= 5 ms/KB on 200 KB
+  A11 no catastrophic backtracking: seven pathological inputs, each under 1 s
 
 Usage: python3 tests/anonymizer-verify.py   (exit 0 = all green)
 """
@@ -327,6 +328,25 @@ def test_cli(home):
     rep = json.loads(r.stdout.split("STATUS:")[0])
     ms_kb = rep[0]["ms"] / (rep[0]["chars"] / 1024)
     check("A10 scan <= 5 ms/KB on 200 KB", ms_kb <= 5.0, f"{ms_kb:.2f} ms/KB, wall {wall:.2f}s")
+
+    # A11 — ReDoS: every rule must stay linear-ish on adversarial input
+    # (nested quantifiers in the address, CAP, phone and e-mail rules).
+    import copy
+    from anonymizer.rules import find_spans
+    from anonymizer.config import DEFAULTS
+    cfg = copy.deepcopy(DEFAULTS)
+    cases = {"via+parole": "via " + "Aaaa " * 3000 + "!", "prot cifre": "prot. n. " + "1" * 5000 + "x",
+             "tel separatori": "tel. 3" + " 3" * 4000 + "x", "cap comune": "88900 " + "Aaaa " * 3000 + "?",
+             "iban-like": "IT" + "12" * 3000 + "!", "nato il": "nato a " + "a" * 3000 + " il x",
+             "email-like": "a" * 5000 + "@" + "b" * 5000 + "!"}
+    slow = {}
+    for name, text in cases.items():
+        t0 = time.perf_counter()
+        find_spans(text, cfg, [])
+        ms = (time.perf_counter() - t0) * 1000
+        if ms > 1000:
+            slow[name] = round(ms)
+    check("A11 no catastrophic backtracking (each pathological input < 1 s)", not slow, slow)
 
 
 # ---------------------------------------------------------------- A3 / A6
