@@ -17,8 +17,8 @@
         "source": "git-subdir",
         "url": "https://github.com/frsorrentino/claude-master.git",
         "path": "claude-master",
-        "ref": "v0.3.5",
-        "sha": "75df4affcadfd37262a25aad63d4a4d545180795"
+        "ref": "v0.3.6",
+        "sha": "d76228a567530017d43be487447721b50f101dd3"
       },
       "description": "Run many Claude Code sessions on one machine: launch them in the right folder and account, in tmux, with a terminal window whose tab tells you which is which; list, close, restart, talk to them and restore them after a reboot. Configurable per machine, generic across terminals."
     }
