@@ -104,6 +104,10 @@ ECON_USER = BASE / "model-economics.json"
 _ECON = None
 # Tier di effort ammessi (allineati al frontmatter agent di Claude Code).
 EFFORT_LEVELS = {"low", "medium", "high", "xhigh", "max"}
+# Rotte in cui a scrivere e' un ESECUTORE, non il modello principale: li' il
+# perimetro di scrittura e' obbligatorio (vedi cmd_budget_open). inline ed
+# external scrivono col modello principale, gia' sotto il permission mode.
+DELEGATING_ROUTES = {"agent", "workflow", "bg-session"}
 
 
 def model_economics():
@@ -773,6 +777,27 @@ def cmd_budget_open(args):
         sys.exit("invalid --data-class (allowed: public, internal, restricted)")
     if not opts["--task"] or not opts["--expected-output"]:
         sys.exit("budget-open requires --task and --expected-output")
+    # Il perimetro di scrittura e' l'unica regola del kernel rimasta sotto il
+    # 90 %: misurato il 14/09/2026 su 30 giorni, 36 budget su 50 lo
+    # dichiaravano (72 %), e 5 delle 26 deleghe partivano senza. Senza --paths
+    # il gate sulle scritture non ha nulla da confrontare: un esecutore puo'
+    # scrivere ovunque nel progetto. Lo pretendiamo SOLO sulle rotte che
+    # delegano — inline ed external scrivono col modello principale, gia' sotto
+    # il permission mode dell'utente — e nel momento in cui il budget si apre,
+    # perche' la prosa attaccata a un gesto in corso viene seguita (72-92 %)
+    # mentre quella che chiede un gesto separato no (0-9 %). `--paths none` e'
+    # la rinuncia esplicita: dichiarata e a verbale, non un'omissione.
+    if opts["--route"] in DELEGATING_ROUTES and not opts["--paths"]:
+        sys.exit(
+            f"--route {opts['--route']} requires --paths: declare where the "
+            f"executor may write (e.g. --paths \"src/**,tests/**\"), so the "
+            f"perimeter hook has something to enforce. Writes outside the "
+            f"project (scratchpad, /tmp) are never constrained anyway. If the "
+            f"task genuinely has no bounded write area, say so on purpose: "
+            f"--paths none")
+    if str(opts["--paths"] or "").strip().lower() == "none":
+        opts["--paths"] = None
+        opts["--paths-waived"] = True
     if opts["--effort"] and opts["--effort"] not in EFFORT_LEVELS:
         sys.exit(f"invalid --effort: {opts['--effort']} "
                  f"(allowed: {', '.join(sorted(EFFORT_LEVELS))})")
@@ -875,6 +900,9 @@ def cmd_budget_open(args):
         # si estende solo con budget-amend (emendamento esplicito, loggato).
         "paths": [p.strip() for p in (opts["--paths"] or "").split(",")
                   if p.strip()] or None,
+        # `--paths none` su una rotta che delega: rinuncia DICHIARATA, non
+        # un'omissione. Resta nella ricevuta perche' si veda a posteriori.
+        "paths_waived": bool(opts.get("--paths-waived")) or None,
         "expected_output_tokens": exp_out,
         "expected_input_tokens": exp_in,
         # agents: fan-out dichiarato — decision record e denominatore per la
@@ -1232,6 +1260,8 @@ def receipt_lines(budget, cwd, sid):
         detail.append(f"data class: {budget['data_class']}")
     if budget.get("paths"):
         detail.append("write perimeter: " + ", ".join(budget["paths"]))
+    elif budget.get("paths_waived"):
+        detail.append("write perimeter: waived on purpose (--paths none)")
     return line, detail
 
 

@@ -5,6 +5,53 @@ execution goes to the cheapest adequate means (script > mid-model > top model).
 Like a Renaissance workshop: the master (the director) sketches and refines, the apprentices
 execute, the workshop accrues craft.
 
+## Why a hook and not an instruction
+
+Most of this plugin could have been a page of instructions. It isn't, and the reason is
+measured rather than assumed. Across 30 days and 161 real sessions we compared how often an
+instruction was actually carried out, depending on how it was asked.
+
+**Asked while the model is already doing something** — the flags on the command that opens a
+budget, which it has to run anyway before delegating:
+
+| What the instruction asks for | Carried out |
+|---|---|
+| declare the route taken | 100% |
+| declare why, naming the rule that allows it and the one that forbids it | 92% |
+| declare a *done* that can be checked | 90% |
+| declare where files may be written | 72% |
+
+**Asked as a separate step, later** — record what happened, once the work is over:
+
+| What the instruction asks for | Carried out |
+|---|---|
+| record a route change | 27 times |
+| record that a check ran | 5 times out of 53 finished tasks — 9% |
+| record that the failure ladder reached its last rung | never |
+| record that a repeated job became a script | never |
+
+Meanwhile every single thing written by a hook arrived without exception: 161 session
+summaries for 161 sessions.
+
+The lesson is not "models don't follow instructions". It is narrower and more useful: an
+instruction attached to a gesture already in progress gets followed; an instruction asking for
+a separate gesture afterwards does not. So this plugin follows two rules.
+
+**If a signal matters, a mechanism writes it.** Checks, failure escalations and budget
+overruns are recorded by hooks, because a hook that already runs the check has no excuse for
+not recording the outcome. Nothing depends on remembering.
+
+**If something must be declared, ask for it in the moment of the act.** The write perimeter is
+required when the budget opens, not recommended in a page someone read an hour earlier — and
+only on the routes where an assistant does the writing, since that is where the protection
+does any work. Declining is allowed, but it has to be said out loud and it ends up on the
+receipt.
+
+Where neither is possible, the instruction stops being a rule and becomes a question asked at
+the right moment. Promoting a repeated job to a script cannot be observed by any hook, so
+nobody is told to remember it: the question is raised when a job is finished for the second
+time by a model rather than by code.
+
 ## Components
 
 | Piece | Role |
