@@ -79,6 +79,52 @@ def soft_dep_candidates(prompt_lower):
     return out
 
 
+TRACK_MIN_RUNS = 3      # sotto questa soglia il tasso e' rumore, non si mostra
+TRACK_DAYS = 180
+
+
+def track_record(names):
+    """Come e' andata finora, per provider, presa dal ledger `external_exec`.
+
+    Il dato esisteva gia' ma viveva solo in `report`, che si legge dopo. Qui
+    arriva NEL MOMENTO in cui la rotta si sceglie: e' la stessa regola del
+    perimetro — un'informazione attaccata al gesto in corso viene usata,
+    una in una pagina letta un'ora prima no (misurato 14/09/2026: 72-100 %
+    contro 0-9 %). Best-effort: se la telemetria non risponde, la riga di
+    suggerimento resta quella di prima, mai un errore."""
+    try:
+        import sqlite3
+        con = sqlite3.connect(base_dir() / "telemetry.db", timeout=0.5)
+        con.execute("PRAGMA busy_timeout=500")
+        tally = {}
+        for (p,) in con.execute(
+                "SELECT payload FROM events WHERE event='external_exec' "
+                f"AND ts > datetime('now','-{TRACK_DAYS} days')"):
+            try:
+                d = json.loads(p)
+            except Exception:
+                continue
+            prov = d.get("provider")
+            if prov in names:
+                ok, tot = tally.get(prov, (0, 0))
+                tally[prov] = (ok + (1 if d.get("ok") else 0), tot + 1)
+        con.close()
+    except Exception:
+        return ""
+    parts = [f"{p} {ok}/{tot}" for p, (ok, tot) in sorted(tally.items())
+             if tot >= TRACK_MIN_RUNS]
+    if not parts:
+        return ""
+    peggiore = min(((ok / tot, p, ok, tot) for p, (ok, tot) in tally.items()
+                    if tot >= TRACK_MIN_RUNS), default=None)
+    coda = ""
+    if peggiore and peggiore[0] < 0.8:
+        coda = (f" — {peggiore[1]} ha fallito "
+                f"{peggiore[3] - peggiore[2]} volte su {peggiore[3]}: "
+                f"metti in conto una verifica in piu'")
+    return f"; andate finora: {', '.join(parts)}{coda}"
+
+
 def cardinality_candidate(prompt_lower):
     m = CARDINALITY.search(prompt_lower)
     if not m:
@@ -94,7 +140,7 @@ def cardinality_candidate(prompt_lower):
     return ("external-exec",
             f'- external-exec asse 4 (segnale cardinalità "{m.group(0)}") — '
             f"free-tier provider: {names}; solo item non quality-sensitive, "
-            f"pre-budget obbligatorio")
+            f"pre-budget obbligatorio{track_record(set(free))}")
 
 
 def in_holdout(session_id):
