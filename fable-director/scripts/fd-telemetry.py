@@ -1344,9 +1344,51 @@ def cmd_budget_close(args):
     print(line)
     for d in detail:
         print("  " + d)
+    promo = promotion_question(budget, cwd)
+    if promo:
+        print("  " + promo)
 
 
-ALLOWED_EVENTS = {"task_open", "task_close", "budget_flag", "retry", "escalation",
+def promotion_question(budget, cwd):
+    """La promozione a script non e' osservabile da un hook: nessun evento puo'
+    dedurre che un lavoro deterministico meritava un file .py. Percio' non e'
+    una regola in prosa (misurato il 14/09/2026: 0 `script_promotion` in 30
+    giorni) ma una DOMANDA posta qui, nel momento in cui l'evidenza esiste:
+    il tipo appena chiuso ricorre per la seconda volta su rotta modello, che
+    e' la stessa soglia della coda in `report`. Best-effort: un errore di
+    lettura non deve mai disturbare la chiusura di un budget."""
+    t = (budget or {}).get("type")
+    if not t or budget.get("outcome") != "ok" or (budget.get("route") or "") == "script":
+        return None
+    try:
+        import sqlite3
+        con = sqlite3.connect(DB_PATH, timeout=1.0)
+        con.execute("PRAGMA busy_timeout=1000")
+        n = 0
+        for (p,) in con.execute(
+                "SELECT payload FROM events WHERE event='task_close' "
+                "AND ts > datetime('now','-90 days')"):
+            try:
+                d = json.loads(p)
+            except Exception:
+                continue
+            if (d.get("type") == t and d.get("outcome") == "ok"
+                    and (d.get("route") or "") != "script"):
+                n += 1
+        con.close()
+    except Exception:
+        return None
+    if n < 2:
+        return None
+    return (f"script promotion: «{t}» chiuso ok {n} volte su rotta modello. "
+            f"Il nucleo e' deterministico? Allora vale un file in tools/ e una "
+            f"riga nel playbook — da qui in poi e' rotta script, costo zero. "
+            f"Se non lo e', o l'interfaccia e' instabile, non promuovere: "
+            f"`fd-telemetry.py log script_promotion --json "
+            f"'{{\"script\":\"...\",\"tokens_pre_promotion\":N}}'` quando lo fai.")
+
+
+ALLOWED_EVENTS ={"task_open", "task_close", "budget_flag", "retry", "escalation",
                   "script_promotion", "verification", "session_summary", "reversal",
                   "schema_anomaly", "external_exec"}
 

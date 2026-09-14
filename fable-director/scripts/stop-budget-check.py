@@ -271,6 +271,18 @@ def run_verify(budget, state, cwd, rw_stats):
     state["verify_cmd"] = cmd
     state["verify_touches"] = touches
     state["verify_tail"] = tail[0][:160]
+    # Il done dichiarato e' stato ESEGUITO: l'esito e' un fatto oggettivo e lo
+    # scrive l'hook, non il modello. Misurato il 14/09/2026 su 30 giorni e 161
+    # sessioni: 5 `verification` registrate su 53 task chiusi (9 %), mentre
+    # ogni evento scritto da un hook arrivava senza eccezioni. Un meccanismo
+    # che gia' lancia il comando non ha scuse per non registrarne l'esito.
+    # `found` = la verifica ha TROVATO un problema (rc != 0), come in report.
+    log_telemetry("verification", {
+        "found": rc != 0,
+        "kind": "rung1-command",
+        "rc": rc if isinstance(rc, int) else str(rc),
+        "auto": True,
+    }, cwd)
     if rc == 0 and prev_rc not in (None, 0):
         return f"FD ✓ verification passed again: {cmd}"
     if rc != 0 and prev_rc in (None, 0):

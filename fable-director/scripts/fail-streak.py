@@ -52,8 +52,10 @@ LADDER = (
     "il modello. Alla 3ª FERMA IL LOOP: il top model la prende inline, oppure "
     "chiedi all'utente. Mai una 4ª identica automatica. Se gli ultimi ~5 turni non "
     "hanno prodotto un artefatto, un test o un fatto verificabile, fermati e "
-    "chiedi. Loggato `fail_streak`; se diagnostichi il tipo, mettilo a verbale: "
-    "fd-telemetry.py log escalation --json '{{\"class\":\"...\",\"resolution\":\"...\"}}'"
+    "chiedi. `fail_streak` e `escalation` sono gia' a verbale (li scrive questo "
+    "hook): manca solo la CLASSE, che un hook non puo' dedurre. Quando l'hai "
+    "diagnosticata: fd-telemetry.py log escalation --json "
+    "'{{\"class\":\"infra|capability|approach|tool-target\",\"resolution\":\"...\"}}'"
 )
 
 
@@ -175,6 +177,18 @@ def main():
 
     log_event("fail_streak", {"streak": streak, "binary": binary, "auto": True},
               data.get("session_id"), data.get("cwd") or os.getcwd())
+    # Terzo fallimento di fila = livello 3 della regola dei 3, quello dove la
+    # dottrina dice di fermare il loop. L'evento lo scrive l'hook: misurato il
+    # 14/09/2026 su 30 giorni, 0 `escalation` registrate a fronte di 3
+    # `fail_streak` — il modello non lo mette mai a verbale. La CLASSE resta
+    # sua (infra | capability | approach | tool-target) e la aggiunge
+    # ri-loggando: un hook vede CHE si e' fallito tre volte, non PERCHE'.
+    # Solo alla PRIMA volta che lo streak tocca la soglia, non a 6, 9, 12.
+    if streak == REMIND_EVERY:
+        log_event("escalation",
+                  {"class": "unclassified", "binary": binary,
+                   "streak": streak, "auto": True},
+                  data.get("session_id"), data.get("cwd") or os.getcwd())
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "PostToolUse",
         "additionalContext": LADDER.format(n=streak)}}))
