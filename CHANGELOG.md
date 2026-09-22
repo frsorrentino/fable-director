@@ -2,13 +2,17 @@
 
 Full release history. The README shows only the latest few entries.
 
-## Unreleased
+## 1.45.x
 
-- **Claude Opus 5.5 priced right.** `model-economics.json` has a `claude-opus-5-5` row, cache reads at 0.05× input ($0.20 on $4): until now it fell on the 0.1× default and every eq estimate on Opus 5.5 counted cache reads twice. `cache_create` stays on the 1.25× default until the list price states it.
-  - Suite: longest prefix wins, checked against a first-match lookup (a future `claude-opus-5` row does not capture `claude-opus-5-5`); two Opus ids in one session stay separate in receipts and in the model-switch line.
-- **Fork parity follows the table.** Kernel axis 6 and the skill say the parity point scales with the parent model's `cache_read` in `model-economics.json`; the two measured anchors stay (0.025×, 0.1×), rates in between are extrapolations until measured. A new model needs no kernel rewrite.
-- **Gate messages name the model id.** The sonnet-vs-top USD note (window fit, workflow lint) cites the id it was measured on, `claude-fable-5-1`, and says "not measured on <id>" when the session runs another model.
-- Test fixtures updated for the required write perimeter (`--paths none`): `bg-session`, `external-failover`, `route-hardening`, `workflow-guard`, `workflow-tokens` were red since the perimeter became mandatory.
+- **1.45.0 — Claude Opus 5.5 priced right, and three rules moved from prose into hooks.**
+  - **Events the model never logged are now written by hooks.** The Stop hook records the `--verify` outcome itself; the fail-streak hook writes the escalation when a streak reaches 3; `budget-close` asks about script promotion when a task type recurs on a model route. Measured before: 0%, 0% and 9% logged over 161 sessions.
+  - **Write perimeter required on delegating routes.** `budget-open` on `agent`, `workflow` and `bg-session` needs `--paths` (or an explicit `--paths none`, printed on the receipt), so the write hook always has something to enforce. README explains why the plugin uses hooks instead of instructions.
+  - **Route hint carries the external providers' track record.** Ok-rate per free provider at the moment the route is chosen, with a warning below 80%; providers with fewer than 3 runs are omitted.
+  - **Claude Opus 5.5 priced right.** `model-economics.json` has a `claude-opus-5-5` row, cache reads at 0.05× input ($0.20 on $4): until now it fell on the 0.1× default and every eq estimate on Opus 5.5 counted cache reads twice. `cache_create` stays on the 1.25× default until the list price states it.
+    - Suite: longest prefix wins, checked against a first-match lookup (a future `claude-opus-5` row does not capture `claude-opus-5-5`); two Opus ids in one session stay separate in receipts and in the model-switch line.
+  - **Fork parity follows the table.** Kernel axis 6 and the skill say the parity point scales with the parent model's `cache_read` in `model-economics.json`; the two measured anchors stay (0.025×, 0.1×), rates in between are extrapolations until measured. A new model needs no kernel rewrite.
+  - **Gate messages name the model id.** The sonnet-vs-top USD note (window fit, workflow lint) cites the id it was measured on, `claude-fable-5-1`, and says "not measured on <id>" when the session runs another model.
+  - Test fixtures updated for the required write perimeter (`--paths none`): `bg-session`, `external-failover`, `route-hardening`, `workflow-guard`, `workflow-tokens` were red since the perimeter became mandatory.
 
 ## 1.44.x
 
