@@ -470,6 +470,18 @@ def _journal_done(data, run_id):
         return 0
 
 
+def sonnet_usd_note(model):
+    """La misura sonnet-vs-top del 2026-09-01 (fd-executor, n=3) e' stata fatta
+    contro claude-fable-5-1: il messaggio nomina quell'id e, se la sessione
+    gira su un altro modello, dice che li' non e' misurata — mai «top model =
+    Fable» implicito (Claude Opus 5.5 costa meno di Fable su ogni componente)."""
+    m = str(model or "")
+    note = "measured 2026-09-01 on fd-executor vs claude-fable-5-1: same eq, 5.5× the USD"
+    if m and not m.startswith("claude-fable-5-1"):
+        note += f"; not measured on {m}"
+    return note
+
+
 def workflow_fit(data, budget):
     """Il fan-out dichiarato (--agents) entra nel residuo della finestra 5h?
     stima = max(N × eq mediano per agente, eq dichiarato nel budget); residuo
@@ -516,8 +528,9 @@ def workflow_fit(data, budget):
                 f"five-hour window left ≈ {fmt_eq(remaining)} eq ({ratio:.1f}×)")
         opts = (f"(a) chunk: at most {fit} agents fit now — run those, resume the rest after "
                 f"the reset{reset_s} (resumeFromRunId, identical args, unchanged script prefix); "
-                f"(b) reading/fetching/extracting stages on `model: 'sonnet'` (measured "
-                f"2026-09-01: same eq, ~1/5 the USD of Fable 5.1); (c) wait for the reset{reset_s}.")
+                f"(b) reading/fetching/extracting stages on `model: 'sonnet'` "
+                f"({sonnet_usd_note(session_snapshot(data).get('model'))}); "
+                f"(c) wait for the reset{reset_s}.")
         srcs = (f"agent eq {cal['agent_src']}; window eq {cal['window_src']}; override in "
                 f"cost-checkpoint.json (workflow_agent_eq, five_hour_window_eq)")
         if ratio >= WF_FIT_DENY_RATIO and not run_id:
@@ -648,8 +661,8 @@ def workflow_lint(data):
                 inh = f"the session model ({model})" if model else "the session model"
                 bits.append(f"{n_calls} agent() calls, {n_calls - n_model} without `model:` inherit "
                             f"{inh}: stages that read, fetch or extract (axis 3-5) belong on "
-                            f"`model: 'sonnet'` (measured 2026-09-01 on fd-executor: same eq, "
-                            f"5.5× the USD on Fable 5.1); keep the top model for the judgment stages")
+                            f"`model: 'sonnet'` ({sonnet_usd_note(model)}); keep the top "
+                            f"model for the judgment stages")
             if n_max >= 2:
                 bits.append(f"effort max/xhigh on {n_max} agent() calls: measured 2026-09-03, judges "
                             f"at max produced 33-68k output tokens each — 40-60% of their cost at "

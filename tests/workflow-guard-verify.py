@@ -106,7 +106,8 @@ return { readers, judge }
 """)
 
 r = run([sys.executable, FDT, "budget-open", "--task", "panel", "--expected-output", "400000",
-         "--expected-input", "300000", "--agents", "16", "--route", "workflow", "--cost-ack", "--cwd", str(proj)])
+         "--expected-input", "300000", "--agents", "16", "--route", "workflow", "--cost-ack",
+         "--paths", "none", "--cwd", str(proj)])
 assert r.returncode == 0, r.stderr
 set_session(); set_quota(22)
 
@@ -123,7 +124,8 @@ out, r = gate({"scriptPath": str(SCRIPT), "args": {"data": "2026-09-03"}})
 dr = deny_reason(out) or ""
 check("W2 window fit al 60%: deny con chunk e orario di reset",
       "cannot finish in the current five-hour window" in dr and "chunk: at most 4 agents" in dr
-      and f"reset at {RESET_HHMM}" in dr and "3.8×" in dr, r.stdout + r.stderr)
+      and f"reset at {RESET_HHMM}" in dr and "3.8×" in dr
+      and "vs claude-fable-5-1: same eq, 5.5× the USD" in dr, r.stdout + r.stderr)
 
 # W3 resume: journal con 10 agenti conclusi → 6 restanti; mai deny
 jdir = SESS_DIR / "subagents" / "workflows" / "wf_test1"; jdir.mkdir(parents=True)
@@ -141,6 +143,16 @@ check("W4 lint: model: assente su Fable, effort max ×2+, 2 PDF, args stringa �
       deny_reason(out) is None and "2 without `model:`" in msg and "claude-fable-5-1" in msg
       and "effort max/xhigh on 2 agent() calls" in msg and "2 .pdf path(s)" in msg
       and "args passed as a JSON string" in msg, r.stdout + r.stderr)
+check("W4b lint su Fable: la misura USD nomina l'id claude-fable-5-1, niente 'not measured'",
+      "vs claude-fable-5-1: same eq, 5.5× the USD" in msg and "not measured on" not in msg, msg)
+set_session(model="claude-opus-5-5")
+out5, r5 = gate({"scriptPath": str(SCRIPT), "args": '{"data": "2026-09-03"}'})
+msg5 = out5.get("systemMessage", "")
+check("W4c lint su claude-opus-5-5: eredita l'id della sessione, misura USD dichiarata non fatta li'",
+      "inherit the session model (claude-opus-5-5)" in msg5
+      and "vs claude-fable-5-1" in msg5 and "not measured on claude-opus-5-5" in msg5,
+      r5.stdout + r5.stderr)
+set_session()
 check("W5 heavy launcher: contesto 600k → avviso con 750k eq di ri-cache",
       "heavy launcher" in msg and "600k tokens" in msg and "750k eq" in msg, msg)
 

@@ -93,7 +93,8 @@ USAGE_KEYS = ("input_tokens", "output_tokens",
 # su budget reali non fissa le soglie eq.
 EQ_MULT = {"input": 1.0, "output": 5.0, "cache_read": 0.1, "cache_create": 1.25}
 # I moltiplicatori sopra sono il DEFAULT universale; le parti che cambiano
-# col listino di un modello (oggi: cache_read 0.025x su claude-fable-5-1)
+# col listino di un modello (oggi: cache_read 0.025x su claude-fable-5-1,
+# 0.05x su claude-opus-5-5)
 # vivono in model-economics.json — shipped con il plugin, override utente in
 # ~/.claude/fable-director/model-economics.json. Un modello nuovo e' una
 # riga in 'models', mai un cambio di policy. Il modello va letto dal record

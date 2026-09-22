@@ -5,10 +5,12 @@
     "Lookup: prefisso piu' lungo dell'id modello (es. 'claude-fable-5-1' copre anche varianti datate); nessun match -> 'default'.",
     "Override utente: ~/.claude/fable-director/model-economics.json (stessa forma; 'models' si fonde, 'default' si sovrascrive per chiave).",
     "Modello nuovo = una riga in 'models'; la policy non si tocca.",
-    "Fonte tariffe: listino Anthropic 2026-08 — cache read 0.1x input su tutti i modelli, 0.025x su Claude Fable 5.1 ($0.25/MTok su $10)."
+    "Fonte tariffe: listino Anthropic 2026-09 — cache read 0.1x input salvo le righe in 'models': 0.025x su Claude Fable 5.1 ($0.25/MTok su $10), 0.05x su Claude Opus 5.5 ($0.20/MTok su $4, note di rilascio Claude Code 2.1.280).",
+    "cache_create di Claude Opus 5.5 non dichiarato dal listino citato: resta il default 1.25x finche' non e' verificato."
   ],
   "default": {"input": 1.0, "output": 5.0, "cache_read": 0.1, "cache_create": 1.25},
   "models": {
-    "claude-fable-5-1": {"cache_read": 0.025}
+    "claude-fable-5-1": {"cache_read": 0.025},
+    "claude-opus-5-5": {"cache_read": 0.05}
   }
 }

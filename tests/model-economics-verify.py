@@ -8,7 +8,9 @@ strutturali no: cache_read vale 0,025× su claude-fable-5-1 e 0,1× altrove
 per record (message.model), mai cachato a inizio sessione.
 
   M1 shipped: eq_mult('claude-fable-5-1').cache_read == 0.025, sonnet 0.1
+  M1b shipped: claude-opus-5-5 0.05 (anche [1m] e datato), claude-opus-5 resta 0.1
   M2 prefisso più lungo: id datati/varianti ricadono sul prefisso giusto
+  M2b una voce utente 'claude-opus-5' non cattura claude-opus-5-5
   M3 override utente: 'models' si fonde, 'default' per campo; file rotto ignorato
   M4 eq_tokens(cr_by_model=...) pesa ogni quota alla SUA tariffa
   M5 find_usage porta il modello del record (fd-telemetry + stop hook)
@@ -73,6 +75,15 @@ check("M1 shipped: fable 0.025, sonnet 0.1",
       and fdt.eq_mult(None)["cache_read"] == 0.1,
       f"{fdt.eq_mult('claude-fable-5-1')} / {fdt.eq_mult('claude-sonnet-5')}")
 
+check("M1b shipped: opus-5-5 0.05 ([1m] e datato inclusi), opus-5 0.1, output 5×",
+      fdt.eq_mult("claude-opus-5-5")["cache_read"] == 0.05
+      and fdt.eq_mult("claude-opus-5-5[1m]")["cache_read"] == 0.05
+      and fdt.eq_mult("claude-opus-5-5-20260922")["cache_read"] == 0.05
+      and fdt.eq_mult("claude-opus-5")["cache_read"] == 0.1
+      and fdt.eq_mult("claude-opus-5-5")["output"] == 5.0
+      and fdt.eq_mult("claude-opus-5-5")["cache_create"] == 1.25,
+      f"{fdt.eq_mult('claude-opus-5-5')} / {fdt.eq_mult('claude-opus-5')}")
+
 # M2 — prefisso più lungo
 check("M2 prefisso: variante datata ricade su fable 0.025, fable-5 resta 0.1",
       fdt.eq_mult("claude-fable-5-1-20260901")["cache_read"] == 0.025
@@ -91,6 +102,19 @@ check("M3a override: modello nuovo dell'utente e default per campo",
       m_h["cache_read"] == 0.05 and m_h["output"] == 4.0
       and fdt2.eq_mult("claude-fable-5-1")["cache_read"] == 0.025,
       str(m_h))
+(udir / "model-economics.json").write_text(json.dumps({
+    "models": {"claude-opus-5": {"cache_read": 0.08},
+               # chiave più lunga inserita DOPO quella shipped più corta:
+               # distingue "prefisso più lungo" da "primo match"
+               "claude-opus-5-5-2027": {"cache_read": 0.03}}}))
+fdt4 = load(SCRIPTS / "fd-telemetry.py", "fdt4")
+check("M2b prefisso più lungo vince: voce 'claude-opus-5' non cattura opus-5-5",
+      fdt4.eq_mult("claude-opus-5")["cache_read"] == 0.08
+      and fdt4.eq_mult("claude-opus-5-20260401")["cache_read"] == 0.08
+      and fdt4.eq_mult("claude-opus-5-5")["cache_read"] == 0.05
+      and fdt4.eq_mult("claude-opus-5-5[1m]")["cache_read"] == 0.05
+      and fdt4.eq_mult("claude-opus-5-5-20270101")["cache_read"] == 0.03,
+      f"{fdt4.eq_mult('claude-opus-5')} / {fdt4.eq_mult('claude-opus-5-5')}")
 (udir / "model-economics.json").write_text("{not json")
 fdt3 = load(SCRIPTS / "fd-telemetry.py", "fdt3")
 check("M3b override rotto: ignorato, shipped intatto",

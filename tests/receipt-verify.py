@@ -67,9 +67,14 @@ b = json.loads(bfile.read_text())
 b["actual_output_tokens"] = 160
 b["reopens"] = 0
 b["actual_eq_tokens"] = 45000
-b["cache_read_by_model"] = {"claude-sonnet-5": 300000}
+# due Opus nella stessa sessione (opus-5 ripresa, poi opus-5-5 dal picker):
+# id completi, mai fusi per famiglia
+b["cache_read_by_model"] = {"claude-sonnet-5": 300000, "claude-opus-5": 100000,
+                            "claude-opus-5-5": 200000}
 b["model_switches"] = [{"from": "claude-fable-5-1", "to": "claude-opus-5",
-                        "context_tokens": 280000}]
+                        "context_tokens": 280000},
+                       {"from": "claude-opus-5", "to": "claude-opus-5-5",
+                        "context_tokens": 150000}]
 bfile.write_text(json.dumps(b))
 sdir = home / ".claude" / "fable-director" / "subagents"; sdir.mkdir(parents=True)
 (sdir / f"{SID}.json").write_text(json.dumps({
@@ -93,7 +98,8 @@ check("R3 dettaglio + .md: executors, BLOCKED, model switch, costo, verification
       "executors: fable-director:fd-executor ×3" in out
       and "BLOCKED from fable-director:fd-executor: Error: 403 from provider" in out
       and "model switch: claude-fable-5-1 → claude-opus-5 with 280.000 tokens of context" in out
-      and "cost: 45.000 eq (cache read on claude-sonnet-5)" in out
+      and "model switch: claude-opus-5 → claude-opus-5-5 with 150.000 tokens of context" in out
+      and "cost: 45.000 eq (cache read on claude-opus-5, claude-opus-5-5, claude-sonnet-5)" in out
       and "verification: python3 tests/check.py" in out
       and "data class: internal" in out and "write perimeter: src/**" in out
       and md.startswith("# Closed fine: batch descrizioni") and "- executors:" in md,

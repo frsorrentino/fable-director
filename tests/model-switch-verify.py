@@ -114,6 +114,15 @@ check("S6 Post resume: exit 0, stdout per Claude con tariffa cache 0.025",
       r.returncode == 0 and "opus-5 → fable-5-1" in r.stdout and "0.025" in r.stdout
       and not r.stderr, f"rc={r.returncode} out={r.stdout!r} err={r.stderr!r}")
 
+# S6b Post dal picker con i due Opus (caso dal vivo 2026-09-22): tariffa 0.05
+r = run([str(HOOK)], home, payload(hook_event_name="PostModelSwitch", source="picker",
+                                   from_model="claude-opus-5[1m]",
+                                   to_model="claude-opus-5-5[1m]"))
+check("S6b Post opus-5 → opus-5-5: id completi a schermo, tariffa cache 0.05",
+      r.returncode == 0 and "opus-5[1m] → opus-5-5[1m]" in r.stdout
+      and "0.05× input" in r.stdout and not r.stderr,
+      f"rc={r.returncode} out={r.stdout!r} err={r.stderr!r}")
+
 # S7 hooks.json
 h = json.loads((HERE.parent / "fable-director" / "hooks" / "hooks.json").read_text())["hooks"]
 ok7 = all(ev in h and any("model-switch.py" in hk["command"] and hk["command"].startswith("python3")
