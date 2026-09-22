@@ -73,7 +73,7 @@ print("gate: delega annidata + effort nativo")
 
 subprocess.run([sys.executable, str(TELEMETRY), "budget-open",
                 "--task", "test hardening", "--expected-output", "1000",
-                "--route", "agent", "--effort", "low"],
+                "--route", "agent", "--effort", "low", "--paths", "none"],
                env=env, cwd=str(work), capture_output=True, text=True,
                timeout=30)
 

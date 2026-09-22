@@ -243,7 +243,7 @@ home = fresh_home()
 with tempfile.TemporaryDirectory() as tmp:
     r = budget_open(home, tmp, 12000,
                     extra=["--agents", "16", "--expected-input", "120000",
-                           "--route", "workflow"])
+                           "--route", "workflow", "--paths", "none"])
     check("C1 stima sotto l'ancora fan-out → warning",
           r.returncode == 0 and "fan-out anchor" in r.stdout
           and "320000" in r.stdout and "272000" in r.stdout,

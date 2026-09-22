@@ -67,7 +67,8 @@ def gate(used, tool="Agent", sid="s-fo"):
 
 def reopen(**kw):
     run([FDT, "budget-close", "--outcome", "abandoned", "--cwd", proj])
-    args = [FDT, "budget-open", "--task", "batch seo", "--expected-output", "100", "--cwd", proj]
+    args = [FDT, "budget-open", "--task", "batch seo", "--expected-output", "100", "--cwd", proj,
+            "--paths", "none"]
     for k, v in kw.items():
         args += [f"--{k}", v]
     r = run(args, sid="s-fo")

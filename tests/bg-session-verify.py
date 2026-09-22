@@ -37,7 +37,7 @@ def run(script, args, stdin=None, env_extra=None):
 
 
 base = ["budget-open", "--task", "migrazione lunga", "--expected-output", "5000",
-        "--route", "bg-session", "--verify", "python3 tests/run.py"]
+        "--route", "bg-session", "--verify", "python3 tests/run.py", "--paths", "none"]
 r = run("fd-telemetry.py", base + ["--cwd", child], env_extra={"CLAUDE_CODE_SESSION_ID": "parent-1"})
 check("B1 senza flag: rifiutato", r.returncode != 0 and "behind a flag" in (r.stderr + r.stdout), r.stderr)
 r = run("fd-telemetry.py", base, env_extra={"FD_BG_SESSION": "1", "CLAUDE_CODE_SESSION_ID": "parent-1"})
