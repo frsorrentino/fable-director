@@ -1,0 +1,49 @@
+{
+  "_doc": [
+    "Regole per Claude Opus 5.5: un file per modello, il modello successivo e' un file nuovo.",
+    "kind forbid: ogni riga che combacia con 'pattern' in un file dello scope e' una segnalazione.",
+    "kind require: in ogni account almeno un file dello scope deve combaciare, altrimenti una segnalazione per account.",
+    "kind setting: la chiave deve essere presente in settings.json dell'account (qualunque valore: conta che la scelta sia fatta).",
+    "scope: claude_md (CLAUDE.md dell'account), skills (skills/**/SKILL.md), agents (agents/*.md), settings (settings.json), plugin_kernel / plugin_claude_md / plugin_skills / plugin_agents (i nostri plugin installati).",
+    "Solo segnalazioni: lo script non modifica nulla."
+  ],
+  "model": "claude-opus-5-5",
+  "source": "Getting the most out of Opus 5.5 (claude.dev/blog/getting-the-most-out-of-opus-5-5, 2026-09-22)",
+  "rules": [
+    {
+      "id": "no-think-hard",
+      "kind": "forbid",
+      "pattern": "(?i)\\bthink\\s+(?:very\\s+)?(?:hard|harder|carefully|deeply)\\b|\\bstep[- ]by[- ]step\\b|\\bpasso\\s+(?:dopo|per)\\s+passo\\b|\\bpensa(?:ci)?\\s+bene\\b",
+      "scope": ["claude_md", "skills", "agents", "plugin_kernel", "plugin_claude_md", "plugin_skills", "plugin_agents"],
+      "why": "Thinking is always on and its depth is set by effort: prompts that ask for more thinking add nothing and push the model toward over-long turns."
+    },
+    {
+      "id": "no-visible-reasoning",
+      "kind": "forbid",
+      "pattern": "(?i)\\b(?:show|explain|write\\s+out|walk\\s+(?:me\\s+)?through|include)\\s+(?:all\\s+)?your\\s+(?:reasoning|thought\\s+process|chain[- ]of[- ]thought)\\b|\\bthink\\s+(?:out\\s+loud|aloud)\\b|\\bmostra(?:re)?\\s+(?:il\\s+)?(?:tuo\\s+)?ragionamento\\b|\\bragiona\\s+ad\\s+alta\\s+voce\\b|<thinking>",
+      "scope": ["claude_md", "skills", "agents", "plugin_kernel", "plugin_claude_md", "plugin_skills", "plugin_agents"],
+      "why": "Reasoning happens in thinking blocks; asking to write it in the answer duplicates it at output-token price."
+    },
+    {
+      "id": "stop-rule",
+      "kind": "require",
+      "pattern": "(?im)^#+\\s*(?:quando\\s+fermarti|when\\s+to\\s+stop)\\b",
+      "scope": ["claude_md"],
+      "why": "The guide recommends stating when to keep going and when to stop and ask; without it the model asks for confirmation between steps."
+    },
+    {
+      "id": "task-list-file",
+      "kind": "require",
+      "pattern": "\\bTASKS\\.md\\b",
+      "scope": ["claude_md", "plugin_kernel"],
+      "why": "Long tasks keep their checklist in a file updated as they go: it survives compaction."
+    },
+    {
+      "id": "switch-on-flag-decided",
+      "kind": "setting",
+      "key": "switchModelsOnFlag",
+      "scope": ["settings"],
+      "why": "Opus 5.5 safeguards (bio, cyber) can flag a message and move the session to another model. Set switchModelsOnFlag (/config: Switch models when a message is flagged) so the behaviour is a choice, not the first-flag prompt."
+    }
+  ]
+}

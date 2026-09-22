@@ -123,6 +123,110 @@ check("S6b Post opus-5 → opus-5-5: id completi a schermo, tariffa cache 0.05",
       and "0.05× input" in r.stdout and not r.stderr,
       f"rc={r.returncode} out={r.stdout!r} err={r.stderr!r}")
 
+# S9-S15 cambi involontari (2.1.280): source "auto" + riga di fallback nel transcript.
+# Fixture costruite dallo schema del binario, nessun messaggio segnalato provocato.
+TR = Path(tempfile.mkdtemp(prefix="fd-switch-tr-")) / "sess.jsonl"
+
+
+def fb_line(sub="model_refusal_fallback", snake=False, **kw):
+    d = {"type": "system", "subtype": sub, "level": "warning",
+         "timestamp": "2026-09-22T20:00:00Z", "content": "flagged"}
+    if sub == "model_refusal_fallback":
+        d.update({"trigger": "refusal", "direction": "retry"})
+    fields = {"originalModel": "claude-opus-5-5", "fallbackModel": "claude-opus-5",
+              "apiRefusalCategory": "cyber"}
+    if snake:
+        fields = {"original_model": fields["originalModel"],
+                  "fallback_model": fields["fallbackModel"],
+                  "api_refusal_category": fields["apiRefusalCategory"]}
+    d.update(fields)
+    d.update(kw)
+    return json.dumps(d) + "\n"
+
+
+def post_auto(lines, **kw):
+    TR.write_text(json.dumps({"type": "user", "message": {"content": "x"}}) + "\n"
+                  + "".join(lines))
+    d = dict(hook_event_name="PostModelSwitch", source="auto", requested_model=None,
+             from_model="claude-opus-5-5[1m]", to_model="claude-opus-5[1m]",
+             transcript_path=str(TR))
+    d.update(kw)
+    return run([str(HOOK)], home, payload(**d))
+
+
+def out_json(r):
+    try:
+        return json.loads(r.stdout)
+    except Exception:
+        return {}
+
+
+def events(name):
+    con = sqlite3.connect(db)
+    rows = [json.loads(p) for (p,) in con.execute(
+        "select payload from events where event=? order by ts", (name,))]
+    con.close()
+    return rows
+
+
+n_rev = len(events("reversal"))
+r = post_auto([fb_line()])
+j = out_json(r)
+sm = j.get("systemMessage", "")
+ac = (j.get("hookSpecificOutput") or {}).get("additionalContext", "")
+fbe = events("model_fallback")
+check("S9 refusal fallback (camelCase, scope assente): systemMessage con ritorno "
+      "/model e voce /config, contesto a Claude, evento model_fallback, nessun reversal",
+      r.returncode == 0 and "without your request" in sm and "(cyber)" in sm
+      and "/model claude-opus-5-5" in sm and "Switch models when a message is flagged" in sm
+      and "INVOLUNTARILY" in ac and "0.1× input" in ac
+      and (j.get("hookSpecificOutput") or {}).get("hookEventName") == "PostModelSwitch"
+      and fbe and fbe[-1].get("cause") == "refusal_fallback"
+      and fbe[-1].get("category") == "cyber" and len(events("reversal")) == n_rev,
+      f"rc={r.returncode} out={r.stdout!r} err={r.stderr!r} ev={fbe}")
+b = json.loads(bfile.read_text())
+last = (b.get("model_switches") or [{}])[-1]
+check("S10 budget aperto: model_switches con involuntary=refusal_fallback e categoria",
+      last.get("involuntary") == "refusal_fallback" and last.get("category") == "cyber",
+      str(last))
+
+r = post_auto([fb_line("model_fallback", snake=True, trigger="overloaded")])
+fbe = events("model_fallback")
+check("S11 model_fallback (snake_case SDK, trigger overloaded): causa distinta",
+      "primary model failed (overloaded)" in out_json(r).get("systemMessage", "")
+      and fbe[-1].get("cause") == "model_fallback:overloaded", r.stdout)
+
+r = post_auto([fb_line(scope="local")])
+check("S12 scope local (subagente/btw): non conta → auto non identificato, ripiego dichiarato",
+      events("model_fallback")[-1].get("cause") == "auto_unidentified"
+      and "no fallback line in the transcript" in out_json(r).get("systemMessage", ""),
+      r.stdout)
+
+r = post_auto([fb_line(), fb_line(direction="revert")],
+              from_model="claude-opus-5[1m]", to_model="claude-opus-5-5[1m]")
+check("S13 revert: ritorno automatico sull'originale, causa refusal_revert, niente /model",
+      events("model_fallback")[-1].get("cause") == "refusal_revert"
+      and "back to opus-5-5[1m]" in out_json(r).get("systemMessage", "")
+      and "/model" not in out_json(r).get("systemMessage", ""), r.stdout)
+
+n_fb = len(events("model_fallback"))
+r = post_auto([fb_line()], source="picker")
+check("S14 source picker con riga di fallback presente: cambio voluto, riga normale",
+      r.stdout.startswith("FD: session model switched") and len(events("model_fallback")) == n_fb
+      and len(events("reversal")) == n_rev + 1, r.stdout)
+
+r = run([str(HOOK)], home, payload(hook_event_name="PostModelSwitch", source="auto",
+                                   requested_model=None, from_model="claude-fable-5-1",
+                                   to_model="claude-opus-5-5"))
+check("S15 source auto senza transcript: involontario non identificato, senza attesa",
+      events("model_fallback")[-1].get("cause") == "auto_unidentified"
+      and "/model claude-fable-5-1" in out_json(r).get("systemMessage", ""), r.stdout)
+
+r = run([str(SCRIPTS / "fd-telemetry.py"), "report"], home, None)
+check("S16 report: sezione cambi involontari separata dai reversal",
+      "Involuntary model switches: 5" in r.stdout and "refusal_fallback×1" in r.stdout,
+      r.stdout[-800:] + r.stderr)
+
 # S7 hooks.json
 h = json.loads((HERE.parent / "fable-director" / "hooks" / "hooks.json").read_text())["hooks"]
 ok7 = all(ev in h and any("model-switch.py" in hk["command"] and hk["command"].startswith("python3")

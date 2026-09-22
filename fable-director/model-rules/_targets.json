@@ -1,0 +1,9 @@
+{
+  "_doc": [
+    "Cosa controlla model-rules-check.py, indipendente dal modello.",
+    "accounts: cartelle di configurazione Claude Code (quelle assenti si saltano).",
+    "own_plugins: nomi dei nostri plugin; il percorso si legge da plugins/installed_plugins.json di ogni account (la copia installata, non il repository)."
+  ],
+  "accounts": ["~/.claude", "~/.claude-pixel"],
+  "own_plugins": ["fable-director", "pixelfarm", "claude-master"]
+}

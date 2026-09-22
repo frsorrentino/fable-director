@@ -15,6 +15,23 @@ budget aperto per questa sessione, appeso a `model_switches` nel budget file
 (source auto/resume) e dice a Claude, in una riga su stdout, che la tariffa
 economica e' cambiata.
 
+Cambi INVOLONTARI (2.1.280, verificato nel binario, mai provocato): quando le
+salvaguardie segnalano un messaggio (Claude Opus 5.5: bio/cyber) o il modello
+primario fallisce, Claude Code sposta la sessione su un altro modello e
+PostModelSwitch arriva con source "auto", requested_model null — lo stesso
+source di ogni altro cambio programmatico, quindi da solo non basta. Il segnale
+certo e' nel transcript: riga type "system", subtype "model_refusal_fallback"
+(originalModel, fallbackModel, direction retry/revert/sticky, scope
+session/local, apiRefusalCategory) o "model_fallback" (trigger overloaded,
+model_not_found, ...). Definizione condivisa con claude-master: conta l'ultima
+riga con scope != "local" (assente = session), direction != "revert",
+fallbackModel = to_model sull'id base. Un cambio involontario NON e' un
+`reversal` (report e hindsight li leggono come politica smentita): va in
+telemetria come evento `model_fallback` con la causa, e a schermo con la via
+di ritorno (/model <originale>; /config "Switch models when a message is
+flagged" per farsi chiedere prima). source "auto" senza riga nel transcript =
+involontario con causa non identificata (ripiego dichiarato, non una stima).
+
 Stdin (schema host): from_model, to_model, requested_model, source,
 context_tokens, prompt_cache_warm, cache_ttl, estimated_cache_write_usd,
 pricing, session_id, cwd, hook_event_name. Campi assenti → silenzio, mai
@@ -24,6 +41,7 @@ import importlib.util
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 try:
@@ -57,6 +75,141 @@ def fmt(n):
     return f"{int(n):,}".replace(",", ".")
 
 
+FALLBACK_WAIT_S = 2.0   # la riga di sistema puo' arrivare nel jsonl dopo l'hook
+TAIL_BYTES = 256 * 1024
+
+
+def base_id(model):
+    """'claude-opus-5[1m]' → 'claude-opus-5': confronto sull'id base."""
+    m = str(model or "")
+    return m.split("[", 1)[0].strip()
+
+
+def _fb_field(rec, camel, snake):
+    v = rec.get(camel)
+    return v if v is not None else rec.get(snake)
+
+
+def find_fallback(transcript, to_m):
+    """Ultima riga di fallback coerente con questo cambio, o None.
+    Ritorna {cause, from, to, category, direction, at}."""
+    try:
+        p = Path(transcript)
+        size = p.stat().st_size
+        with open(p, "rb") as fh:
+            fh.seek(max(0, size - TAIL_BYTES))
+            lines = fh.read().decode("utf-8", errors="replace").splitlines()
+    except Exception:
+        return None
+    for line in reversed(lines):
+        if '"model_refusal_fallback"' not in line and '"model_fallback"' not in line:
+            continue
+        try:
+            rec = json.loads(line)
+        except Exception:
+            continue
+        sub = rec.get("subtype")
+        if rec.get("type") != "system" or sub not in ("model_refusal_fallback",
+                                                        "model_fallback"):
+            continue
+        if (rec.get("scope") or "session") == "local":
+            continue
+        direction = rec.get("direction")
+        fb_to = _fb_field(rec, "fallbackModel", "fallback_model")
+        orig = _fb_field(rec, "originalModel", "original_model")
+        if direction == "revert":
+            # l'host riporta la sessione sul modello originale: automatico,
+            # ma e' un ritorno, non un ripiego
+            if base_id(orig) != base_id(to_m):
+                return None
+            return {"cause": "refusal_revert", "from": fb_to, "to": orig,
+                    "category": _fb_field(rec, "apiRefusalCategory",
+                                          "api_refusal_category"),
+                    "direction": direction, "at": rec.get("timestamp")}
+        if base_id(fb_to) != base_id(to_m):
+            return None
+        if sub == "model_refusal_fallback":
+            cause = "refusal_fallback"
+        else:
+            cause = f"model_fallback:{rec.get('trigger') or '?'}"
+        return {"cause": cause,
+                "from": orig,
+                "to": fb_to,
+                "category": _fb_field(rec, "apiRefusalCategory", "api_refusal_category"),
+                "direction": direction, "at": rec.get("timestamp")}
+    return None
+
+
+def classify(data, to_m, wait_s=FALLBACK_WAIT_S):
+    """None = cambio voluto (command/picker/sdk/resume). Altrimenti dict con
+    la causa: da transcript quando c'e' la riga, 'auto_unidentified' se no."""
+    if data.get("source") != "auto":
+        return None
+    tp = data.get("transcript_path")
+    fb = None
+    if tp:
+        deadline = time.monotonic() + max(0.0, wait_s)
+        while True:
+            fb = find_fallback(tp, to_m)
+            if fb or time.monotonic() >= deadline:
+                break
+            time.sleep(0.25)
+    return fb or {"cause": "auto_unidentified", "from": None, "to": to_m,
+                  "category": None, "direction": None, "at": None}
+
+
+def involuntary_lines(from_m, to_m, fb, rate_s):
+    """(riga per l'utente, riga per Claude)."""
+    cat = f" ({fb['category']})" if fb.get("category") else ""
+    back = base_id(fb.get("from") or from_m)
+    if fb["cause"] == "refusal_fallback":
+        why = f"Claude Code's safeguards flagged a message{cat}"
+        tail = (" To be asked first next time: /config → \"Switch models when a "
+                "message is flagged\".")
+    elif fb["cause"] == "refusal_revert":
+        user = (f"FD: model back to {short(to_m)} after the flagged-message "
+                f"fallback on {short(from_m)} (automatic). Logged as involuntary.")
+        claude = (f"FD: session model returned automatically {short(from_m)} → "
+                  f"{short(to_m)} (refusal_revert){rate_s}. Read the model from "
+                  f"the record, never from the session start.")
+        return user, claude
+    elif fb["cause"].startswith("model_fallback:"):
+        why = f"the primary model failed ({fb['cause'].split(':', 1)[1]})"
+        tail = ""
+    else:
+        why = ("an automatic change (source auto, no fallback line in the "
+               "transcript: safeguard, usage limit or other programmatic switch)")
+        tail = ""
+    user = (f"FD ⚠ model switched without your request: {short(from_m)} → "
+            f"{short(to_m)} — {why}. Back with /model {back}.{tail} "
+            f"Logged as involuntary, not as a choice.")
+    claude = (f"FD: session model switched INVOLUNTARILY {short(from_m)} → "
+              f"{short(to_m)} ({fb['cause']}{cat}){rate_s}. The user did not "
+              f"choose this; they can return with /model {back}. Read the model "
+              f"from the record, never from the session start.")
+    return user, claude
+
+
+def record_involuntary(mod, data, from_m, to_m, fb):
+    """Evento `model_fallback` (mai `reversal`) + nota nel budget aperto."""
+    payload = {"from": from_m, "to": to_m, "source": data.get("source"),
+               "cause": fb["cause"], "category": fb.get("category"),
+               "original_model": fb.get("from"), "direction": fb.get("direction"),
+               "at": fb.get("at"), "context_tokens": data.get("context_tokens")}
+    if mod:
+        try:
+            mod.log_event("model_fallback", payload,
+                          session_id=data.get("session_id"),
+                          cwd=data.get("cwd") or os.getcwd())
+        except Exception:
+            pass
+    _append_budget(mod, data, {"from": from_m, "to": to_m,
+                               "source": data.get("source"),
+                               "context_tokens": data.get("context_tokens"),
+                               "involuntary": fb["cause"],
+                               "category": fb.get("category")})
+
+
 def record(mod, data, from_m, to_m):
     """Telemetria + budget aperto. Best-effort: mai un errore all'utente."""
     payload = {
@@ -74,7 +227,16 @@ def record(mod, data, from_m, to_m):
             mod.log_event("reversal", payload, session_id=sid, cwd=cwd)
         except Exception:
             pass
-    # budget aperto di QUESTA sessione (owner_sid), altrimenti del cwd
+    _append_budget(mod, data, {"from": from_m, "to": to_m,
+                               "source": data.get("source"),
+                               "context_tokens": data.get("context_tokens")})
+
+
+def _append_budget(mod, data, entry):
+    """Appende a model_switches del budget aperto di QUESTA sessione
+    (owner_sid), altrimenti del cwd. Best-effort."""
+    sid = data.get("session_id")
+    cwd = data.get("cwd") or os.getcwd()
     bdir = BASE / "budgets"
     if not bdir.is_dir():
         return
@@ -93,11 +255,8 @@ def record(mod, data, from_m, to_m):
                 target = (p, b)
         if target:
             p, b = target
-            b.setdefault("model_switches", []).append({
-                "from": from_m, "to": to_m, "source": data.get("source"),
-                "context_tokens": data.get("context_tokens"),
-                "ts": mod.now_iso() if mod and hasattr(mod, "now_iso") else None,
-            })
+            entry["ts"] = mod.now_iso() if mod and hasattr(mod, "now_iso") else None
+            b.setdefault("model_switches", []).append(entry)
             p.write_text(json.dumps(b, indent=1), encoding="utf-8")
     except Exception:
         pass
@@ -113,7 +272,11 @@ def main():
         return 0
     event = data.get("hook_event_name") or ""
     mod = _fdt()
-    record(mod, data, from_m, to_m)
+    fb = classify(data, to_m) if event == "PostModelSwitch" else None
+    if fb:
+        record_involuntary(mod, data, from_m, to_m, fb)
+    else:
+        record(mod, data, from_m, to_m)
 
     ctx = data.get("context_tokens")
     warm = data.get("prompt_cache_warm")
@@ -123,6 +286,14 @@ def main():
     if event == "PostModelSwitch":
         # stdout → Claude al prossimo turno: la tariffa e' cambiata da qui.
         rate_s = f"; cache reads now priced at {rate_to}× input" if rate_to is not None else ""
+        if fb:
+            # JSON: systemMessage a schermo per l'utente, additionalContext a
+            # Claude (schema host 2.1.280, hookSpecificOutput PostModelSwitch).
+            user, claude = involuntary_lines(from_m, to_m, fb, rate_s)
+            print(json.dumps({"systemMessage": user, "hookSpecificOutput": {
+                "hookEventName": "PostModelSwitch", "additionalContext": claude}},
+                ensure_ascii=False))
+            return 0
         print(f"FD: session model switched {short(from_m)} → {short(to_m)} "
               f"(source: {data.get('source') or '?'}){rate_s}. Read the model "
               f"from the record, never from the session start.")

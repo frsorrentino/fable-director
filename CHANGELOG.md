@@ -2,6 +2,12 @@
 
 Full release history. The README shows only the latest few entries.
 
+## Unreleased
+
+- **Involuntary model switches told apart.** When safeguards flag a message (Claude Opus 5.5: bio, cyber) or the primary model fails, Claude Code moves the session to another model and `PostModelSwitch` arrives with `source: "auto"`. The hook reads the matching `model_refusal_fallback` / `model_fallback` line in the transcript, logs a `model_fallback` event with its cause (kept out of reversals, so report and hindsight no longer read it as a changed decision) and shows the user how to go back (`/model <original>`, `/config` → "Switch models when a message is flagged"). An `auto` switch without that line is logged as involuntary with an unidentified cause.
+- **`/fable-director:verifica-modello` and `model-rules-check.py`.** Read-only check of both accounts' CLAUDE.md, skills, agents and settings, and of our installed plugins, against `model-rules/<model>.json`. First rules file: Claude Opus 5.5 (no "think hard" or "show your reasoning" prompts, a when-to-stop rule, a task list in a file, `switchModelsOnFlag` set). A new model is a new data file.
+- **Kernel: long tasks keep their checklist in a file** (`TASKS.md`), ticked as each step is verified, so it survives compaction.
+
 ## 1.45.x
 
 - **1.45.0 — Claude Opus 5.5 priced right, and three rules moved from prose into hooks.**

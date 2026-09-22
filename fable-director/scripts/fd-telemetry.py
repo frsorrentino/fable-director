@@ -1246,8 +1246,11 @@ def receipt_lines(budget, cwd, sid):
         detail.append(f"  {lb.get('status', '?').upper()} from {lb.get('agent_type')}: "
                       f"{lb.get('blocker') or '(no blocker line)'}")
     for sw in budget.get("model_switches") or []:
+        inv = sw.get("involuntary")
         detail.append(f"model switch: {sw.get('from')} → {sw.get('to')}"
-                      + (f" with {fmt(sw['context_tokens'])} tokens of context" if sw.get("context_tokens") else ""))
+                      + (f" with {fmt(sw['context_tokens'])} tokens of context" if sw.get("context_tokens") else "")
+                      + (f" — involuntary ({inv}{', ' + sw['category'] if sw.get('category') else ''})"
+                         if inv else ""))
     if budget.get("actual_eq_tokens"):
         crm = budget.get("cache_read_by_model") or {}
         models = ", ".join(sorted(crm)) if crm else None
@@ -1780,6 +1783,16 @@ def cmd_report(args):
         pairs_s = ", ".join(f"{k}×{v}" for k, v in sorted(pairs.items(), key=lambda x: -x[1]))
         print(f"\nReversals: {len(reversals)} ({pairs_s}) — not errors: initial policy "
               f"falsified; recurring patterns = playbook candidates")
+
+    fbs = [p for e, p in events if e == "model_fallback"]
+    if fbs:
+        causes = {}
+        for f in fbs:
+            k = f.get("cause") or "?"
+            causes[k] = causes.get(k, 0) + 1
+        causes_s = ", ".join(f"{k}×{v}" for k, v in sorted(causes.items(), key=lambda x: -x[1]))
+        print(f"\nInvoluntary model switches: {len(fbs)} ({causes_s}) — the host moved "
+              f"the session, not a choice: kept out of reversals")
 
     escs = [p for e, p in events if e == "escalation"]
     if escs:
