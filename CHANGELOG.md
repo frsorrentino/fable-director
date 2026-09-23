@@ -2,6 +2,13 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.47.x
+
+- **1.47.0 — errors of the plugin's own scripts, collected locally and reported only on your yes.**
+  - **claude-observe copy in `observe/`.** A `PostToolUseFailure` hook (Bash only) notes the non-zero exits of the plugin's scripts (`fd-telemetry.py`, `external-exec.py`, `anonymizer.py`, the rest of `scripts/`, the skills' `tools/`) in `${XDG_STATE_HOME:-~/.local/state}/claude-observe/fable-director.jsonl` (0600): script, subcommand and option names only, every argument value as `<ARG>`, error text scrubbed. Documented outcomes are skipped: `cache-get` miss (1), `anonymizer.py test --strict` below threshold (1), NEEDS_CONTEXT of `external-exec.py` and `media-analyze.py` (2). The only way out is one anonymized GitHub issue, shown first and sent on your yes. Off: `{"enabled": false}` in `~/.config/claude-observe/config.json`.
+  - **`/fable-director:observe`** reads the box and adds notes, workarounds and judgements by hand.
+  - **Release preflight** fails if the copy differs from the claude-observe source (`check.sh`).
+
 ## 1.46.x
 
 - **1.46.0 — involuntary model switches told apart, and a per-model check of your instructions.**
