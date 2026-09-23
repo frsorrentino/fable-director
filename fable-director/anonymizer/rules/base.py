@@ -59,7 +59,28 @@ def public_ip(s: str) -> bool:
                 or ip.is_reserved or ip.is_unspecified)
 
 
+# Secrets in config files and code: values of password/key/token/salt
+# assignments (`KEY=v`, `key: v`, `'key' => 'v'`, PHP `define('KEY', 'v')`)
+# and well-known key formats. SECRET goes first: a key is never a TEL or IBAN.
+_SECRET_NAME = (r"[\w.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|"
+                r"private[_-]?key|secure[_-]?key|cookie[_-]?key|auth[_-]?key|_salt|salt_|"
+                r"_key)[\w.-]*")
+_SECRET_LHS = (r"(?i)(?:define\(\s*['\"]" + _SECRET_NAME + r"['\"]\s*,\s*|\b['\"]?"
+               + _SECRET_NAME + r"['\"]?\s*(?:=>|=|:)\s*)")
+# Quoted: anything up to the closing quote. Unquoted: never a $variable or a
+# call, so `$password = $_POST['password']` stays code.
+_SECRET_QUOTED = re.compile(_SECRET_LHS + r"(['\"])([^'\"\n]{6,})\1")
+_SECRET_BARE = re.compile(_SECRET_LHS + r"(?![$@'\"])([^\s'\",;()\[\]{}]{6,})(?=[\s'\",;)\]}]|$)")
+_SECRET_FORMATS = re.compile(
+    r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]+?-----END [A-Z ]*PRIVATE KEY-----"
+    r"|\bAIza[0-9A-Za-z_-]{35}\b|\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}"
+    r"|\bgh[pousr]_[A-Za-z0-9]{36,}\b|\bgithub_pat_\w{22,}|\bAKIA[0-9A-Z]{16}\b"
+    r"|\bxox[abprs]-[A-Za-z0-9-]{10,}|\beyJ[\w-]{8,}\.eyJ[\w-]{8,}\.[\w-]{8,}")
+
 RULES = [
+    Rule("SECRET", _SECRET_FORMATS, None, 0),
+    Rule("SECRET", _SECRET_QUOTED, None, 2),
+    Rule("SECRET", _SECRET_BARE, None, 1),
     # scp-style git URLs (git@github.com:user/repo) are not e-mail addresses
     Rule("EMAIL", re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![\w.-]*:[^\s/])"), None, 0),
     # Host group 1 is the DOMINIO span in domain-only mode; the whole match in full mode.

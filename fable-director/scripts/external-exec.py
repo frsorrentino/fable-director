@@ -44,6 +44,7 @@ Uso:
                    [--provider gemini|gemini-stable|codex] [--type SLUG]
                    [--model M] [--effort low|medium|high|...]
                    [--items N] [--timeout N] [--allow-truncate]
+                   [--allow-sensitive "REASON"]
   external-exec.py --doctor [--ping]   # setup guidato / diagnosi provider
 
 --doctor: nessun budget richiesto (zero chiamate modello senza --ping).
@@ -53,6 +54,17 @@ piano); oppure chiavi API a pagamento nelle stesse voci di config. Config
 presente → checklist per provider (binario/chiave/auth_check) + uso odierno
 vs limits.rpd dal config. --ping aggiunge una chiamata reale minima per
 provider (consuma 1 richiesta di quota ciascuna: opt-in).
+
+Input sensibili: verso i provider che possono usare gli input per
+addestrare ("trains_on_inputs" nel config; campo assente = true,
+fail-closed) --spec-file e --input vengono rifiutati se sono file con
+segreti (wp-config.php, .env, parameters.php...), dump di database,
+esportazioni tabellari (csv/xlsx: ordini, anagrafiche), chiavi e
+credenziali, file sotto ~/.ssh, ~/.config e simili, o sotto un percorso di
+"sensitive_paths" nel config. --allow-sensitive "MOTIVO" li lascia passare
+SOLO quando l'utente l'ha chiesto per quel lavoro: motivo e file finiscono
+nel registro (evento sensitive_override). Verso quei provider i valori
+segreti (password, chiavi, token) escono sempre come [SECRET], sblocco o no.
 
 --paid-ok: obbligatorio per provider con "billing" diverso da "free" nel
 config (campo assente = paid, fail-closed). Va passato SOLO dopo consenso
@@ -238,7 +250,7 @@ def check_out_perimeter(budget, out_path):
         sys.exit(1)
 
 
-def log_exec(payload):
+def log_exec(payload, kind="external_exec"):
     """Best-effort: telemetria oggettiva, mai bloccante."""
     try:
         import importlib.util
@@ -246,9 +258,51 @@ def log_exec(payload):
             "fd_telemetry", Path(__file__).with_name("fd-telemetry.py"))
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
-        mod.log_event("external_exec", payload)
+        mod.log_event(kind, payload)
     except Exception:
         pass
+
+
+# File che non partono di default verso un provider che addestra sugli input.
+SENSITIVE_NAME = re.compile(
+    r"(?i)^wp-config[\w.-]*\.php$|^\.env(?!\.(?:example|sample|dist|template)$)(?:\..+)?$"
+    r"|^(?:parameters|settings\.inc)\.php$|\.(?:sql|dump)(?:\.(?:gz|bz2|xz|zip))?$"
+    r"|\.(?:csv|tsv|xlsx|xls|ods)$|\.(?:pem|key|p12|pfx|jks|kdbx|keystore)$"
+    r"|^id_(?:rsa|dsa|ecdsa|ed25519)|^\.?(?:netrc|pgpass|htpasswd)$|credential"
+    r"|^secrets?\.|^auth\.json$")
+SENSITIVE_HOME = (".ssh", ".config", ".aws", ".gnupg", ".kube", ".docker",
+                  ".claude/fable-director/cross-family.json")
+
+
+def trains_on_inputs(prov):
+    return prov.get("trains_on_inputs") is not False
+
+
+def sensitive_reason(path, extra_paths):
+    """Motivo per cui il file non parte di default, o None. Il percorso è
+    risolto (symlink compresi): un link non aggira il blocco."""
+    p = Path(path).expanduser().resolve()
+    home = Path.home().resolve()
+    roots = [home / d for d in SENSITIVE_HOME]
+    roots += [Path(os.path.expanduser(e)).resolve() for e in extra_paths]
+    for r in roots:
+        if p == r or r in p.parents:
+            return f"under {r}"
+    if SENSITIVE_NAME.search(p.name):
+        return "secrets, database dump, tabular export or credentials by file name"
+    return None
+
+
+def mask_secrets(text):
+    """Password, chiavi e token → [SECRET], a senso unico (niente mappa: il
+    fornitore non ne ha bisogno per l'analisi). Motore dell'anonymizer."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from anonymizer import config as acfg, engine
+    from anonymizer.spans import apply_spans
+    spans, _ = engine.collect(text, {**acfg.DEFAULTS, "packs": ["base"]},
+                              ["columns", "rules"])
+    spans = [s for s in spans if s.cat == "SECRET"]
+    return apply_spans(text, spans, lambda s: "[SECRET]"), len(spans)
 
 
 def best_free_provider(cfg, usage=None):
@@ -458,8 +512,7 @@ Re-check:
                             .replace("{model}", prov.get("model", ""))
                             .replace("{effort}", prov.get("effort", "high"))
                            for a in prov["command"]]
-                    p = subprocess.run(cmd, input=probe.encode(), timeout=90,
-                                       capture_output=True)
+                    p = run_cli(prov, cmd, probe, 90)
                     resp = (Path(tmp).read_text(errors="replace").strip()
                             or p.stdout.decode(errors="replace").strip())
                     os.unlink(tmp)
@@ -505,7 +558,7 @@ def parse_args(argv):
     opts = {"--spec": None, "--spec-file": None, "--out": None,
             "--provider": None, "--type": None, "--items": None,
             "--timeout": None, "--schema-file": None, "--model": None,
-            "--effort": None}
+            "--effort": None, "--allow-sensitive": None}
     inputs = []
     flags = {"--schema-json": False, "--allow-truncate": False,
              "--doctor": False, "--ping": False, "--resume-last": False,
@@ -703,6 +756,32 @@ def render_cli_command(prov, name, opts, out_file, schema_path):
     return cmd
 
 
+def run_cli(prov, cmd, spec, timeout):
+    """Esegue un provider CLI. Spec via stdin, oppure come argomento se il
+    template ha il segnaposto {prompt} (Antigravity CLI non legge stdin),
+    sostituito per ultimo: un {model} dentro la spec resta testo. Con
+    api_key + api_key_env nel config la chiave arriva al figlio come variabile
+    d'ambiente, mai sulla riga di comando (visibile in ps). "isolated_cwd":
+    true lo lancia in una cartella vuota: un agente CLI con strumenti non vede
+    i file del progetto da cui parte la chiamata."""
+    env = None
+    key_env = prov.get("api_key_env")
+    if key_env and prov.get("api_key") and not os.environ.get(key_env):
+        env = dict(os.environ, **{key_env: prov["api_key"]})
+    feed = {"input": spec.encode()}
+    if any("{prompt}" in a for a in cmd):
+        cmd = [a.replace("{prompt}", spec) for a in cmd]
+        feed = {"stdin": subprocess.DEVNULL}
+    cwd = (tempfile.mkdtemp(prefix="xf-cwd-") if prov.get("isolated_cwd")
+           else None)
+    try:
+        return subprocess.run(cmd, timeout=timeout, capture_output=True,
+                              env=env, cwd=cwd, **feed)
+    finally:
+        if cwd:
+            shutil.rmtree(cwd, ignore_errors=True)
+
+
 def call_cli(prov, name, user_msg, timeout, opts, schema_path):
     """Sottoprocesso (es. Codex CLI): preflight, spec via stdin, output su
     mktemp unico, timeout — stessa disciplina di cross-verify.py."""
@@ -711,8 +790,7 @@ def call_cli(prov, name, user_msg, timeout, opts, schema_path):
     spec = f"{EXEC_SYSTEM}\n\n{user_msg}"
     try:
         cmd = render_cli_command(prov, name, opts, out_file, schema_path)
-        proc = subprocess.run(cmd, input=spec.encode(), timeout=timeout,
-                              capture_output=True)
+        proc = run_cli(prov, cmd, spec, timeout)
         if proc.returncode != 0:
             unavailable(f"CLI '{name}' exit {proc.returncode}: "
                         f"{proc.stderr.decode(errors='replace')[:200]}")
@@ -720,6 +798,9 @@ def call_cli(prov, name, user_msg, timeout, opts, schema_path):
         return content if content.strip() else proc.stdout.decode(errors="replace")
     except subprocess.TimeoutExpired:
         unavailable(f"CLI '{name}' timeout ({timeout}s)")
+    except OSError as e:
+        # E2BIG: una spec come argomento ({prompt}) sopra ~128 KB su Linux.
+        unavailable(f"CLI '{name}' not runnable: {e}")
     finally:
         try:
             os.unlink(out_file)
@@ -817,6 +898,39 @@ def main():
             unavailable(f"API key missing for '{name}' "
                         f"(export {prov.get('api_key_env')}=... or api_key in config)")
 
+    allow = opts["--allow-sensitive"]
+    if allow is not None and not allow.strip():
+        out("error", name, prov.get("model", "?"), detail=(
+            "--allow-sensitive needs the reason the user gave for sending "
+            "these files"))
+        sys.exit(1)
+    trains = trains_on_inputs(prov)
+    sensitive = []
+    if trains:
+        for f in ([opts["--spec-file"]] if opts["--spec-file"] else []) + inputs:
+            why = sensitive_reason(f, cfg.get("sensitive_paths") or [])
+            if why:
+                sensitive.append((f, why))
+    if sensitive and not allow:
+        log_exec({"provider": name, "model": prov.get("model", "?"),
+                  "billing": billing_of(prov), "type": opts.get("--type"),
+                  "ok": False, "check": "sensitive-refused",
+                  "files": [f for f, _ in sensitive]})
+        out("error", name, prov.get("model", "?"), "sensitive-refused", "-",
+            "; ".join(f"{f}: {why}" for f, why in sensitive)
+            + f" — provider '{name}' may use inputs for training. Keep this "
+              "work in-house on the main model. To send it anyway, the user "
+              "must ask for it explicitly for this job; then re-run with "
+              "--allow-sensitive \"<the user's reason>\" (logged with the "
+              "files). Secret values still leave as [SECRET].")
+        sys.exit(1)
+    if sensitive:
+        log_exec({"provider": name, "reason": allow.strip(),
+                  "files": [f for f, _ in sensitive]}, kind="sensitive_override")
+    masked = 0
+    if trains:
+        spec_text, masked = mask_secrets(spec_text)
+
     schema_obj, schema_text, schema_path = None, None, None
     if opts["--schema-file"]:
         schema_path = str(Path(opts["--schema-file"]).resolve())
@@ -839,7 +953,12 @@ def main():
                 sys.exit(1)
             content = content[:INPUT_CAP]
             user_msg += f"\n[NOTE: {fpath} TRUNCATED to {INPUT_CAP} chars on request]\n"
+        if trains:
+            content, n = mask_secrets(content)
+            masked += n
         user_msg += f"\nINPUT FILE {fpath}:\n{content}\n"
+    if masked:
+        print(f"NOTE: {masked} secret value(s) left as [SECRET]", file=sys.stderr)
     if schema_text:
         user_msg += ("\nOUTPUT FORMAT: strict JSON only — a single valid JSON "
                      "document matching this JSON Schema, no code fences, no "
@@ -895,7 +1014,7 @@ def main():
     base_log = {"provider": name, "model": prov["model"],
                 "billing": billing_of(prov),
                 "type": opts.get("--type"), "resume": flags["--resume-last"],
-                "chars_in": len(user_msg)}
+                "chars_in": len(user_msg), "secrets_masked": masked}
     if content is None or not str(content).strip():
         out("error", name, prov["model"], detail="empty response from provider")
         log_exec({**base_log, "ok": False, "check": "empty"})

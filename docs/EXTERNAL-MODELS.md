@@ -1,4 +1,4 @@
-# External free-tier models (Gemini, Codex)
+# External free-tier models (Gemini, Codex, Antigravity)
 
 **Already have a Google or a ChatGPT account? It pays to connect them.** Their
 free tiers **reset every day** — a day without calls is capacity lost, not
@@ -12,6 +12,22 @@ cross-verify.py --init          # writes ~/.claude/fable-director/cross-family.j
 
 Add a Gemini key from [AI Studio](https://aistudio.google.com/apikey), and/or
 run `codex login`. Check the result with `external-exec.py --doctor`.
+
+**Antigravity CLI** (`agy`, Google's successor to the Gemini CLI, which closed
+for personal accounts in June 2026) runs on the same Gemini key — no new
+account, same free-tier quota:
+
+```bash
+curl -fsSL https://antigravity.google/cli/install.sh | bash
+mkdir -p ~/.gemini/antigravity-cli
+echo '{ "modelProvider": "gemini" }' > ~/.gemini/antigravity-cli/settings.json
+external-exec.py --doctor --ping
+```
+
+`agy` takes its prompt only as an argument, so the provider template uses the
+`{prompt}` placeholder (specs up to ~128 KB on Linux); the key reaches it as an
+environment variable, never on the command line, and `isolated_cwd` runs it in
+an empty folder so the agent cannot read the project it was called from.
 
 ## Three roles, all off your Claude quota
 
@@ -64,6 +80,19 @@ access/billing refusal, logged as `billing-block`, and never dressed up as a
 transient quota error. Free windows do end (Grok's is a time-limited
 promotion), and a message saying "retry later" about a door that won't reopen is
 worse than no message.
+
+**Sensitive files stay home unless you say otherwise.** Free tiers may use
+what you send to train models (Gemini API unpaid terms; ChatGPT plans unless
+you opt out in Data controls). Towards any provider whose config does not say
+`"trains_on_inputs": false`, `external-exec.py` refuses `--input` and
+`--spec-file` files that hold secrets (`wp-config.php`, `.env`,
+`parameters.php`), database dumps, tabular exports (csv/xlsx: orders, customer
+lists), keys and credentials, anything under `~/.ssh` or `~/.config`, and any
+folder you list in `sensitive_paths` in `cross-family.json`. Ordinary code —
+themes, plugins, modules — goes through. When you do want a sensitive file
+sent for one job, say so: the call then carries `--allow-sensitive "reason"`,
+and the reason and files land in the ledger (`sensitive_override`). Either
+way, password, key and token values leave as `[SECRET]`.
 
 ## Running under Claude Code's native sandbox
 

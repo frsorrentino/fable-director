@@ -22,7 +22,7 @@ class Rule(NamedTuple):
 
 
 # Category order across packs: first come, first served on overlaps.
-ORDER = ["EMAIL", "URL", "IBAN", "CF", "PIVA", "CARTA", "DATA_NASCITA", "PROTOCOLLO",
+ORDER = ["SECRET", "EMAIL", "URL", "IBAN", "CF", "PIVA", "CARTA", "DATA_NASCITA", "PROTOCOLLO",
          "INDIRIZZO", "CAP_COMUNE", "TEL", "TARGA", "IP"]
 
 

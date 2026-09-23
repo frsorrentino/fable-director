@@ -14,6 +14,13 @@ Runs the REAL script against a throwaway HOME and a stub CLI provider:
   E8  --resume-last su provider senza resume_command → error rumoroso
   E9  --schema-json su output non-JSON → error json-invalid (regressione)
   E10 --model override raggiunge il comando
+  E17 {prompt}: spec come argomento letterale, stdin vuoto, chiave dal
+      config in env, cwd isolata vuota e rimossa (Antigravity CLI)
+  E18 regressione: senza {prompt} la spec resta su stdin, nessuna chiave
+  S1-S11 input sensibili verso provider che addestrano: tema WP consentito,
+      wp-config/dump/csv/.env/sensitive_paths rifiutati, --allow-sensitive
+      consente e registra, segreti sempre [SECRET], provider senza
+      addestramento invariato
 
 Usage: python3 tests/external-exec-verify.py   (exit 0 = all green)
 """
@@ -21,6 +28,7 @@ import hashlib
 import json
 import os
 import re
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -37,10 +45,14 @@ import json, os, sys, time
 args = sys.argv[1:]
 out = args[args.index("--out") + 1] if "--out" in args else None
 mode = os.environ.get("STUB_MODE", "echo")
-sys.stdin.read()
+stdin = sys.stdin.read()
 if mode == "sleep":
     time.sleep(5)
 text = "not a json {" if mode == "notjson" else json.dumps({"argv": args})
+if mode == "probe":
+    text = json.dumps({"argv": args, "stdin": stdin,
+                       "key": os.environ.get("STUB_KEY"),
+                       "cwd": os.getcwd(), "files": os.listdir(".")})
 if out:
     open(out, "w").write(text)
 else:
@@ -95,6 +107,22 @@ def setup():
                 "billing": "paid",
                 "cost_note": "~$9.99/call",
             },
+            "stub-arg": {
+                "type": "cli",
+                "command": [py, str(stub), "run", "-p={prompt}"],
+                "model": "stub-arg-model",
+                "api_key": "k-123",
+                "api_key_env": "STUB_KEY",
+                "isolated_cwd": True,
+                "billing": "free",
+            },
+            "stub-notrain": {
+                "type": "cli",
+                "command": [py, str(stub), "run"],
+                "model": "stub-notrain-model",
+                "trains_on_inputs": False,
+                "billing": "free",
+            },
             "stub-nobilling": {
                 "type": "cli",
                 "command": [py, str(stub), "run", "--out", "{output_file}"],
@@ -102,6 +130,7 @@ def setup():
             },
         },
     }
+    config["sensitive_paths"] = [str(home / "pa-files")]
     (cfg_dir / "cross-family.json").write_text(json.dumps(config))
     (cfg_dir / "budgets" / f"{slug(proj)}.json").write_text(json.dumps({
         "status": "open",
@@ -230,6 +259,99 @@ def main():
     check("E16 doctor flags undeclared billing as a problem (exit 1)",
           r.returncode == 1 and "billing UNDECLARED" in r.stdout
           and "fail-closed" in r.stdout, r.stdout + r.stderr)
+
+    # E17 — {prompt}: argomento, env, cwd isolata.
+    (proj / "secret.txt").write_text("x")
+    r = run(home, proj, ["--spec", "hi {model}", "--provider", "stub-arg"],
+            mode="probe")
+    try:
+        d = json.loads(r.stdout[r.stdout.index("{"):r.stdout.rindex("}") + 1])
+    except ValueError:
+        d = {}
+    check("E17 {prompt} as literal argument, key in env, isolated empty cwd",
+          r.returncode == 0 and d.get("stdin") == ""
+          and any(a.startswith("-p=") and a.rstrip().endswith("hi {model}")
+                  for a in d.get("argv", []))
+          and d.get("key") == "k-123" and d.get("files") == []
+          and Path(d.get("cwd", str(proj))) != proj
+          and not Path(d.get("cwd", str(proj))).exists(),
+          r.stdout + r.stderr)
+
+    # E18 — regressione: spec su stdin, nessuna chiave iniettata.
+    r = run(home, proj, ["--spec", "hi"], mode="probe")
+    check("E18 without {prompt} the spec stays on stdin, no key injected",
+          r.returncode == 0 and '"stdin": ' in r.stdout
+          and "hi" in r.stdout.split('"stdin": ', 1)[1]
+          and '"key": null' in r.stdout, r.stdout + r.stderr)
+
+    # S — input sensibili ("stub" non dichiara trains_on_inputs: fail-closed).
+    theme = proj / "wp-content" / "themes" / "t"
+    theme.mkdir(parents=True)
+    (theme / "functions.php").write_text("<?php add_action('init', 'x');")
+    wpc = proj / "wp-config.php"
+    wpc.write_text("<?php define( 'DB_PASSWORD', 'Hunter2!pw' );")
+    (proj / "db.sql.gz").write_text("x")
+    (proj / "orders.csv").write_text("email,total\na@b.example,3")
+    (proj / ".env").write_text("API_TOKEN=abcdef123456")
+    (proj / ".env.example").write_text("API_TOKEN=changeme")
+    pa = home / "pa-files"
+    pa.mkdir()
+    (pa / "pratica.txt").write_text("x")
+
+    def sent(r):
+        return r.stdout.split('"stdin": ', 1)[1] if '"stdin": ' in r.stdout else ""
+
+    r = run(home, proj, ["--spec", "hi", "--input", str(theme / "functions.php")],
+            mode="probe")
+    check("S1 client WordPress theme file is allowed",
+          r.returncode == 0 and "add_action" in sent(r), r.stdout + r.stderr)
+    for tag, f in (("S2 wp-config.php", wpc), ("S3 database dump", proj / "db.sql.gz"),
+                   ("S4 tabular export", proj / "orders.csv"),
+                   ("S5 sensitive_paths folder", pa / "pratica.txt")):
+        r = run(home, proj, ["--spec", "hi", "--input", str(f)], mode="probe")
+        check(f"{tag} refused without --allow-sensitive",
+              r.returncode == 1 and field(r.stdout, "CHECK") == "sensitive-refused"
+              and "--allow-sensitive" in r.stdout and '"stdin"' not in r.stdout,
+              r.stdout + r.stderr)
+    r = run(home, proj, ["--spec-file", str(proj / ".env")], mode="probe")
+    check("S6 --spec-file .env refused",
+          r.returncode == 1 and field(r.stdout, "CHECK") == "sensitive-refused",
+          r.stdout + r.stderr)
+    r = run(home, proj, ["--spec", "hi", "--input", str(proj / ".env.example")],
+            mode="probe")
+    check("S7 .env.example template allowed",
+          r.returncode == 0 and "API_TOKEN" in sent(r), r.stdout + r.stderr)
+    r = run(home, proj, ["--spec", "hi", "--input", str(wpc),
+                         "--allow-sensitive", "asked for the DB migration review"],
+            mode="probe")
+    db = home / ".claude" / "fable-director" / "telemetry.db"
+    rows = []
+    if db.exists():
+        con = sqlite3.connect(db)
+        rows = [json.loads(p) for (p,) in con.execute(
+            "SELECT payload FROM events WHERE event='sensitive_override'")]
+        con.close()
+    check("S8 --allow-sensitive sends, logs reason and file, secret masked",
+          r.returncode == 0 and "DB_PASSWORD" in sent(r)
+          and "[SECRET]" in sent(r) and "Hunter2!pw" not in r.stdout
+          and any(x.get("reason") == "asked for the DB migration review"
+                  and str(wpc) in x.get("files", []) for x in rows),
+          r.stdout + r.stderr + str(rows))
+    r = run(home, proj, ["--spec", "hi", "--input", str(wpc),
+                         "--allow-sensitive", " "], mode="probe")
+    check("S9 --allow-sensitive without a reason is an error",
+          r.returncode == 1 and field(r.stdout, "STATUS") == "error",
+          r.stdout + r.stderr)
+    key = "AIza" + "B" * 35
+    r = run(home, proj, ["--spec", f"check key {key} please"], mode="probe")
+    check("S10 inline spec: secrets masked, text allowed",
+          r.returncode == 0 and key not in r.stdout and "[SECRET]" in sent(r)
+          and "please" in sent(r), r.stdout + r.stderr)
+    r = run(home, proj, ["--spec", f"key {key}", "--input", str(wpc),
+                         "--provider", "stub-notrain"], mode="probe")
+    check("S11 provider with trains_on_inputs false: no block, no masking",
+          r.returncode == 0 and key in sent(r) and "Hunter2!pw" in sent(r),
+          r.stdout + r.stderr)
 
     print(f"\n{len(passed)} passed, {len(failed)} failed")
     sys.exit(1 if failed else 0)

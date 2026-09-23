@@ -126,6 +126,31 @@ DEFAULT_CONFIG = {
                     "external-exec.py (codex exec resume non accetta --sandbox: read-only "
                     "via -c sandbox_mode). billing free = flat nel piano ChatGPT (nessun costo marginale per chiamata)"
         },
+        "antigravity": {
+            "type": "cli",
+            "command": ["agy", "--sandbox", "--model", "{model}",
+                        "--effort", "{effort}", "--output-format", "text",
+                        "-p={prompt}"],
+            "model": "gemini-3.6-flash",
+            "effort": "high",
+            "timeout": 600,
+            "api_key_env": "GEMINI_API_KEY",
+            "isolated_cwd": True,
+            "billing": "free",
+            "limits": {"rpd": 1500, "rpm": 10,
+                       "reset": {"period": "daily",
+                                 "tz": "America/Los_Angeles"}},
+            "note": "Antigravity CLI (agy >=1.1.13; installer: curl -fsSL "
+                    "https://antigravity.google/cli/install.sh | bash), erede della "
+                    "Gemini CLI. Serve ~/.gemini/antigravity-cli/settings.json con "
+                    "{\"modelProvider\": \"gemini\"}: stessa GEMINI_API_KEY e stessa "
+                    "quota free tier dei provider gemini (dati usati da Google per "
+                    "migliorare i prodotti). {prompt}: agy non legge stdin, la spec va "
+                    "come argomento (tetto ~128 KB). --model sempre esplicito (default "
+                    "agy gemini-3.1-pro, 429 sul free tier). isolated_cwd: cartella "
+                    "vuota, l'agente non vede il progetto. Niente schema_args ne' "
+                    "resume_command"
+        },
         "grok": {
             "base_url": "https://api.x.ai/v1",
             "model": "grok-4.3",
@@ -335,6 +360,16 @@ def call_http(prov, name, api_key, user_msg, timeout):
         return None
 
 
+def load_ext():
+    """external-exec.py come modulo: un solo run_cli per tutti i chiamanti."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "external_exec", Path(__file__).with_name("external-exec.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def call_cli(prov, name, user_msg, timeout):
     """Provider a sottoprocesso (es. Codex CLI). Disciplina Appendice C:
     preflight esplicito, spec via STDIN (niente quoting hazard), output su
@@ -358,8 +393,7 @@ def call_cli(prov, name, user_msg, timeout):
             .replace("{effort}", effort) for a in cmd_template]
     spec = f"{VERIFIER_SYSTEM}\n\n{user_msg}"
     try:
-        proc = subprocess.run(cmd, input=spec.encode(), timeout=timeout,
-                              capture_output=True)
+        proc = load_ext().run_cli(prov, cmd, spec, timeout)
         if proc.returncode != 0:
             unavailable(f"CLI '{name}' exit {proc.returncode}: "
                         f"{proc.stderr.decode(errors='replace')[:200]}")
@@ -367,6 +401,8 @@ def call_cli(prov, name, user_msg, timeout):
         return content if content.strip() else proc.stdout.decode(errors="replace")
     except subprocess.TimeoutExpired:
         unavailable(f"CLI '{name}' timeout ({timeout}s)")
+    except OSError as e:
+        unavailable(f"CLI '{name}' not runnable: {e}")
     finally:
         try:
             os.unlink(out_file)
