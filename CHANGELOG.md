@@ -2,6 +2,14 @@
 
 Full release history. The README shows only the latest few entries.
 
+## Unreleased
+
+- **Antigravity CLI as an external provider, and sensitive files kept home by default.**
+  - **`antigravity` provider** (`agy`, Google's successor to the Gemini CLI): same Gemini key, no new account. CLI templates can take the spec as an argument (`{prompt}`) for tools that do not read stdin; the key reaches the tool as an environment variable; `isolated_cwd` runs it in an empty folder.
+  - **Known issue — shared free-tier quota.** Gemini's free quota is per model and per project, and agy's agent loop sends several requests per task (plus its own retries on 503) that the local counter does not see. A canary on `gemini-3.6-flash` used up the daily request quota that the `gemini` and `gemini-media` providers also draw from. The provider now runs on `gemini-3.7-flash`, which no other provider uses, with a 300 s timeout as the only per-task cap (agy has no turn limit).
+  - **Sensitive-input block.** Towards providers that may train on inputs (`trains_on_inputs` absent counts as true), `external-exec.py` refuses secrets files, database dumps, tabular exports, keys and credentials, `~/.ssh`, `~/.config` and any `sensitive_paths` folder. `--allow-sensitive "reason"` unblocks one job on the user's explicit request and is logged as `sensitive_override`. Password, key and token values always leave as `[SECRET]`.
+  - **Anonymizer: SECRET rules** for assignments, PHP `define()` and known key formats.
+
 ## 1.47.x
 
 - **1.47.0 — errors of the plugin's own scripts, collected locally and reported only on your yes.**

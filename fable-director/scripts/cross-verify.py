@@ -131,9 +131,9 @@ DEFAULT_CONFIG = {
             "command": ["agy", "--sandbox", "--model", "{model}",
                         "--effort", "{effort}", "--output-format", "text",
                         "-p={prompt}"],
-            "model": "gemini-3.6-flash",
+            "model": "gemini-3.7-flash",
             "effort": "high",
-            "timeout": 600,
+            "timeout": 300,
             "api_key_env": "GEMINI_API_KEY",
             "isolated_cwd": True,
             "billing": "free",
@@ -143,13 +143,15 @@ DEFAULT_CONFIG = {
             "note": "Antigravity CLI (agy >=1.1.13; installer: curl -fsSL "
                     "https://antigravity.google/cli/install.sh | bash), erede della "
                     "Gemini CLI. Serve ~/.gemini/antigravity-cli/settings.json con "
-                    "{\"modelProvider\": \"gemini\"}: stessa GEMINI_API_KEY e stessa "
-                    "quota free tier dei provider gemini (dati usati da Google per "
+                    "{\"modelProvider\": \"gemini\"}: stessa GEMINI_API_KEY e stesso "
+                    "progetto free tier dei provider gemini (dati usati da Google per "
                     "migliorare i prodotti). {prompt}: agy non legge stdin, la spec va "
                     "come argomento (tetto ~128 KB). --model sempre esplicito (default "
                     "agy gemini-3.1-pro, 429 sul free tier). isolated_cwd: cartella "
                     "vuota, l'agente non vede il progetto. Niente schema_args ne' "
-                    "resume_command"
+                    "resume_command. Modello diverso da quello dei provider gemini: la quota "
+                    "free tier e' per modello e il ciclo agente di agy fa piu' richieste "
+                    "per compito; niente tetto di turni in agy, il limite e' il timeout"
         },
         "grok": {
             "base_url": "https://api.x.ai/v1",
