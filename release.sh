@@ -31,6 +31,11 @@ grep -q "version-$VER-blue" README.md \
 # due liste = allineamento a mano) — il preflight non lo richiede più.
 git rev-parse "v$VER" >/dev/null 2>&1 \
   && { echo "FAIL: tag v$VER already exists"; exit 1; }
+# claude-observe: the copy in fable-director/observe/ must equal the source (sync.py re-copies it).
+OBSERVE_SRC="${CLAUDE_OBSERVE_SRC:-$(cd ../../claude-observe 2>/dev/null && pwd || true)}"
+[ -n "$OBSERVE_SRC" ] && [ -f "$OBSERVE_SRC/check.sh" ] \
+  || { echo "FAIL: claude-observe source not found (set CLAUDE_OBSERVE_SRC)"; exit 1; }
+bash "$OBSERVE_SRC/check.sh" fable-director
 
 echo "== 2/6 test suites (must be green BEFORE the commit) =="
 python3 tests/transcript-contract/run.py

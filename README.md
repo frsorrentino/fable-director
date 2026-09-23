@@ -172,6 +172,23 @@ outside your dictionary and outside a known column is **not** seen. Demo,
 commands, measurements and plan: **[docs/anonymizer-demo.md](docs/anonymizer-demo.md)**,
 **[docs/plans/2026-09-09-anonymizer.md](docs/plans/2026-09-09-anonymizer.md)**.
 
+## Error reports: local, and only on your yes
+
+The plugin notes the errors of **its own scripts** (a non-zero exit of
+`fd-telemetry.py`, `external-exec.py`, `anonymizer.py` and the rest of
+`scripts/`) in a **local** file,
+`${XDG_STATE_HOME:-~/.local/state}/claude-observe/fable-director.jsonl` (mode
+0600). Exit codes that are documented outcomes, not defects (a `cache-get`
+miss, `anonymizer.py test --strict` below threshold), are skipped. Of each
+command only the script name, the subcommand and the option names are kept:
+every argument value becomes `<ARG>`, and the error text is scrubbed (home
+path, emails, URL queries, secrets). **Nothing leaves your computer** except
+one GitHub issue, anonymized, shown to you first and sent only when you say
+yes. `/fable-director:observe` reads the box and adds notes by hand. Turn it
+off with `{"enabled": false}` in `~/.config/claude-observe/config.json`; stop
+only the offers with `{"propose": false}`. Source and record format:
+[claude-observe](https://github.com/frsorrentino/claude-observe).
+
 ## External free-tier models
 
 Have a Google or ChatGPT account? Their free tiers reset daily, and

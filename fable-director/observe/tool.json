@@ -1,0 +1,14 @@
+{
+  "name": "fable-director",
+  "repo": "frsorrentino/fable-director",
+  "version_from": ".claude-plugin/plugin.json",
+  "match": {
+    "bash": [
+      "(^|\\s|/)(fd-telemetry|external-exec|anonymizer)\\.py\\b",
+      "fable-director/(?:[\\d.]+/)?scripts/[\\w-]+\\.(py|sh)\\b",
+      "fable-director/(?:[\\d.]+/)?skills/[\\w-]+/tools/[\\w-]+\\.py\\b"
+    ]
+  },
+  "benign_exits": {"cache-get": [1], "test": [1]},
+  "known": []
+}
