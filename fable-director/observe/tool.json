@@ -9,6 +9,19 @@
       "fable-director/(?:[\\d.]+/)?skills/[\\w-]+/tools/[\\w-]+\\.py\\b"
     ]
   },
-  "benign_exits": {"cache-get": [1], "test": [1]},
+  "benign_exits": {
+    "cache-get": [
+      1
+    ],
+    "test": [
+      1
+    ],
+    "external-exec.py": [
+      2
+    ],
+    "media-analyze.py": [
+      2
+    ]
+  },
   "known": []
 }

@@ -40,8 +40,11 @@ voce `known` del registro distribuita col plugin) non si propone come issue.
 """
 import platform
 import urllib.parse
-import fcntl
 import glob
+try:
+    import fcntl   # non c'e' su Windows: li' resta il solo lock a cartella
+except ImportError:
+    fcntl = None
 import hashlib
 import json
 import os
@@ -54,6 +57,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 FORMAT = 1   # versione del formato dei record (FORMAT.md): chi legge ignora i campi ignoti, chi riscrive li conserva
+LOCK_WAIT_S, LOCK_STALE_S = 3.0, 10.0   # un hook non aspetta oltre 3 s; un lock di 10 s e' di un processo morto
 OPS = {"|", "||", "&&", ";", "&", "|&"}
 VERBS = {"arm", "list", "show", "add", "mark", "export", "report", "hook", "status", "push", "serve", "set", "get",
          "open", "close", "check"}
@@ -83,7 +87,7 @@ MSG = {
   "observe.draft_nogh": "gh non c'è o non è autenticato: l'invio stamperà un link GitHub precompilato da aprire nel browser (già loggato).",
   "observe.draft_existing": "Esiste già una issue aperta sullo stesso errore: #{number} «{title}» ({url}). L'invio aggiunge un COMMENTO lì, non una issue nuova.",
   "observe.nothing_to_send": "nessuna osservazione da inviare per {tool}",
-  "observe.propose": "OSSERVAZIONI DA INVIARE {tool}: {n} errori registrati da un hook su uno strumento pubblico. In un momento naturale (a fine lavoro) proponi all'utente di inviarle: `{cmd} report {tool}` prepara UNA issue anonimizzata; mostragliela com'è e chiedi un solo sì, poi lancia il comando con --send che stampa."
+  "observe.propose": "OSSERVAZIONI DA INVIARE {tool}: {n} (errori registrati dall'hook o note a mano) sul plugin {tool}. In un momento naturale (a fine lavoro) proponi all'utente di inviarle: `{cmd} report {tool}` prepara UNA issue anonimizzata; mostragliela com'è e chiedi un solo sì, poi lancia il comando con --send che stampa."
  },
  "en": {
   "observe.summary": "OBSERVATIONS {tool}: {new} new, {again} recurring — `{cmd} list {tool}` (triage: `observe mark ID D|L|S|done`)",
@@ -107,7 +111,7 @@ MSG = {
   "observe.draft_nogh": "gh is missing or not logged in: sending will print a prefilled GitHub link to open in the browser (already logged in).",
   "observe.draft_existing": "An open issue on the same error exists: #{number} “{title}” ({url}). Sending adds a COMMENT there, not a new issue.",
   "observe.nothing_to_send": "no observations to send for {tool}",
-  "observe.propose": "OBSERVATIONS TO SEND {tool}: {n} errors recorded by a hook on a public tool. At a natural moment (end of the task) offer the user to send them: `{cmd} report {tool}` prepares ONE anonymized issue; show it as it is and ask for a single yes, then run the --send command it prints."
+  "observe.propose": "OBSERVATIONS TO SEND {tool}: {n} (errors recorded by the hook or notes added by hand) on the {tool} plugin. At a natural moment (end of the task) offer the user to send them: `{cmd} report {tool}` prepares ONE anonymized issue; show it as it is and ask for a single yes, then run the --send command it prints."
  }
 }
 
@@ -283,10 +287,19 @@ def tool_of(tool_name, tool_input):
 
 
 def is_benign(tool, seg, code):
+    """Un codice d'uscita documentato come normale. La chiave e' un sottocomando («restart arm»: le parole dopo il
+    programma) o il nome di uno script («external-exec.py»: script senza sottocomandi), con i suoi eventuali
+    sottocomandi («fd-telemetry.py budget-open»)."""
     if code is None:
         return False
     words = " ".join(x for x in seg[1:] if not x.startswith("-") and re.fullmatch(r"[a-z][a-z0-9-]*", x))
-    return any((words + " ").startswith(k + " ") and code in codes for k, codes in (tool.get("benign_exits") or {}).items())
+    red = " " + redact_cmd(seg, tool) + " "
+    for k, codes in (tool.get("benign_exits") or {}).items():
+        if code not in codes:
+            continue
+        if (words + " ").startswith(k + " ") or (k.split()[0].endswith((".py", ".sh")) and f" {k} " in red):
+            return True
+    return False
 
 
 # ------------------------------------------------------------------ contesto e versioni
@@ -390,11 +403,55 @@ class Box:
         self.path = self.dir / f"{re.sub(r'[^A-Za-z0-9_.-]', '_', tool)}.jsonl"
 
     def __enter__(self):
+        """Due lock, sempre in quest'ordine (FORMAT.md): flock su <dir>/.lock dove il sistema ce l'ha, che esclude le
+        copie gia' distribuite (fino ad a787654 prendevano solo quello), poi la cartella <file>.lock creata con mkdir,
+        atomica ovunque e uguale per chi scrive in Node senza flock. Nessuno stallo: chi prende solo mkdir non aspetta mai
+        flock. Una cartella di lock piu' vecchia di LOCK_STALE_S e' di un processo morto."""
         self.dir.mkdir(parents=True, exist_ok=True)
         os.chmod(self.dir, 0o700)
-        self.lock = open(self.dir / ".lock", "w")
-        fcntl.flock(self.lock, fcntl.LOCK_EX)
+        self.lock = Path(str(self.path) + ".lock")
+        end = time.time() + LOCK_WAIT_S
+        self.flock = None
+        if fcntl is not None:
+            self.flock = open(self.dir / ".lock", "w")
+            while True:
+                try:
+                    fcntl.flock(self.flock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except OSError:
+                    if time.time() > end:
+                        self.flock.close()
+                        raise TimeoutError(f"flock {self.dir / '.lock'}")
+                    time.sleep(0.05)
+        while True:
+            try:
+                os.mkdir(self.lock)
+                break
+            except FileExistsError:
+                try:
+                    if time.time() - self.lock.stat().st_mtime > LOCK_STALE_S:
+                        os.rmdir(self.lock)
+                        continue
+                except OSError:
+                    continue
+                if time.time() > end:
+                    self._release_flock()
+                    raise TimeoutError(f"lock {self.lock}")
+                time.sleep(0.05)
         self.recs = read(self.path)
+        # le voci rimaste in attesa (lock occupato): si incorporano ora, sotto lock, e il file si svuota all'uscita
+        self.pending = Path(str(pending_path(self.path.stem)))
+        self.taken = None
+        if self.pending.exists():
+            self.taken = self.pending.with_suffix(f".{os.getpid()}.taking")
+            try:
+                os.replace(self.pending, self.taken)
+                for e in read(self.taken):
+                    if int(e.get("v") or 1) <= FORMAT and e.get("id"):
+                        apply(self.recs, e.get("tool") or self.path.stem, e["id"], e.get("fields") or {}, e.get("example"),
+                              float(e.get("at") or time.time()))
+            except OSError:
+                self.taken = None
         return self
 
     def __exit__(self, *exc):
@@ -406,9 +463,29 @@ class Box:
                 for r in self.recs:
                     f.write(json.dumps(r, ensure_ascii=False) + "\n")
             os.replace(tmp, self.path)
-        fcntl.flock(self.lock, fcntl.LOCK_UN)
-        self.lock.close()
+            if self.taken is not None:
+                self.taken.unlink(missing_ok=True)
+        elif self.taken is not None:
+            try:   # non riscritto: le voci prese tornano in attesa
+                with open(self.pending, "a") as f:
+                    f.write(self.taken.read_text())
+                self.taken.unlink()
+            except OSError:
+                pass
+        try:
+            os.rmdir(self.lock)
+        except OSError:
+            pass
+        self._release_flock()
         return False
+
+    def _release_flock(self):
+        if self.flock is not None:
+            try:
+                fcntl.flock(self.flock, fcntl.LOCK_UN)
+            finally:
+                self.flock.close()
+                self.flock = None
 
 
 def read(path):
@@ -441,26 +518,48 @@ def all_records():
     return out
 
 
-def record(tool, rec_id, fields, example=None):
-    """Aggiunge o aggiorna (count, last_seen, fino a tre esempi) il record rec_id nella casella dello strumento."""
-    now = round(time.time(), 3)   # frazioni di secondo: un aggiornamento nello stesso secondo dell'avviso conta
-    with Box(tool) as box:
-        r = next((x for x in box.recs if x.get("id") == rec_id), None)
-        if r is None:
-            r = {"v": FORMAT, "id": rec_id, "tool": tool, "count": 0, "first_seen": now, "examples": [], "workaround": None,
-                 "class": None, "status": "new", **fields}
-            box.recs.append(r)
-        else:
-            for k in ("workaround", "class", "note", "context"):
-                if fields.get(k):
-                    r[k] = fields[k]
-            if r.get("status") == "done" and fields.get("source", "").startswith("hook"):
-                r["status"] = "new"   # un errore segnato risolto che torna: va rivisto
-        r["count"] = int(r.get("count") or 0) + (1 if example is not None or not r["count"] else 0)
-        r["last_seen"] = now
-        if example is not None:
-            r["examples"] = (r.get("examples") or [])[-2:] + [dict(example, at=now)]
+def apply(recs, tool, rec_id, fields, example, now):
+    """Aggiunge o aggiorna (count, last_seen, fino a tre esempi) il record rec_id nella lista."""
+    r = next((x for x in recs if x.get("id") == rec_id), None)
+    if r is None:
+        r = {"v": FORMAT, "id": rec_id, "tool": tool, "count": 0, "first_seen": now, "examples": [], "workaround": None,
+             "class": None, "status": "new", **fields}
+        recs.append(r)
+    else:
+        for k in ("workaround", "class", "note", "context"):
+            if fields.get(k):
+                r[k] = fields[k]
+        if r.get("status") == "done" and fields.get("source", "").startswith("hook"):
+            r["status"] = "new"   # un errore segnato risolto che torna: va rivisto
+    r["count"] = int(r.get("count") or 0) + (1 if example is not None or not r["count"] else 0)
+    r["last_seen"] = max(float(r.get("last_seen") or 0), now)
+    if example is not None:
+        r["examples"] = (r.get("examples") or [])[-2:] + [dict(example, at=now)]
     return r
+
+
+def pending_path(tool):
+    return box_dir() / f"{re.sub(r'[^A-Za-z0-9_.-]', '_', tool)}.pending.jsonl"
+
+
+def record(tool, rec_id, fields, example=None):
+    """Registra nella casella del plugin. Se il lock resta occupato oltre l'attesa (carico alto: il 23/09 un record si
+    perdeva in silenzio), la voce va in <plugin>.pending.jsonl con una sola scrittura in append, atomica senza lock; il
+    prossimo scrittore che ha il lock la incorpora (FORMAT.md). Niente si perde."""
+    now = round(time.time(), 3)   # frazioni di secondo: un aggiornamento nello stesso secondo dell'avviso conta
+    try:
+        with Box(tool) as box:
+            return apply(box.recs, tool, rec_id, fields, example, now)
+    except TimeoutError:
+        line = json.dumps({"v": FORMAT, "tool": tool, "id": rec_id, "fields": fields, "example": example, "at": now},
+                          ensure_ascii=False) + "\n"
+        box_dir().mkdir(parents=True, exist_ok=True)
+        fd = os.open(pending_path(tool), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        try:
+            os.write(fd, line.encode())
+        finally:
+            os.close(fd)
+        return {"id": rec_id, "tool": tool, "pending": True, **fields}
 
 
 def rid(tool, key):
@@ -676,9 +775,11 @@ def draft(tool, recs, target=None):
             rows.append(f"  - workaround: {scrub(v['workaround'], 300)}")
     if len(vs) > 20:
         rows.append(f"- … and {len(vs) - 20} more")
-    title = f"[{tool}] field observations: {len(vs)} error(s), most frequent `{vs[0].get('call')}`"
-    body = "\n".join([f"Collected automatically by `claude-master observe` on {time.strftime('%Y-%m-%d')} "
-                      f"(tool errors recorded by a hook; parameter values are never stored).", "", *rows])
+    errors = sum(1 for v in vs if v.get("kind") != "note")
+    kinds = ", ".join(x for x in (f"{errors} error(s)" if errors else "", f"{len(vs) - errors} note(s)" if len(vs) > errors else "") if x)
+    title = f"[{tool}] field observations: {kinds}, most frequent `{vs[0].get('call')}`"
+    body = "\n".join([f"Collected on {time.strftime('%Y-%m-%d')} by claude-observe (https://github.com/frsorrentino/claude-observe): "
+                      "errors recorded by a hook and notes added by hand; parameter values are never stored.", "", *rows])
     text = redact_out(f"{title}\n\n{body}", tool)
     title, _, body = text.partition("\n\n")
     head = f"comment #{target['number']}" if target else "new"
