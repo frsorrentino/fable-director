@@ -377,6 +377,81 @@ _VERIFY_MSG = None
 _PRINTED = False
 
 
+# (1.49) Dichiarazione di chiusura con il --verify fallito: blocco UNA volta
+# per esito di verifica (idea da mtk-agent-toolkit, hooks/verify-completion).
+# Scatta solo su un fatto (rc != 0 del comando eseguito da questo hook), mai
+# su un giudizio: senza --verify eseguibile non c'e' niente da confrontare.
+# Frasi deliberate di chiusura, IT ed EN; una riga che e' solo "Fatto." conta.
+CLAIM_RE = re.compile(
+    r"\b(all done|task (?:is )?complete[d]?|work (?:is )?complete|"
+    r"implementation (?:is )?complete|ready for review|fully verified|"
+    r"all tests pass(?:ing)?|everything (?:is )?(?:green|passing)|"
+    r"tutto fatto|lavoro (?:è |e' )?(?:completato|finito)|"
+    r"task (?:è |e' )?(?:completato|chiuso)|tutti i test (?:sono )?verdi|"
+    r"tutto verde|fatto e verificato|completato e verificato|"
+    r"verificato e funzionante)\b"
+    r"|(?:^|\n)\s*(?:done|completed|fixed|verified|finished|fatto|"
+    r"completato|finito|verificato|risolto)\s*[.!:]",
+    re.IGNORECASE)
+CLAIM_TAIL_BYTES = 262144
+
+
+def last_assistant_text(data, transcript):
+    """Testo dell'ultimo messaggio dell'assistente: dal campo del payload se
+    Claude Code lo passa, altrimenti dalla coda del transcript."""
+    msg = data.get("last_assistant_message")
+    if isinstance(msg, str) and msg.strip():
+        return msg
+    try:
+        with open(transcript, "rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            f.seek(max(0, size - CLAIM_TAIL_BYTES))
+            lines = f.read().decode("utf-8", "ignore").splitlines()
+    except OSError:
+        return ""
+    for line in reversed(lines):
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        if rec.get("type") != "assistant":
+            continue
+        content = (rec.get("message") or {}).get("content")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            text = " ".join(c.get("text") or "" for c in content
+                            if isinstance(c, dict) and c.get("type") == "text")
+            if text.strip():
+                return text
+    return ""
+
+
+def claim_gate(data, transcript, budget, state):
+    """Motivo del blocco, oppure None. Marca lo state PRIMA di bloccare:
+    lo stesso esito di verifica non blocca mai due volte."""
+    rc = state.get("verify_rc")
+    if rc in (None, 0) or not verify_command(budget):
+        return None
+    mark = state.get("verify_at") or "?"
+    if state.get("claim_blocked_at") == mark:
+        return None
+    if not CLAIM_RE.search(last_assistant_text(data, transcript) or ""):
+        return None
+    state["claim_blocked_at"] = mark
+    what = "timed out" if rc == "timeout" else f"exit {rc}"
+    return (f"✕ FABLE-DIRECTOR — the last message reports the task as "
+            f"finished, but the declared verification fails: "
+            f"{state.get('verify_cmd') or verify_command(budget)} ({what})"
+            + (f" — {state.get('verify_tail')}" if state.get("verify_tail") else "")
+            + ".\nTell the user it is not finished yet, with this output, "
+            "or fix it and let the verification run again. "
+            "(Blocked once for this verification result.)")
+
+
+
+
 # Cap dell'harness sui campi di un hook (Claude Code 2.1.260, letti dal
 # binario): reason 2000 caratteri / 20 righe, systemMessage 4000. Oltre, il
 # testo viene TRONCATO IN SILENZIO a meta' parola — l'autore dell'hook non lo
@@ -509,6 +584,16 @@ def _main():
     if verify_msg:
         global _VERIFY_MSG
         _VERIFY_MSG = verify_msg
+    try:
+        claim = claim_gate(data, transcript, budget, state)
+    except Exception:
+        claim = None
+    if claim:
+        write_json_atomic(state_file, state)
+        log_telemetry("claim_block", {"rc": state.get("verify_rc"),
+                                      "auto": True}, cwd)
+        emit({"decision": "block", "reason": claim})
+        return
     # Costo in eq del task finora (misura in fase di taratura, MAI enforcement:
     # le soglie 2×/3× restano sui token dichiarati — vedi EQ_MULT).
     actual_eq = None

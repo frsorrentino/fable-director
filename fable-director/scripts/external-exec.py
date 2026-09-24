@@ -756,6 +756,34 @@ def render_cli_command(prov, name, opts, out_file, schema_path):
     return cmd
 
 
+WORKTREE_CHANGES = []
+
+
+def worktree_state(cwd):
+    """Istantanea delle voci di `git status` con mtime e dimensione: una voce
+    nuova, sparita o riscritta dopo la chiamata e' una scrittura del CLI.
+    None fuori da un repo git (niente da confrontare)."""
+    try:
+        r = subprocess.run(["git", "status", "--porcelain=v1", "-z",
+                            "--untracked-files=all"], cwd=cwd,
+                           capture_output=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if r.returncode != 0:
+        return None
+    snap = {}
+    for entry in r.stdout.decode(errors="replace").split("\0"):
+        if len(entry) < 4:
+            continue
+        path = entry[3:]
+        try:
+            st = os.stat(os.path.join(cwd, path))
+            snap[path] = (entry[:2], st.st_mtime_ns, st.st_size)
+        except OSError:
+            snap[path] = (entry[:2], None, None)
+    return snap
+
+
 def run_cli(prov, cmd, spec, timeout):
     """Esegue un provider CLI. Spec via stdin, oppure come argomento se il
     template ha il segnaposto {prompt} (Antigravity CLI non legge stdin),
@@ -774,12 +802,36 @@ def run_cli(prov, cmd, spec, timeout):
         feed = {"stdin": subprocess.DEVNULL}
     cwd = (tempfile.mkdtemp(prefix="xf-cwd-") if prov.get("isolated_cwd")
            else None)
+    # (1.49) Senza isolated_cwd il CLI vede il progetto: si confronta il
+    # working tree prima e dopo (idea dal driver di richkuo/rk-skills). Ci
+    # fidiamo della sandbox del fornitore solo dopo averla controllata.
+    before = None if cwd else worktree_state(os.getcwd())
     try:
         return subprocess.run(cmd, timeout=timeout, capture_output=True,
                               env=env, cwd=cwd, **feed)
     finally:
         if cwd:
             shutil.rmtree(cwd, ignore_errors=True)
+        if before is not None:
+            after = worktree_state(os.getcwd()) or {}
+            WORKTREE_CHANGES[:] = sorted(
+                p for p in set(before) | set(after) if before.get(p) != after.get(p))
+
+
+def worktree_refusal(prov, name, opts):
+    """Il CLI ha scritto nel progetto: esito error, output mai consegnato,
+    anche se il CLI e' uscito con errore."""
+    files = ", ".join(WORKTREE_CHANGES[:5]) + (
+        f" (+{len(WORKTREE_CHANGES) - 5})" if len(WORKTREE_CHANGES) > 5 else "")
+    out("error", name, prov.get("model", "-"), "worktree-write", "-",
+        f"the external CLI changed the working tree: {files} — its output "
+        f"is NOT delivered; inspect with git status/diff and revert what "
+        f"you did not ask for")
+    log_exec({"provider": name, "model": prov.get("model", "-"),
+              "billing": billing_of(prov), "type": opts.get("--type"),
+              "ok": False, "check": "worktree-write",
+              "files_changed": len(WORKTREE_CHANGES)})
+    sys.exit(1)
 
 
 def call_cli(prov, name, user_msg, timeout, opts, schema_path):
@@ -791,6 +843,8 @@ def call_cli(prov, name, user_msg, timeout, opts, schema_path):
     try:
         cmd = render_cli_command(prov, name, opts, out_file, schema_path)
         proc = run_cli(prov, cmd, spec, timeout)
+        if WORKTREE_CHANGES:
+            worktree_refusal(prov, name, opts)
         if proc.returncode != 0:
             unavailable(f"CLI '{name}' exit {proc.returncode}: "
                         f"{proc.stderr.decode(errors='replace')[:200]}")

@@ -261,6 +261,14 @@ def main():
     claude_md_hygiene(cwd)
     db = Path.home() / ".claude" / "fable-director" / "telemetry.db"
     pl = hook_payload()
+    # (1.49) Dopo compact/clear il modello non vede piu' le righe iniettate:
+    # route-hint puo' ridarle una volta.
+    if pl.get("source") in ("compact", "clear") and pl.get("session_id"):
+        try:
+            (Path.home() / ".claude" / "fable-director" / "hint-seen"
+             / f"{pl['session_id']}.json").unlink()
+        except OSError:
+            pass
     rc = resume_cache_line(pl)
     if (pl.get("source") or "startup") in ("startup", "resume"):
         ib = inherited_budget_line(cwd)

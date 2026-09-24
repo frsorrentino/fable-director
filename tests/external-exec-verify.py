@@ -17,6 +17,10 @@ Runs the REAL script against a throwaway HOME and a stub CLI provider:
   E17 {prompt}: spec come argomento letterale, stdin vuoto, chiave dal
       config in env, cwd isolata vuota e rimossa (Antigravity CLI)
   E18 regressione: senza {prompt} la spec resta su stdin, nessuna chiave
+  W1  CLI che scrive nel repo (senza isolated_cwd) → error worktree-write, exit 1
+  W2  CLI che non scrive, repo con file non tracciati → ok (niente falso positivo)
+  W3  CLI con isolated_cwd che scrive nella sua cartella → ok
+  W4  fuori da un repo git → nessun controllo, ok
   S1-S11 input sensibili verso provider che addestrano: tema WP consentito,
       wp-config/dump/csv/.env/sensitive_paths rifiutati, --allow-sensitive
       consente e registra, segreti sempre [SECRET], provider senza
@@ -48,6 +52,8 @@ mode = os.environ.get("STUB_MODE", "echo")
 stdin = sys.stdin.read()
 if mode == "sleep":
     time.sleep(5)
+if mode == "write":
+    open("intruso.txt", "w").write("x")
 text = "not a json {" if mode == "notjson" else json.dumps({"argv": args})
 if mode == "probe":
     text = json.dumps({"argv": args, "stdin": stdin,
@@ -352,6 +358,30 @@ def main():
     check("S11 provider with trains_on_inputs false: no block, no masking",
           r.returncode == 0 and key in sent(r) and "Hunter2!pw" in sent(r),
           r.stdout + r.stderr)
+
+    # W1-W4 — working tree intorno ai CLI esterni (1.49)
+    gproj = Path(tempfile.mkdtemp(prefix="fd-xexec-git-"))
+    subprocess.run(["git", "init", "-q"], cwd=gproj, check=True)
+    (gproj / "gia-qui.txt").write_text("untracked prima della chiamata")
+    (home / ".claude" / "fable-director" / "budgets" / f"{slug(gproj)}.json").write_text(
+        json.dumps({"status": "open",
+                    "declared_at": datetime.now(timezone.utc).isoformat()}))
+    r = run(home, gproj, ["--provider", "stub-plain", "--spec", "fai x"], mode="write")
+    check("W1 CLI writes into the repo -> error worktree-write, exit 1",
+          r.returncode == 1 and field(r.stdout, "STATUS") == "error"
+          and field(r.stdout, "CHECK") == "worktree-write"
+          and "intruso.txt" in field(r.stdout, "DETAIL"), r.stdout + r.stderr)
+    (gproj / "intruso.txt").unlink()
+    r = run(home, gproj, ["--provider", "stub-plain", "--spec", "fai x"])
+    check("W2 CLI that does not write, untracked files present -> ok",
+          field(r.stdout, "STATUS") == "ok", r.stdout + r.stderr)
+    r = run(home, gproj, ["--provider", "stub-arg", "--spec", "fai x"], mode="write")
+    check("W3 isolated_cwd CLI writing in its own folder -> ok",
+          field(r.stdout, "STATUS") == "ok" and not (gproj / "intruso.txt").exists(),
+          r.stdout + r.stderr)
+    r = run(home, proj, ["--provider", "stub-plain", "--spec", "fai x"], mode="write")
+    check("W4 outside a git repo -> no check, ok",
+          field(r.stdout, "STATUS") == "ok", r.stdout + r.stderr)
 
     print(f"\n{len(passed)} passed, {len(failed)} failed")
     sys.exit(1 if failed else 0)

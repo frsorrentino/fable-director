@@ -14,6 +14,7 @@
   H7 stessa cartella, esito flagged, o 1 solo termine: silenzio
   H8 route-hint.json enabled=false: candidati spenti, memoria intatta
   H9 messaggio di un'altra sessione: memoria soppressa
+  H10 stessa ricevuta nella stessa sessione: una volta sola, di nuovo dopo compact
 
 Usage: python3 tests/memory-verify.py   (exit 0 = all green)
 """
@@ -117,9 +118,9 @@ rdir = home / ".claude" / "fable-director" / "receipts"; rdir.mkdir(parents=True
     "closed_at": "2026-08-02T10:00:00Z"}))
 
 
-def prompt(text, cwd=proj):
+def prompt(text, cwd=proj, sid="s9"):
     return run([str(SCRIPTS / "route-hint.py")], home,
-               json.dumps({"prompt": text, "cwd": cwd, "session_id": "s9"}))
+               json.dumps({"prompt": text, "cwd": cwd, "session_id": sid}))
 
 
 r = prompt("Un altro sito PrestaShop ha traffico anomalo, sembra scraping: cosa faccio?")
@@ -134,7 +135,7 @@ check("H7 stessa cartella esclusa; 1 solo termine → silenzio",
 
 # H8 interruttore route-hint.json: candidati spenti, memoria intatta
 (home / ".claude" / "fable-director" / "route-hint.json").write_text('{"enabled": false}')
-r = prompt("Un altro sito PrestaShop ha traffico anomalo, sembra scraping: rigenera le descrizioni di ogni prodotto")
+r = prompt("Un altro sito PrestaShop ha traffico anomalo, sembra scraping: rigenera le descrizioni di ogni prodotto", sid="s8")
 check("H8 route-hint.json enabled=false: niente [fd-route-hint], [fd-memory] resta",
       "[fd-route-hint]" not in r.stdout and "[fd-memory]" in r.stdout, r.stdout)
 
@@ -143,6 +144,15 @@ r = prompt('Another Claude session sent a message: <cross-session-message from="
            'Un altro sito PrestaShop ha traffico anomalo, sembra scraping'
            '</cross-session-message>')
 check("H9 messaggio di peer: niente [fd-memory]", r.stdout.strip() == "", r.stdout)
+
+# H10 stessa ricevuta nella stessa sessione: una volta sola; dopo compact torna
+r1 = prompt("Un altro sito PrestaShop ha traffico anomalo, sembra scraping: e ora?", sid="s10")
+r2 = prompt("Ancora PrestaShop con scraping anomalo stamattina, stessa storia", sid="s10")
+start("compact", proj, sid="s10")
+r3 = prompt("Ancora PrestaShop con scraping anomalo stamattina, stessa storia", sid="s10")
+check("H10 [fd-memory] una volta per sessione, di nuovo dopo compact",
+      "[fd-memory]" in r1.stdout and "[fd-memory]" not in r2.stdout
+      and "[fd-memory]" in r3.stdout, r1.stdout + "|" + r2.stdout + "|" + r3.stdout)
 
 print(f"\n{len(passed)} passed, {len(failed)} failed")
 sys.exit(1 if failed else 0)

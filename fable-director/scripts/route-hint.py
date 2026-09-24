@@ -257,6 +257,40 @@ def machine_origin(prompt):
     return None
 
 
+def seen_file(session_id):
+    return base_dir() / "hint-seen" / f"{session_id}.json"
+
+
+def load_seen(session_id):
+    """Chiavi gia' iniettate in questa sessione (1.49): la stessa riga ripetuta
+    era il 36% delle iniezioni sui prompt dell'utente (7 giorni, 24/09/2026).
+    Senza session_id niente dedup. SessionStart compact/clear azzera il file:
+    dopo la compattazione il modello non vede piu' la riga."""
+    if not session_id:
+        return None
+    try:
+        return set(json.loads(seen_file(session_id).read_text()))
+    except (OSError, ValueError, TypeError):
+        return set()
+
+
+def save_seen(session_id, seen):
+    if not session_id or seen is None:
+        return
+    try:
+        import time
+        d = seen_file(session_id).parent
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{session_id}.json").write_text(json.dumps(sorted(seen)))
+        # potatura: le sessioni ferme da 7 giorni non tornano
+        cutoff = time.time() - 7 * 86400
+        for f in d.glob("*.json"):
+            if f.stat().st_mtime < cutoff:
+                f.unlink()
+    except OSError:
+        pass
+
+
 def main():
     data = json.load(sys.stdin)
     prompt = str(data.get("prompt") or "")
@@ -284,6 +318,8 @@ def main():
                     cwd=cwd)
         return
     prompt_lower = prompt.lower()
+    session_id = str(data.get("session_id") or "") or None
+    seen = load_seen(session_id)
 
     # Memoria cross-progetto (D.3.2): indipendente dal route hint e dal suo
     # braccio di controllo — e' un fatto verificato, non un suggerimento.
@@ -292,7 +328,12 @@ def main():
     except Exception:
         mem = None
     if mem:
-        print(mem)
+        key = "mem:" + mem.rsplit("receipt: ", 1)[-1]
+        if seen is None or key not in seen:
+            print(mem)
+            if seen is not None:
+                seen.add(key)
+                save_seen(session_id, seen)
 
     # Interruttore (1.39): route-hint.json {"enabled": false} spegne i
     # candidati keyword (verdetto del braccio di controllo), non la memoria.
@@ -309,17 +350,25 @@ def main():
         return
     candidates = candidates[:MAX_CANDIDATES]
 
-    session_id = str(data.get("session_id") or "") or None
     holdout = in_holdout(session_id)
-    if not holdout:
+    # Un candidato gia' mostrato in questa sessione non si ripete; l'evento
+    # resta completo (matches) con il conteggio delle ripetizioni taciute.
+    fresh = [(n, l) for n, l in candidates
+             if seen is None or f"route:{n}" not in seen]
+    if not holdout and fresh:
         print("[fd-route-hint] candidati deterministici — da VALUTARE, non "
               "seguire ciecamente; verdetto di rotta in una riga (asse "
               "permittente E vietante):")
-        for _, line in candidates:
+        for _, line in fresh:
             print(line)
-    write_event({"matches": [n for n, _ in candidates],
-                 "prompt_len": len(prompt), "holdout": holdout},
-                session_id=session_id, cwd=cwd)
+        if seen is not None:
+            seen.update(f"route:{n}" for n, _ in fresh)
+            save_seen(session_id, seen)
+    payload = {"matches": [n for n, _ in candidates],
+               "prompt_len": len(prompt), "holdout": holdout}
+    if not holdout and len(fresh) < len(candidates):
+        payload["repeat"] = len(candidates) - len(fresh)
+    write_event(payload, session_id=session_id, cwd=cwd)
 
 
 if __name__ == "__main__":

@@ -22,6 +22,9 @@ HOME usa-e-getta con soft-deps.json/cross-family.json sintetici, poi inchioda:
   R18 <task-notification> con termini rari   -> silenzio (niente [fd-memory])
   R19 stesso testo senza marcatori           -> iniezione presente
   R20 prompt di macchina                     -> evento route_hint con skipped
+  R21 stesso candidato, stessa sessione       -> la seconda volta silenzio, evento con repeat
+  R22 stesso candidato, altra sessione        -> hint di nuovo
+  R23 candidato nuovo accanto a uno ripetuto  -> solo il nuovo
 """
 import json
 import shutil
@@ -77,8 +80,8 @@ def mkhome(deps=DEPS, xfam=XFAM, raw=None):
     return home
 
 
-def run(home, prompt):
-    payload = {"prompt": prompt, "session_id": "sid-test", "cwd": "/proj/x"}
+def run(home, prompt, sid="sid-test"):
+    payload = {"prompt": prompt, "session_id": sid, "cwd": "/proj/x"}
     return subprocess.run(
         [sys.executable, str(HOOK)],
         env={"HOME": str(home), "PATH": "/usr/bin:/bin"},
@@ -211,6 +214,23 @@ try:
     r = run(h, body)
     check("R19 stesso testo senza marcatori -> memoria e candidati",
           "[fd-memory]" in r.stdout and "[fd-route-hint]" in r.stdout, r.stdout[:200])
+
+    # R21-R23: una riga per sessione
+    h = mkhome(); tmp.append(h)
+    p = "devo consultare la documentazione di PrestaShop per il modulo carrello"
+    r1 = run(h, p, sid="dd-1")
+    r2 = run(h, p, sid="dd-1")
+    check("R21 stesso candidato stessa sessione -> seconda volta silenzio",
+          "gemini-docs" in r1.stdout and r2.stdout.strip() == "", r2.stdout[:150])
+    ev = events(h)
+    check("R21b evento completo con repeat=1",
+          len(ev) == 2 and ev[1]["matches"] == ["gemini-docs"]
+          and ev[1].get("repeat") == 1 and "repeat" not in ev[0], ev)
+    r = run(h, p, sid="dd-2")
+    check("R22 altra sessione -> hint di nuovo", "gemini-docs" in r.stdout, r.stdout[:150])
+    r = run(h, "leggi la documentazione e fai uno screenshot della pagina", sid="dd-1")
+    check("R23 solo il candidato nuovo",
+          "chrome-bridge" in r.stdout and "gemini-docs" not in r.stdout, r.stdout[:200])
 finally:
     for h in tmp:
         shutil.rmtree(h, ignore_errors=True)
