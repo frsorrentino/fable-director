@@ -2,12 +2,12 @@
 
 Full release history. The README shows only the latest few entries.
 
-## Unreleased
+## 1.48.x
 
-- **No route candidates or memory on messages written by other sessions or background tasks.** Cross-session messages, task notifications and idle notices now get neither `[fd-memory]` nor `[fd-route-hint]`: they were 78% of all injections, almost all off topic. Only a `route_hint` event with `skipped` is logged, so the control arm stays measurable.
-- **Antigravity CLI as an external provider, and sensitive files kept home by default.**
+- **1.48.0 — Antigravity as an external provider, sensitive files kept home, and no injections on machine-written prompts.**
+  - **No route candidates or memory on messages written by other sessions or background tasks.** Cross-session messages, task notifications and idle notices now get neither `[fd-memory]` nor `[fd-route-hint]`: they were 78% of all injections, almost all off topic. Only a `route_hint` event with `skipped` is logged, so the control arm stays measurable.
   - **`antigravity` provider** (`agy`, Google's successor to the Gemini CLI): same Gemini key, no new account. CLI templates can take the spec as an argument (`{prompt}`) for tools that do not read stdin; the key reaches the tool as an environment variable; `isolated_cwd` runs it in an empty folder.
-  - **Known issue — shared free-tier quota.** Gemini's free quota is per model and per project, and agy's agent loop sends several requests per task (plus its own retries on 503) that the local counter does not see. A canary on `gemini-3.6-flash` used up the daily request quota that the `gemini` and `gemini-media` providers also draw from. The provider now runs on `gemini-3.7-flash`, which no other provider uses, with a 300 s timeout as the only per-task cap (agy has no turn limit).
+  - **Own quota model for Antigravity.** Gemini's free quota is per model and per project, and agy's agent loop sends several requests per task (plus its own retries on 503) that the local counter does not see: on `gemini-3.6-flash` it used up the quota of the `gemini` and `gemini-media` providers. It now runs on `gemini-3.7-flash`, which no other provider uses, with a 300 s timeout as the only per-task cap (agy has no turn limit). Canary against Codex on the same task: both correct, agy ~8× slower (159 s vs 21 s), `gemini` quota untouched.
   - **Sensitive-input block.** Towards providers that may train on inputs (`trains_on_inputs` absent counts as true), `external-exec.py` refuses secrets files, database dumps, tabular exports, keys and credentials, `~/.ssh`, `~/.config` and any `sensitive_paths` folder. `--allow-sensitive "reason"` unblocks one job on the user's explicit request and is logged as `sensitive_override`. Password, key and token values always leave as `[SECRET]`.
   - **Anonymizer: SECRET rules** for assignments, PHP `define()` and known key formats.
 
