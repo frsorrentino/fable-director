@@ -12,6 +12,8 @@
   H6 UserPromptSubmit: ricevuta ok di un'ALTRA cartella con ≥2 termini rari in
      comune → una riga [fd-memory] con task, cartella, data, path ricevuta
   H7 stessa cartella, esito flagged, o 1 solo termine: silenzio
+  H8 route-hint.json enabled=false: candidati spenti, memoria intatta
+  H9 messaggio di un'altra sessione: memoria soppressa
 
 Usage: python3 tests/memory-verify.py   (exit 0 = all green)
 """
@@ -135,6 +137,12 @@ check("H7 stessa cartella esclusa; 1 solo termine → silenzio",
 r = prompt("Un altro sito PrestaShop ha traffico anomalo, sembra scraping: rigenera le descrizioni di ogni prodotto")
 check("H8 route-hint.json enabled=false: niente [fd-route-hint], [fd-memory] resta",
       "[fd-route-hint]" not in r.stdout and "[fd-memory]" in r.stdout, r.stdout)
+
+# H9 prompt di un'altra sessione: memoria soppressa anche con match valido
+r = prompt('Another Claude session sent a message: <cross-session-message from="x">'
+           'Un altro sito PrestaShop ha traffico anomalo, sembra scraping'
+           '</cross-session-message>')
+check("H9 messaggio di peer: niente [fd-memory]", r.stdout.strip() == "", r.stdout)
 
 print(f"\n{len(passed)} passed, {len(failed)} failed")
 sys.exit(1 if failed else 0)

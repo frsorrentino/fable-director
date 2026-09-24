@@ -4,6 +4,7 @@ Full release history. The README shows only the latest few entries.
 
 ## Unreleased
 
+- **No route candidates or memory on messages written by other sessions or background tasks.** Cross-session messages, task notifications and idle notices now get neither `[fd-memory]` nor `[fd-route-hint]`: they were 78% of all injections, almost all off topic. Only a `route_hint` event with `skipped` is logged, so the control arm stays measurable.
 - **Antigravity CLI as an external provider, and sensitive files kept home by default.**
   - **`antigravity` provider** (`agy`, Google's successor to the Gemini CLI): same Gemini key, no new account. CLI templates can take the spec as an argument (`{prompt}`) for tools that do not read stdin; the key reaches the tool as an environment variable; `isolated_cwd` runs it in an empty folder.
   - **Known issue — shared free-tier quota.** Gemini's free quota is per model and per project, and agy's agent loop sends several requests per task (plus its own retries on 503) that the local counter does not see. A canary on `gemini-3.6-flash` used up the daily request quota that the `gemini` and `gemini-media` providers also draw from. The provider now runs on `gemini-3.7-flash`, which no other provider uses, with a 300 s timeout as the only per-task cap (agy has no turn limit).

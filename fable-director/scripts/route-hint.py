@@ -243,6 +243,20 @@ def solved_elsewhere(prompt_lower, cwd):
             f"\"{r['task'][:80]}\" in {where} ({day}) — receipt: {ref}")
 
 
+def machine_origin(prompt):
+    """Prompt scritto da una macchina, non dall'utente: messaggio di un'altra
+    sessione, notifica di un task in background, avviso di inattivita' di un
+    peer. Su questi testi memoria e candidati erano il 78% delle iniezioni,
+    quasi tutte fuori tema (misura 7 giorni, 37 sessioni). None = umano."""
+    if "<cross-session-message" in prompt:
+        return "peer"
+    if "<task-notification>" in prompt:
+        return "task-notification"
+    if "[Cross-session idle notice]" in prompt:
+        return "idle-notice"
+    return None
+
+
 def main():
     data = json.load(sys.stdin)
     prompt = str(data.get("prompt") or "")
@@ -260,8 +274,16 @@ def main():
     # slash command o prompt troppo corto: mai un task da instradare
     if len(prompt) < MIN_PROMPT_LEN or prompt.lstrip().startswith("/"):
         return
-    prompt_lower = prompt.lower()
     cwd = str(data.get("cwd") or "") or None
+    # Prompt generato da una macchina: niente memoria ne' candidati;
+    # solo l'evento, cosi' il braccio di controllo resta misurabile.
+    origin = machine_origin(prompt)
+    if origin:
+        write_event({"skipped": origin, "prompt_len": len(prompt)},
+                    session_id=str(data.get("session_id") or "") or None,
+                    cwd=cwd)
+        return
+    prompt_lower = prompt.lower()
 
     # Memoria cross-progetto (D.3.2): indipendente dal route hint e dal suo
     # braccio di controllo — e' un fatto verificato, non un suggerimento.

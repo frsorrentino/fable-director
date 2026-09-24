@@ -18,6 +18,10 @@ HOME usa-e-getta con soft-deps.json/cross-family.json sintetici, poi inchioda:
   R14 payload telemetria: solo nomi match + lunghezza, MAI il testo del prompt
   R15 mix free/paid provider                -> hint asse 4 elenca SOLO i free
   R16 solo provider paid/undeclared         -> nessuna rotta free, silenzio
+  R17 messaggio di un'altra sessione         -> silenzio
+  R18 <task-notification> con termini rari   -> silenzio (niente [fd-memory])
+  R19 stesso testo senza marcatori           -> iniezione presente
+  R20 prompt di macchina                     -> evento route_hint con skipped
 """
 import json
 import shutil
@@ -177,6 +181,36 @@ try:
     r = run(h, "processa in batch tutti i file del progetto")
     check("R16 no free providers -> no axis-4 hint",
           "external-exec" not in r.stdout, r.stdout[:100])
+
+    # R17-R20: prompt generati da macchine (testi sintetici, mai transcript)
+    h = mkhome(); tmp.append(h)
+    r = run(h, 'Another Claude session sent a message: <cross-session-message '
+               'from="x">controlla la documentazione di tutte le sessioni e '
+               'fai uno screenshot del form</cross-session-message>')
+    check("R17 messaggio di peer -> silenzio", r.stdout.strip() == "", r.stdout[:150])
+    ev = events(h)
+    check("R20a evento skipped=peer con prompt_len",
+          len(ev) == 1 and ev[0].get("skipped") == "peer"
+          and ev[0].get("prompt_len", 0) > 0, ev)
+
+    body = ("zanzibar quokka: rigenera la documentazione del pdf per "
+            "ogni articolo del catalogo")
+    rdir = h / ".claude" / "fable-director" / "receipts"
+    rdir.mkdir(parents=True)
+    (rdir / "altro-20260901T100000Z.json").write_text(json.dumps({
+        "task": "zanzibar quokka migrazione", "outcome": "ok",
+        "cwd": "/proj/altro", "closed_at": "2026-09-01T10:00:00Z"}))
+    r = run(h, f"<task-notification>\n<summary>{body}</summary>\n</task-notification>")
+    check("R18 task-notification con termini rari -> silenzio",
+          r.stdout.strip() == "", r.stdout[:150])
+    r2 = run(h, "Another session: [Cross-session idle notice] " + body)
+    check("R18b idle notice -> silenzio", r2.stdout.strip() == "", r2.stdout[:150])
+    ev = events(h)
+    check("R20b eventi skipped task-notification e idle-notice",
+          [e.get("skipped") for e in ev] == ["peer", "task-notification", "idle-notice"], ev)
+    r = run(h, body)
+    check("R19 stesso testo senza marcatori -> memoria e candidati",
+          "[fd-memory]" in r.stdout and "[fd-route-hint]" in r.stdout, r.stdout[:200])
 finally:
     for h in tmp:
         shutil.rmtree(h, ignore_errors=True)
