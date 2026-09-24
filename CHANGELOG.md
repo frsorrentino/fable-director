@@ -2,9 +2,9 @@
 
 Full release history. The README shows only the latest few entries.
 
-## Unreleased
+## 1.49.x
 
-- **Four automatic checks taken from the plugins that cite us (analysis in `docs/concorrenti-2026-09-24.md`).**
+- **1.49.0 — four automatic checks taken from the plugins that cite us (analysis in `docs/concorrenti-2026-09-24.md`).**
   - **One injection per session.** A `[fd-memory]` receipt or a `[fd-route-hint]` candidate already shown in the session is not repeated: over 7 days they were 36% of the lines injected on the user's prompts (101 of 278). After `/compact` or `/clear` they can come back once. The `route_hint` event stays complete, with `repeat` counting the lines held back.
   - **No "done" on a failing verification.** When the budget's `--verify` command fails and the last message declares the task finished (Italian or English), the Stop hook blocks once for that result and asks to report the failure or fix it. It fires only on the exit code of the command the hook ran itself. Logged as `claim_block`.
   - **External text guard.** Drafts and opinions from `gemini:`/`codex:`/`xfamily` lose invisible and bidi Unicode, and a line warns when they contain text that reads as instructions (override phrases, role tags, credential paths). The draft is still delivered; counts go to `guard_hits` in the `external_exec` event.
