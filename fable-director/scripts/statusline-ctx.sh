@@ -655,6 +655,11 @@ compose1() {
     esac
     app "$(osc8 "https://status.anthropic.com" "$seg")"
   fi
+  # cartella di lavoro (1.50.2), in penombra dopo il modello: con piu sessioni
+  # aperte e cio che le distingue. Cade per prima (liv 0, terminale stretto).
+  if [ "$dir" != "-" ] && [ "$1" -ge 1 ]; then
+    app "$(printf '\033[38;5;245m\342\226\270 %s\033[0m' "$dir")"
+  fi
   # ctx: gauge 8 celle (solo liv 2) + /1M se window estesa
   if [ "$pct" != "-" ]; then
     gb=""; [ "$1" -ge 2 ] && [ "$bar" != "-" ] && gb="$bar "

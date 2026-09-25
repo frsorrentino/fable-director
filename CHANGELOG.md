@@ -4,6 +4,7 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.50.x
 
+- **1.50.2 — the working folder in the expert statusline too.** `▸ shop` in half-light after the model, the first segment to drop on a narrow terminal.
 - **1.50.1 — the statusline installs itself, and `xfamily` really in parallel.**
   - **Statusline at the first session.** A fresh install showed no statusline until someone ran `/fable-director:statusline`. The SessionStart hook now runs the installer in `--auto` mode: it writes the statusLine when `settings.json` has none (visible from the next start, one line tells the user), re-points it when a plugin update moves the cache folder, and stays silent when it is already there or belongs to another tool. `/fable-director:statusline --remove` leaves a marker so it never comes back on its own; an explicit install clears it.
   - **Plain statusline: effort, folder, window.** The live effort level sits next to the model (`Fable 5.1 high`, yellow from `xhigh`), the working folder follows (`▸ shop`: with several sessions open it is what tells them apart), and the context percentage carries `/1M` on an extended window. Expert mode already had effort and `/1M`.

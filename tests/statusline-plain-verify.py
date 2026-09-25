@@ -195,6 +195,8 @@ check("T11 nessuna sigla storica in nessuna resa plain",
 # T12 expert via file
 (base / "statusline.json").write_text(json.dumps({"mode": "expert"}))
 out = render(stdin())
+check("T12b expert: cartella '▸ proj' dopo il modello",
+      re.search(r"✦ FABLE 5\.1\S* · ▸ proj", plain(render(stdin(effort="high")))) is not None, repr(out))
 check("T12 expert via statusline.json: riga storica",
       "✦ FABLE 5.1" in out and "ctx" in out and "5H 40%" in out, out)
 (base / "statusline.json").unlink()

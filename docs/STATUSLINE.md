@@ -60,6 +60,7 @@ The plain line has no segments to learn: its exception texts are the legend
 | Segment | What it tells you |
 |---|---|
 | `✦ FABLE 5·max` | Which model is driving the session, and its **live** reasoning effort: yellow from `xhigh` up, because a forgotten `/effort max` burns quota silently |
+| `▸ shop` | The working folder: with several sessions open it is what tells them apart. The first segment to go on a narrow terminal |
 | `ctx ▓▓▓░░░░░ 26%/1M` | How full the context window is, as an 8-cell gauge; `/1M` marks an extended window (26% of 1M is not 26% of 200k) |
 | `cmp 1` | How many times context was compacted this session (each one dropped history); hidden until the first |
 | `5H 71% 17:30` | Your 5-hour plan quota used, and when it resets — the time sits apart in deeper half-light, no arrow: `17:30` announces itself as a time by its own shape |
