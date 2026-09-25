@@ -134,8 +134,11 @@ check("V3 nuova scrittura + comando che passa → rc 0, 'passed again'",
 
 # V4 prosa
 proj2 = Path(tempfile.mkdtemp(prefix="fd-cv-proj2-"))
-run([FDT, "budget-open", "--task", "prosa", "--expected-output", "100",
+r_prosa = run([FDT, "budget-open", "--task", "prosa", "--expected-output", "100",
      "--verify", "checklist: 3 file aggiornati, test verdi", "--cwd", str(proj2)], home)
+check("V4a budget-open con --verify in prosa suggerisce /goal (il comando no)",
+      "`/goal checklist: 3 file aggiornati, test verdi`" in r_prosa.stdout
+      and "/goal" not in r.stdout, r_prosa.stdout[:300])
 tr2 = proj2 / "s.jsonl"; tr2.write_text(usage(10, "2030-01-01T10:00:00Z", write=str(proj2 / "a.py")))
 r = run([STOP], home, json.dumps({"cwd": str(proj2), "transcript_path": str(tr2),
                                   "stop_hook_active": False}))

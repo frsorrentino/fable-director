@@ -348,7 +348,10 @@ def quota_guard(data):
             f"valuable downstream phase (verify/synthesis) first.\n"
             f"Options: (a) inline work and closures only until the window "
             f"resets; (b) size the workflow to finish BEFORE the wall; "
-            f"(c) resume a previous run — resumeFromRunId is always allowed."
+            f"(c) resume a previous run — resumeFromRunId is always allowed; "
+            f"(d) `/low-priority` — continue now at lower priority on the "
+            f"weekly limit: requests wait for capacity instead of dying at "
+            f"the wall (slower, not stopped). Never another account."
         )
     except Exception:
         return None

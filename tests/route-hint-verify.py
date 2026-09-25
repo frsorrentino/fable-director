@@ -25,6 +25,9 @@ HOME usa-e-getta con soft-deps.json/cross-family.json sintetici, poi inchioda:
   R21 stesso candidato, stessa sessione       -> la seconda volta silenzio, evento con repeat
   R22 stesso candidato, altra sessione        -> hint di nuovo
   R23 candidato nuovo accanto a uno ripetuto  -> solo il nuovo
+  R24 finestra 5h al muro, settimanale con credito -> riga /low-priority, una volta per sessione, anche su prompt corto
+  R25 finestra 5h e settimanale esaurite     -> riga "no weekly allowance", mai un altro account
+  R26 snapshot quota stantio o finestra sotto soglia -> nessuna riga quota
 """
 import json
 import shutil
@@ -231,6 +234,38 @@ try:
     r = run(h, "leggi la documentazione e fai uno screenshot della pagina", sid="dd-1")
     check("R23 solo il candidato nuovo",
           "chrome-bridge" in r.stdout and "gemini-docs" not in r.stdout, r.stdout[:200])
+    # R24-R26: quota al muro
+    import os, time
+    def set_quota(h, five, week, stale=False):
+        qf = h / ".claude" / "fable-director" / "quota.json"
+        qf.write_text(json.dumps({"five_hour_used_pct": five, "weekly_used_pct": week,
+                                  "five_hour_resets_at": time.time() + 3600,
+                                  "weekly_resets_at": time.time() + 86400}))
+        if stale:
+            os.utime(qf, (time.time() - 1200, time.time() - 1200))
+    h = mkhome(); tmp.append(h); set_quota(h, 97, 40)
+    r1 = run(h, "continua", sid="q-1")
+    r2 = run(h, "continua", sid="q-1")
+    check("R24 5h al muro -> riga /low-priority anche su prompt corto, una volta per sessione",
+          "[fd-route-hint] five-hour window at 97%" in r1.stdout and "`/low-priority`" in r1.stdout
+          and "60% of the weekly limit left" in r1.stdout and "never propose another account" in r1.stdout
+          and r2.stdout.strip() == "", r1.stdout[:300] + "|" + r2.stdout[:100])
+    ev = events(h)
+    check("R24b evento route_hint quota=low-priority, senza testo del prompt",
+          len(ev) == 1 and ev[0].get("quota") == "low-priority" and "continua" not in json.dumps(ev), ev)
+    h = mkhome(); tmp.append(h); set_quota(h, 100, 99)
+    r = run(h, "continua", sid="q-2")
+    check("R25 5h e settimanale esaurite -> no weekly allowance, inline until reset",
+          "no weekly allowance left" in r.stdout and "never propose another account" in r.stdout
+          and "/low-priority" in r.stdout, r.stdout[:300])
+    h = mkhome(); tmp.append(h); set_quota(h, 97, 40, stale=True)
+    r = run(h, "continua", sid="q-3")
+    h2 = mkhome(); tmp.append(h2); set_quota(h2, 60, 40)
+    r2 = run(h2, "continua", sid="q-4")
+    r3 = run(h, "/status", sid="q-5")
+    check("R26 snapshot stantio, finestra al 60%, slash command -> nessuna riga",
+          r.stdout.strip() == "" and r2.stdout.strip() == "" and r3.stdout.strip() == "",
+          (r.stdout + r2.stdout + r3.stdout)[:200])
 finally:
     for h in tmp:
         shutil.rmtree(h, ignore_errors=True)

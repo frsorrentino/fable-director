@@ -13,3 +13,4 @@ corpus-private/
 *.private.*
 corpus/reale/
 anonymizer-corpus/
+fable-director/evals/results/

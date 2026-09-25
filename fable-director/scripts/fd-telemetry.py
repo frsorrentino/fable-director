@@ -62,6 +62,7 @@ Sottocomandi:
                rung-1). KEY = sha256 di schema_version + prompt + contenuto input.
 """
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -924,6 +925,23 @@ def cmd_budget_open(args):
     write_json_atomic(bfile, budget)
     log_event("task_open", budget, cwd=cwd)
     print(f"budget open: {bfile}")
+    # /goal (Claude Code 2.1.282): la condizione di sessione giudicata da un
+    # modello a ogni Stop. Un --verify COMANDO lo esegue gia' lo Stop hook, a
+    # zero token: doppiarlo nel goal costerebbe una chiamata per turno. Una
+    # CHECKLIST in prosa invece nessun hook la puo' eseguire: il goal nativo
+    # e' il giudice che manca. Decisione in docs/goal-verify-2026-09-25.md.
+    try:
+        if budget.get("verify"):
+            spec = importlib.util.spec_from_file_location(
+                "stop_budget_check", Path(__file__).with_name("stop-budget-check.py"))
+            sbc = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(sbc)
+            if not sbc.verify_command(budget):
+                print("FD ◎ verify is a checklist, not a command: the Stop hook cannot run it. "
+                      f"`/goal {budget['verify']}` hands it to the native goal check "
+                      "(model-judged at every stop, blocks stopping until met, auto-clears).")
+    except Exception:
+        pass
     if budget.get("priority") == "incident":
         priority_set(budget, cwd)
         print(f"FD ▲ incident priority on: other sessions on this account get "

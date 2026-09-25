@@ -243,6 +243,62 @@ def solved_elsewhere(prompt_lower, cwd):
             f"\"{r['task'][:80]}\" in {where} ({day}) — receipt: {ref}")
 
 
+QUOTA_WALL_PCT = 95.0          # finestra 5h da qui in su: al muro o quasi
+QUOTA_WEEKLY_EXHAUSTED_PCT = 98.0
+QUOTA_SNAPSHOT_MAX_AGE_S = 600  # snapshot piu' vecchio → nessuna riga
+
+
+def _fmt_reset(ts, with_day=False):
+    try:
+        import datetime
+        d = datetime.datetime.fromtimestamp(float(ts))
+        return d.strftime("%d/%m %H:%M" if with_day else "%H:%M")
+    except (TypeError, ValueError, OverflowError, OSError):
+        return "?"
+
+
+def quota_line():
+    """Finestra 5h al muro: la rotta e' `/low-priority` (Claude Code 2.1.282:
+    «continue now at lower priority · uses your weekly limit»), non fermarsi
+    e mai proporre un altro account. Con anche la settimanale esaurita la
+    bassa priorita' non ha piu' credito: lo dice, e resta sul lavoro inline
+    fino al reset. Snapshot quota della statusline, stesso file per account
+    del gate; assente o stantio → None. Ritorna (chiave, riga, payload)."""
+    try:
+        import hashlib
+        import os
+        import time
+        base = base_dir()
+        acct = hashlib.sha256((os.environ.get("CLAUDE_CONFIG_DIR")
+                               or str(Path.home() / ".claude")).encode()).hexdigest()[:8]
+        qfile = base / f"quota-{acct}.json"
+        if not qfile.is_file():
+            qfile = base / "quota.json"
+        if not qfile.is_file() or time.time() - qfile.stat().st_mtime > QUOTA_SNAPSHOT_MAX_AGE_S:
+            return None
+        q = json.loads(qfile.read_text())
+        five, week = q.get("five_hour_used_pct"), q.get("weekly_used_pct")
+        if five is None or float(five) < QUOTA_WALL_PCT:
+            return None
+        five = float(five)
+        week = float(week) if week is not None else None
+        r5 = _fmt_reset(q.get("five_hour_resets_at"))
+        if week is not None and week >= QUOTA_WEEKLY_EXHAUSTED_PCT:
+            line = (f"[fd-route-hint] five-hour window at {five:.0f}% and weekly at {week:.0f}%: "
+                    f"`/low-priority` has no weekly allowance left. Inline work and closures only "
+                    f"until the reset ({r5}; weekly {_fmt_reset(q.get('weekly_resets_at'), True)}); "
+                    f"say it to the user, never propose another account.")
+            return ("quota:exhausted", line, {"quota": "exhausted", "five_hour": five, "weekly": week})
+        left = f", {100 - week:.0f}% of the weekly limit left" if week is not None else ""
+        line = (f"[fd-route-hint] five-hour window at {five:.0f}% (resets {r5}): `/low-priority` "
+                f"continues now at lower priority — slower, on the weekly limit{left}. Keep working "
+                f"on that route instead of stopping; never propose another account. Fan-outs: "
+                f"resume only, the gate says why.")
+        return ("quota:low-priority", line, {"quota": "low-priority", "five_hour": five, "weekly": week})
+    except Exception:
+        return None
+
+
 def machine_origin(prompt):
     """Prompt scritto da una macchina, non dall'utente: messaggio di un'altra
     sessione, notifica di un task in background, avviso di inattivita' di un
@@ -305,10 +361,24 @@ def main():
         hm.cmd_prompt(data)
     except Exception:
         pass
+    cwd = str(data.get("cwd") or "") or None
+    # Quota al muro: una riga per sessione, anche su prompt corti ("continua")
+    # — e' un fatto sulla rotta, non un candidato; mai su uno slash command.
+    if not prompt.lstrip().startswith("/"):
+        qh = quota_line()
+        if qh:
+            key, line, payload = qh
+            sid = str(data.get("session_id") or "") or None
+            qseen = load_seen(sid)
+            if qseen is None or key not in qseen:
+                print(line)
+                write_event(payload, session_id=sid, cwd=cwd)
+                if qseen is not None:
+                    qseen.add(key)
+                    save_seen(sid, qseen)
     # slash command o prompt troppo corto: mai un task da instradare
     if len(prompt) < MIN_PROMPT_LEN or prompt.lstrip().startswith("/"):
         return
-    cwd = str(data.get("cwd") or "") or None
     # Prompt generato da una macchina: niente memoria ne' candidati;
     # solo l'evento, cosi' il braccio di controllo resta misurabile.
     origin = machine_origin(prompt)

@@ -3,7 +3,7 @@ description: Data-driven improvement plan — the director reads telemetry and p
 allowed-tools: Bash, Read
 ---
 
-You are the director re-reading the workshop's own data. Produce a **brutally honest** improvement plan for how this workspace uses delegation — anchored ONLY to objective evidence, never to impressions.
+You are the director re-reading the workshop's own data. Produce an improvement plan for how this workspace uses delegation, anchored only to objective evidence, never to impressions.
 
 Steps:
 

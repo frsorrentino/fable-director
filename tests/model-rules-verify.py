@@ -9,6 +9,8 @@
   R6 --model col prefisso piu' lungo ([1m] incluso); modello senza regole → exit 2
   R7 nessun file modificato (mtime e contenuto invariati)
   R8 --json strutturato
+  R9 --audit-file: le righe Signals: della guida prompt-audit greppano la superficie (riga e regex), exit invariato
+  R10 --audit-signals senza guida trovata → STATUS: unavailable, non tace
 
 Usage: python3 tests/model-rules-verify.py   (exit 0 = all green)
 """
@@ -124,6 +126,34 @@ check("R8 --json: conteggio e risultati per account",
       r8.returncode == 1 and j.get("findings", 0) >= 8 and len(j.get("results", [])) == 2
       and all("rule" in f for b in j["results"] for f in b["findings"]),
       r8.stdout[:400])
+
+# R9
+guide = home / "prompt-audit.md"
+w(guide, "# Prompt Audit\n\n#### 1a. Pressure language\n\ntext\n\n**Signals:** density of `MUST|NEVER|ALWAYS` in caps; `try to|if possible` attached to requirements.\n\n#### 1b. Scaffolds\n\n**Signals:** `think step by step|take a deep breath`; `(unbalanced`.\n")
+home9 = Path(tempfile.mkdtemp(prefix="fd-rules-"))
+account(home9, ".claude", claude_md=GOOD_MD + "You MUST try to be brief.\n", settings={"switchModelsOnFlag": True},
+        kernel=GOOD_KERNEL + "Take a deep breath.\n")
+r9 = run(home9, "--model", "claude-opus-5-5", "--audit-file", str(guide))
+o9 = r9.stdout
+check("R9 --audit-file: match per riga della guida con file:riga, regex rotta ignorata, exit 0 (forbid puliti)",
+      r9.returncode == 0
+      and "[1a. Pressure language] `MUST|NEVER|ALWAYS` 1: ~/.claude/CLAUDE.md:6" in o9
+      and "[1a. Pressure language] `try to|if possible` 1: ~/.claude/CLAUDE.md:6" in o9
+      and "[1b. Scaffolds] `think step by step|take a deep breath` 1: ~/.claude/plugins/cache/fsorrentino/fable-director/9.9.9/kernel.md:2" in o9
+      and "(unbalanced" not in o9 and "(3 signals)" in o9, o9 + r9.stderr)
+r9j = run(home9, "--model", "claude-opus-5-5", "--audit-file", str(guide), "--json")
+try:
+    j9 = json.loads(r9j.stdout)
+except Exception:
+    j9 = {}
+check("R9b --json porta audit_signals con source e risultati",
+      j9.get("audit_signals", {}).get("signals") == 3
+      and j9["audit_signals"]["results"][0]["signals"][0]["count"] == 1, r9j.stdout[:400])
+
+# R10
+r10 = run(home9, "--model", "claude-opus-5-5", "--audit-file", str(home9 / "missing.md"))
+check("R10 guida assente → STATUS: unavailable, exit invariato",
+      r10.returncode == 0 and "STATUS: unavailable" in r10.stdout, r10.stdout)
 
 print(f"\n{len(passed)} passed, {len(failed)} failed")
 sys.exit(1 if failed else 0)
