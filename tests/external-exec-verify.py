@@ -97,6 +97,15 @@ def setup():
                 "schema_args": ["--schema", "{schema_file}"],
                 "model": "stub-model-1",
                 "effort": "high",
+                "timeout": 60,
+                "billing": "free",
+            },
+            # timeout corto SOLO per E6: sul provider di default faceva
+            # scadere qualunque chiamata sotto carico (S1 fallito 25/09, load 15)
+            "stub-slow": {
+                "type": "cli",
+                "command": [py, str(stub), "run", "--out", "{output_file}"],
+                "model": "stub-slow-model",
                 "timeout": 2,
                 "billing": "free",
             },
@@ -201,7 +210,7 @@ def main():
           and "nope" in r.stdout, r.stdout + r.stderr)
 
     # E6 — timeout dal provider (2s < sleep 5s), senza --timeout.
-    r = run(home, proj, ["--spec", "hi"], mode="sleep")
+    r = run(home, proj, ["--spec", "hi", "--provider", "stub-slow"], mode="sleep")
     check("E6 provider-level timeout honored",
           r.returncode == 1 and field(r.stdout, "STATUS") == "unavailable"
           and "timeout (2s)" in r.stdout, r.stdout + r.stderr)
