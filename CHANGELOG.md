@@ -4,6 +4,7 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.50.x
 
+- **1.50.1 — `xfamily` really in parallel.** The two provider subprocesses were started together but fed one after the other: the second waited on its stdin until the first had finished, so `xfamily?`/`xfamily:` cost the sum of the two latencies, not the longer one. Stdin is now written and closed for both before waiting. The suite's parallelism check compares the two providers' start/end intervals (they must overlap) instead of a wall-clock threshold that passed with serial calls and failed under machine load.
 - **1.50.0 — observations: a private path for security, the offer on screen, the same command in every plugin.**
   - **Security observations stay private.** `add … --security` marks a read or write outside the perimeter, a secret exposed, code run that was not asked for, data leaving the computer; `--severity high` a defect of ours that blocks the work. Claude sets both from what it saw, never asks the user. A security observation never enters the public issue: `/fable-director:observe send --security` prepares a separate anonymized report sent as a GitHub private vulnerability report (`"security": "advisory"` in `observe/tool.json`, `SECURITY.md` in the repository).
   - **The offer comes earlier.** Sending is proposed when the oldest unsent observation waits at least `propose_after_days` days (default 3) or when one is of class D, not only from three observations; security and high ones are proposed at once.

@@ -113,15 +113,24 @@ check("F7 provider giu': 'not available', evento ok=false",
       and "BOZZA" not in r.stdout, r.stdout + str(ev[-1:]))
 # X1 xfamily? con codex a pagamento → solo gemini, nota su codex, ordine
 cfg["providers"]["codex"]["billing"] = "free"
+# entrambi i provider dormono 1,5 s e annotano inizio e fine: il parallelismo si legge dalla SOVRAPPOSIZIONE degli
+# intervalli, non dalla durata totale (25/09: sotto load 14 la soglia dei 4 s falliva con i provider davvero paralleli)
 slow = base / "slow-provider.py"
-slow.write_text("import sys,time\nspec=sys.stdin.read()\ntime.sleep(1.5)\n"
-                "open(sys.argv[1],'w').write('CODEX: ' + spec.splitlines()[-1][:40])\n")
-cfg["providers"]["codex"]["command"] = [sys.executable, str(slow), "{output_file}"]
+slow.write_text("import sys,time\nspec=sys.stdin.read()\nt0=time.time()\ntime.sleep(1.5)\n"
+                "open(sys.argv[1],'w').write(sys.argv[2] + ': ' + spec.splitlines()[-1][:40])\n"
+                "open(sys.argv[3],'w').write(f'{t0} {time.time()}')\n")
+times = {n: base / f"times-{n}" for n in ("gemini", "codex")}
+cfg["providers"]["gemini"]["command"] = [sys.executable, str(slow), "{output_file}", "BOZZA", str(times["gemini"])]
+cfg["providers"]["codex"]["command"] = [sys.executable, str(slow), "{output_file}", "CODEX", str(times["codex"])]
 (base / "cross-family.json").write_text(json.dumps(cfg))
-import time as _t
-t0 = _t.time()
 r = run("xfamily? conviene il multistrato o il massello per una libreria")
-dt = _t.time() - t0
+try:
+    iv = {n: tuple(map(float, f.read_text().split())) for n, f in times.items()}
+    overlap = max(t[0] for t in iv.values()) < min(t[1] for t in iv.values())
+except (OSError, ValueError):
+    iv, overlap = {}, False
+cfg["providers"]["gemini"]["command"] = [sys.executable, str(fake), "{output_file}"]
+(base / "cross-family.json").write_text(json.dumps(cfg))
 ev = events()
 pairs = [e.get("pair") for e in ev[-2:]]
 gi = r.stdout.find("----- gemini -----"); ci = r.stdout.find("----- codex -----")
@@ -131,7 +140,7 @@ check("X1 xfamily?: due pareri, ordine gemini poi codex, intestazione TWO OPINIO
       and len(ev) >= 2 and pairs[0] and pairs[0] == pairs[1]
       and {e["provider"] for e in ev[-2:]} == {"gemini", "codex"},
       r.stdout + str(ev[-2:]))
-check("X1b parallelo: durata < somma (provider lento 1,5 s, totale sotto 4 s)", dt < 4.0, f"{dt:.1f}s")
+check("X1b parallelo: gli intervalli dei due provider (1,5 s ciascuno) si sovrappongono", overlap, str(iv))
 r = run("xfamily: scrivi la lettera alla PA")
 check("X2 xfamily: due bozze, istruzione di sceglierne UNA e dire perche'",
       "TWO DRAFTS" in r.stdout and "pick ONE as your base" in r.stdout and "do not merge" in r.stdout,

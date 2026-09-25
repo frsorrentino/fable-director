@@ -216,9 +216,20 @@ def main():
                 [sys.executable, __file__, "--call", n, mode],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL, text=True)
+        # (1.50.1) Stdin scritto e chiuso per TUTTI i figli prima di attendere il
+        # primo: communicate(body) sul primo teneva il secondo fermo su
+        # sys.stdin.read() fino alla fine del primo — chiamate in serie, non in
+        # parallelo (misurato 25/09: intervalli 1,5 s + 1,5 s senza sovrapposizione).
+        for pr in procs.values():
+            try:
+                pr.stdin.write(body)
+                pr.stdin.close()
+            except (OSError, ValueError):
+                pass
+            pr.stdin = None   # communicate() non deve richiudere (flush su file chiuso)
         for n, pr in procs.items():
             try:
-                outp, _ = pr.communicate(body, timeout=TIMEOUT_S + 15)
+                outp, _ = pr.communicate(timeout=TIMEOUT_S + 15)
                 last = [l for l in (outp or "").splitlines() if l.strip()][-1:]
                 res = json.loads(last[0]) if last else {}
                 results[n] = (res.get("content"), res.get("detail"))
