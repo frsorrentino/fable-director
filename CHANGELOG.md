@@ -4,6 +4,7 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.50.x
 
+- **1.50.3 — media-doctor no longer calls the packages broken on a busy machine.** Its checks had a 30 s cap; importing faster-whisper took 22.6 s of wall clock at load 24, so the doctor could report `packages missing/broken` for a working venv. The cap is 120 s. The test suites measure CPU time instead of wall clock for performance checks and give every hook run 120 s.
 - **1.50.2 — the working folder in the expert statusline too.** `▸ shop` in half-light after the model, the first segment to drop on a narrow terminal.
 - **1.50.1 — the statusline installs itself, and `xfamily` really in parallel.**
   - **Statusline at the first session.** A fresh install showed no statusline until someone ran `/fable-director:statusline`. The SessionStart hook now runs the installer in `--auto` mode: it writes the statusLine when `settings.json` has none (visible from the next start, one line tells the user), re-points it when a plugin update moves the cache folder, and stays silent when it is already there or belongs to another tool. `/fable-director:statusline --remove` leaves a marker so it never comes back on its own; an explicit install clears it.
