@@ -121,7 +121,7 @@ table, the hook-by-hook lifecycle and the known limits:
 ## The statusline
 
 ```
-Fable 5.1 · quota 21%, resets 17:30 · context 26%                  caveman
+Fable 5.1 high · ▸ shop · quota 21%, resets 17:30 · context 26%   caveman
 ```
 
 Model, five-hour plan quota with its reset time, context — the three numbers

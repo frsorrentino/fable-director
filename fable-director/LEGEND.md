@@ -3,13 +3,13 @@
 **Every segment says what to do, not what it measures.** Words, no abbreviations; only exceptions. When everything is fine the line is short and quiet; the context percentage is always there, because it is your margin:
 
 ```
-Fable 5.1 · quota 21%, resets 17:30 · context 26%                  caveman
+Fable 5.1 high · ▸ shop · quota 21%, resets 17:30 · context 26%   caveman
 ```
 
 With agents running (a state, not an alarm — it tells you not to close the session):
 
 ```
-Fable 5.1 · quota 21%, resets 17:30 · context 26% · 2 agents working
+Fable 5.1 high · ▸ shop · quota 21%, resets 17:30 · context 26% · 2 agents working
 ```
 
 When something needs you, the exception replaces the quiet text or goes to a second row; more than one exception = row 2, most urgent first. Colour never carries information alone: the words are always there.

@@ -29,11 +29,11 @@ badge=""
 # Tutte le metriche in UNA passata python (statusline gira spesso: un solo processo).
 # Campi assenti → "-" → il segmento si omette. Il budget file è di fable-director
 # (fd-telemetry.py budget-open / stop-budget-check.py): qui SOLO lettura.
-read -r model pct rl rlt wk wkt bdg xf dlg cache cmp grind eff bar win lk fw prn pru stuck vrf prio <<EOF
+read -r model pct rl rlt wk wkt bdg xf dlg cache cmp grind eff bar win lk fw prn pru stuck vrf prio dir <<EOF
 $(printf '%s' "$input" | python3 -c '
 import json,sys,os,time
 from pathlib import Path
-model=pct=rl=rlt=wk=wkt=bdg=xf=dlg=cache=cmp=eff=bar=win="-"
+model=pct=rl=rlt=wk=wkt=bdg=xf=dlg=cache=cmp=eff=bar=win=dir="-"
 def fmt_reset(ts):
     # entro 24h: orario; oltre: "6 Jul"/"6 lug" (giorno + mese secondo il locale)
     try:
@@ -60,6 +60,10 @@ try:
         bar="▓"*cells+"░"*(8-cells)
     ws=d.get("context_window",{}).get("context_window_size")
     if ws and int(ws)>200000: win=f"/{int(ws)//1000000}M"
+    # cartella di lavoro (1.50.1): il nome, per distinguere le sessioni parallele
+    # a vista; ULTIMO campo del read shell, quindi gli spazi passano
+    wd=(d.get("workspace") or {}).get("current_dir") or d.get("cwd") or ""
+    if wd: dir=os.path.basename(str(wd).rstrip("/")) or "/"
     # effort LIVE della sessione (non quello del budget): xhigh/max = quota
     # che brucia in silenzio, acceso giallo; high e sotto = penombra
     el=d.get("effort",{}).get("level")
@@ -576,7 +580,7 @@ try:
             prio=str(_pr.get("task") or "incident")[:60]
 except Exception: pass
 vrf=str(vrf).replace(" ",","); prio=str(prio).replace(" ",",")
-print(model,pct,rl,rlt,wk,wkt,bdg,xf,dlg,cache,cmp,grind,eff,bar,win,lk,fw,prn,pru,stuck,vrf,prio)
+print(model,pct,rl,rlt,wk,wkt,bdg,xf,dlg,cache,cmp,grind,eff,bar,win,lk,fw,prn,pru,stuck,vrf,prio,dir)
 ' 2>/dev/null)
 EOF
 
@@ -595,7 +599,7 @@ if [ "$FD_MODE" != "expert" ]; then
   FD_SL_WKT="$wkt" FD_SL_BDG="$bdg" FD_SL_XF="$xf" FD_SL_DLG="$dlg" FD_SL_CACHE="$cache" \
   FD_SL_CMP="$cmp" FD_SL_GRIND="$grind" FD_SL_EFF="$eff" FD_SL_WIN="$win" FD_SL_PRN="$prn" \
   FD_SL_PRU="$pru" FD_SL_STUCK="$stuck" FD_SL_VRF="$vrf" FD_SL_PRIO="$prio" \
-  FD_SL_BADGE="$badge" FD_SL_LK="$lk" \
+  FD_SL_BADGE="$badge" FD_SL_LK="$lk" FD_SL_DIR="$dir" \
   python3 "$(dirname "$0")/statusline-plain.py"
   exit 0
 fi

@@ -67,6 +67,10 @@ def main():
     bdg, eff, grind = env("FD_SL_BDG"), env("FD_SL_EFF"), num(env("FD_SL_GRIND"))
     xf, dlg, prn, pru = env("FD_SL_XF"), env("FD_SL_DLG"), env("FD_SL_PRN"), env("FD_SL_PRU")
     stuck, vrf, prio = num(env("FD_SL_STUCK")), env("FD_SL_VRF"), env("FD_SL_PRIO")
+    win, wdir = env("FD_SL_WIN"), os.environ.get("FD_SL_DIR", "-")   # dir: nome grezzo, spazi ammessi
+    wdir = "" if wdir in ("-", "") else wdir
+    # effort LIVE sempre accanto al modello (1.50.1): "Fable 5.1 high"; giallo da xhigh
+    lvl = eff.split("·")[-1] if "·" in eff else ""
     badge = os.environ.get("FD_SL_BADGE", "")
 
     takeover = None          # testo rosso in testa (budget 3x, enforcement off)
@@ -112,7 +116,8 @@ def main():
     # livello; da 80 anche la frase in riga 2. Mai in coda alle eccezioni:
     # li' era la voce meno urgente, la prima a cadere su terminale stretto.
     if pct is not None:
-        normal.append((RED if pct >= 80 else YEL if pct >= 60 else GREY, f"context {pct:.0f}%"))
+        # /1M quando la finestra e' estesa: 26% di 1M non e' 26% di 200k
+        normal.append((RED if pct >= 80 else YEL if pct >= 60 else GREY, f"context {pct:.0f}%{win}"))
         if pct >= 80:
             exc.append((5, RED, f"context {pct:.0f}% full — /fable-director:handoff, then a new session"))
 
@@ -163,7 +168,10 @@ def main():
 
     # --- composizione ------------------------------------------------------------
     exc.sort(key=lambda x: x[0])
-    head = f"{GREY}{model}{RST}"
+    head = f"{GREY}{model}{RST}" + (f" {YEL if eff.startswith('y:') else GREY}{lvl}{RST}" if lvl else "")
+    # cartella subito dopo il modello: con piu' sessioni aperte e' cio' che le distingue
+    if wdir:
+        normal.insert(0, (GREY, f"\u25b8 {wdir}"))
     line1_parts = [head] + [f"{c}{t}{RST}" for c, t in normal]
     if takeover:
         line1_parts = [f"{takeover[1]}{takeover[0]}{RST}"] + [f"{DIM}{model}{RST}"]

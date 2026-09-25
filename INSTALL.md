@@ -80,8 +80,8 @@ Only if the plugin system is unusable:
 
 ## 6. Statusline (automatic since 1.50.1)
 
-Plain by default since 1.39: `Fable 5.1 · quota 21%, resets 17:30 · context 26%` — model,
-5-hour plan quota with its reset time (the "Current session" in /usage) and context, always;
+Plain by default since 1.39: `Fable 5.1 high · ▸ shop · quota 21%, resets 17:30 · context 26%` — model with its
+live effort, the working folder (what tells parallel sessions apart), 5-hour plan quota with its reset time (the "Current session" in /usage) and context, always;
 everything else (weekly quota from 60%, budget past 2×, failed verification, stuck agents…)
 appears in words only when there is something to do, the least urgent dropped first on a
 narrow terminal. `--expert` restores the dense line (`[CTX %]`, `[5H % HH:MM]`, `[7D % reset]`,

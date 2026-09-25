@@ -3,7 +3,8 @@
 
 Criterio: ogni segmento dice cosa fare, in parole; a riposo la riga tace.
 
-  T1 stato normale: "Fable 5.1 · quota 40%, resets HH:MM · context 26%", nessuna sigla, una riga
+  T1 stato normale: "Fable 5.1 · ▸ proj · quota 40%, resets HH:MM · context 26%/1M", nessuna sigla, una riga
+  T14 (1.50.1) effort sempre accanto al modello ("Fable 5.1 high"), cartella con spazi, /1M solo a finestra estesa
   T2 agenti al lavoro: "2 agents working"
   T3 quota 5h: sempre "quota N%, resets HH:MM" in riga 1; ≥80 anche "quota 90% used, resets in N min";
      100: "quota 100% used, resets in N min" (mai "almost")
@@ -70,9 +71,21 @@ def render(s, **env):
 SIGLE = re.compile(r"\bctx\b|\b5H\b|\b7D\b|\bbdg\b|\bdlg\b|\bcmp\b|\bcache\b|\bxf\b|✦|▓|░|⟲")
 
 out = render(stdin())
-check("T1 normale: 'Fable 5.1 · quota 40%, resets HH:MM · context 26%', una riga, nessuna sigla",
-      re.fullmatch(r"Fable 5\.1 · quota 40%, resets \d{2}:\d{2} · context 26%", out.strip()) is not None
+check("T1 normale: 'Fable 5.1 · ▸ proj · quota 40%, resets HH:MM · context 26%/1M', una riga, nessuna sigla",
+      re.fullmatch(r"Fable 5\.1 · ▸ proj · quota 40%, resets \d{2}:\d{2} · context 26%/1M", out.strip()) is not None
       and "\n" not in out.strip() and not SIGLE.search(out), repr(out))
+
+# T14 (1.50.1) effort sempre accanto al modello, cartella, /1M sul contesto
+d14 = json.loads(stdin(effort="high"))
+d14["workspace"] = {"current_dir": str(tmp / "my proj")}
+d14["context_window"]["context_window_size"] = 1000000
+out = render(json.dumps(d14))
+check("T14 'Fable 5.1 high · ▸ my proj · quota 40%, resets HH:MM · context 26%/1M'",
+      re.fullmatch(r"Fable 5\.1 high · ▸ my proj · quota 40%, resets \d{2}:\d{2} · context 26%/1M", out.strip()) is not None,
+      repr(out))
+out = render(stdin(effort="max"))
+check("T14b effort max: giallo accanto al modello e 'effort max on' in riga",
+      out.strip().startswith("Fable 5.1 max") and "effort max on" in out, repr(out))
 
 # T2 agenti in volo
 sdir = base / "subagents"; sdir.mkdir()
@@ -92,7 +105,7 @@ check("T3 quota 5h: '90% used, resets in 40 min' / '71%, resets HH:MM' in riga 1
       out80 + "\n" + out60 + "\n" + out100)
 out = render(stdin(pct=85)); outfull = render(stdin(pct=100)); out65 = render(stdin(pct=65, wk=72, effort="max"), COLUMNS="90")
 check("T4 contesto: percentuale sempre in riga 1 (anche a 65% su 90 colonne), frase da 80",
-      out.partition("\n")[0].startswith("Fable 5.1 · quota 40%, resets") and "· context 85%" in out.partition("\n")[0]
+      out.partition("\n")[0].startswith("Fable 5.1 · ▸ proj · quota 40%, resets") and "· context 85%" in out.partition("\n")[0]
       and "context 85% full — /fable-director:handoff, then a new session" in out
       and "context 100% full — /fable-director:handoff" in outfull and "almost" not in out + outfull
       and "· context 65%" in out65.partition("\n")[0], out + "\n" + outfull + "\n" + out65)
@@ -171,7 +184,7 @@ check("T9 precedenza di un'altra sessione", "another session has priority (incid
 out = render(stdin(pct=85, rl=90, wk=72, reset_in=40 * 60))
 l1, _, l2 = out.partition("\n")
 check("T10 piu eccezioni → riga 2 con la piu urgente prima",
-      re.fullmatch(r"Fable 5\.1 · quota 90%, resets \d{2}:\d{2} · context 85%", l1.strip()) is not None
+      re.fullmatch(r"Fable 5\.1 · ▸ proj · quota 90%, resets \d{2}:\d{2} · context 85%/1M", l1.strip()) is not None
       and re.match(r"└ quota 90% used, resets in (39|40) min", l2) and "context 85% full" in l2, out)
 narrow = render(stdin(pct=85, rl=90, wk=72, reset_in=40 * 60), COLUMNS="60")
 check("T10b larghezza ridotta: cade la meno urgente, resta la piu urgente",
