@@ -2,6 +2,14 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.52.x
+
+- **1.52.0 — ready for the Anthropic directory, and the model check on the native `/doctor prompt-audit`.**
+  - **Directory listing fields.** `plugin.json` carries `displayName` (Fable Director), `homepage`, `repository`, `privacyPolicyUrl` and `icon` (`.claude-plugin/icon.svg`); `LICENSE` sits in the plugin folder too. `docs/privacy.md` says what the plugin reads, what it writes on disk, what leaves the machine and when (nothing by default; external routes, error reports and model downloads only on your setup or your yes). A four-line **Data handling** section in both READMEs. Dossier for the submission in `docs/candidatura-directory-ufficiale-2026-09-26.md`.
+  - **Install command fixed.** README, INSTALL and ONBOARDING said `fable-director@pixelfarm`; the marketplace has been `fsorrentino` since 1.31.0, so the copy-pasted command failed. Same for the `extraKnownMarketplaces` key in the opt-out note.
+  - **`verifica-modello` on the native audit.** The second pass is `/doctor prompt-audit <path>` (Claude Code ≥ 2.1.283), which hands off to the same bundled guide and puts stale paths, stale commands and contradicting instruction files first; `/claude-api prompt-audit` stays as the route on older versions.
+  - **Workflows under a model fallback.** A dynamic workflow launched while the session is on a fallback retries the configured model for its agents (2.1.283): a stage's `model:` holds, no relaunch — noted in the delegation skill.
+
 ## 1.51.x
 
 - **1.51.0 — the window at the wall says `/low-priority`, the model check leans on prompt-audit, and the skills have a trigger suite.**

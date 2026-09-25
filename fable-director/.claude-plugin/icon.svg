@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="Fable Director">
+  <rect width="256" height="256" rx="48" fill="#1f1b2e"/>
+  <!-- clapperboard top, tilted open -->
+  <g transform="rotate(-14 56 92)">
+    <rect x="44" y="70" width="168" height="34" rx="6" fill="#f2e9d8"/>
+    <path d="M60 70l22 34h22L82 70zM104 70l22 34h22l-22-34zM148 70l22 34h22l-22-34z" fill="#1f1b2e"/>
+  </g>
+  <!-- board -->
+  <rect x="44" y="104" width="168" height="98" rx="10" fill="#f2e9d8"/>
+  <!-- three gauge bars: budget, quota, context -->
+  <rect x="64" y="124" width="128" height="12" rx="6" fill="#d9cfbc"/>
+  <rect x="64" y="124" width="52" height="12" rx="6" fill="#3fb28f"/>
+  <rect x="64" y="146" width="128" height="12" rx="6" fill="#d9cfbc"/>
+  <rect x="64" y="146" width="84" height="12" rx="6" fill="#e0a94a"/>
+  <rect x="64" y="168" width="128" height="12" rx="6" fill="#d9cfbc"/>
+  <rect x="64" y="168" width="34" height="12" rx="6" fill="#8a5cf6"/>
+</svg>

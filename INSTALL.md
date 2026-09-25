@@ -25,7 +25,7 @@ Try the non-interactive path first (CLI):
 
 ```bash
 claude plugin marketplace add ~/claude-plugins/fable-director-marketplace
-claude plugin install fable-director@pixelfarm --scope user
+claude plugin install fable-director@fsorrentino --scope user
 claude plugin list   # check: fable-director present and enabled
 ```
 
@@ -34,7 +34,7 @@ slash commands in-session (they are user commands, you can't run them yourself):
 
 ```
 /plugin marketplace add ~/claude-plugins/fable-director-marketplace
-/plugin install fable-director@pixelfarm
+/plugin install fable-director@fsorrentino
 ```
 
 ## 3. Initialize the playbook (NEVER overwrite)

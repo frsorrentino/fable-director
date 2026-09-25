@@ -72,10 +72,17 @@ time by a model rather than by code.
 | `anonymizer/` + `scripts/anonymizer.py` (phase A) | Pseudonymisation engine, stdlib only: engines `columns` → `rules` (packs `base`, `it`, check digits) → `dictionary` produce spans on the original text, one merge (longest wins, then engine order), one replacement with stable `[CAT_N]` placeholders; the map lives in `~/.claude/fable-director/anonymizer/maps/` (0600), `restore` is byte-exact (variant letters for a second surface form of the same entity). CLI `scan/redact/restore/test/status`, `STATUS:/OUTPUT:/DETAIL:` like every script, never a value in a report. `test` scores the public synthetic corpus shipped in `anonymizer/corpus-public/` plus a private one outside any repository (`corpus.private_dir`). Config `~/.claude/fable-director/anonymizer.json` and per-project `.fd-anonymizer.json` (dictionary, whitelist, `columns.extra`). Suite `tests/anonymizer-verify.py` |
 | `scripts/external-exec.py` (experimental) | External batch executor for non-code axis-4 items (extraction, classification, text transform) on free external tiers — zero Claude tokens. Same config and discipline as cross-verify (no silent fallback, greppable output), executor contract in the system prompt (`NEEDS_CONTEXT` → exit 2), built-in JSON rung-1 (`--schema-json`), logs `external_exec` per provider/type — `report` decides if the route gets promoted (DENSE, N≥10) |
 
+## Data handling
+
+**Reads:** what Claude Code hands its hooks (session id, model, tool names, the transcript path — from the transcript, token counts only), your `settings.json`, and the files you point the media tools or the anonymizer at.
+**Writes:** `~/.claude/fable-director/` (telemetry, budgets, handoffs, media cache, anonymizer maps at mode 0600), the `statusLine` and one `autoUpdate` key in `settings.json` (announced, backed up first), and a local error log of its own scripts.
+**Sends:** nothing off your machine by default. The external Gemini/Codex/xAI routes, the error report to GitHub and the Whisper model download run only after you set them up or say yes; `--data-class restricted` refuses the external routes.
+**Keeps:** everything until you delete it. Full policy: **[privacy policy](https://github.com/frsorrentino/fable-director/blob/main/docs/privacy.md)**.
+
 ## Installation
 
 See `INSTALL.md` in the marketplace folder (one level up). In short:
-`claude plugin marketplace add <path>` → `claude plugin install fable-director@pixelfarm --scope user` → init playbook.
+`claude plugin marketplace add <path>` → `claude plugin install fable-director@fsorrentino --scope user` → init playbook.
 
 ## Learning loop
 

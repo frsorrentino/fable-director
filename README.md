@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.51.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.52.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need
 to do.** It makes your agent declare what a job should cost before it delegates,
@@ -23,7 +23,7 @@ not for you.
 
 ```bash
 claude plugin marketplace add frsorrentino/fable-director
-claude plugin install fable-director@pixelfarm --scope user
+claude plugin install fable-director@fsorrentino --scope user
 ```
 
 Then two one-off steps:
@@ -34,7 +34,7 @@ Then two one-off steps:
 
 From the first session the plugin **enables its own auto-update** (announced
 in-session, reversible: set `"autoUpdate": false` under
-`extraKnownMarketplaces.pixelfarm` in `settings.json`, and that choice is
+`extraKnownMarketplaces.fsorrentino` in `settings.json`, and that choice is
 respected forever). No-CLI alternative and zip migration:
 **[ONBOARDING.md](ONBOARDING.md)**. Manual hook merge and edge cases:
 **[INSTALL.md](INSTALL.md)**.
@@ -194,6 +194,13 @@ adds notes by hand. Turn it
 off with `{"enabled": false}` in `~/.config/claude-observe/config.json`; stop
 only the offers with `{"propose": false}`. Source and record format:
 [claude-observe](https://github.com/frsorrentino/claude-observe).
+
+## Data handling
+
+**Reads:** what Claude Code hands its hooks (session id, model, tool names, the transcript path — from the transcript, token counts only), your `settings.json`, and the files you point the media tools or the anonymizer at.
+**Writes:** `~/.claude/fable-director/` (telemetry, budgets, handoffs, media cache, anonymizer maps at mode 0600), the `statusLine` and one `autoUpdate` key in `settings.json` (announced, backed up first), and a local error log of its own scripts.
+**Sends:** nothing off your machine by default. The external Gemini/Codex/xAI routes, the error report to GitHub and the Whisper model download run only after you set them up or say yes; `--data-class restricted` refuses the external routes.
+**Keeps:** everything until you delete it. Full policy: **[docs/privacy.md](docs/privacy.md)**.
 
 ## External free-tier models
 
