@@ -123,6 +123,52 @@ check("S8 statusLine di terzi → non toccata, exit 2",
       r6.returncode == 2 and settings(cfg6).get("statusLine") == third,
       f"rc={r6.returncode} {settings(cfg6)}")
 
+# --auto (1.50.1): dal SessionStart hook, muto salvo quando scrive
+KERNEL = ROOT / "scripts" / "session-kernel.sh"
+cfg7 = tmp / "c7"
+cfg7.mkdir()
+r7 = run(cfg7, "--auto")
+s7 = settings(cfg7).get("statusLine") or {}
+check("A1 --auto su settings vuoto → installa, una riga, refresh 5",
+      r7.returncode == 0 and r7.stdout.strip() == "installed in settings.json" and "statusline-ctx.sh" in s7.get("command", "")
+      and s7.get("refreshInterval") == 5, f"rc={r7.returncode} {r7.stdout.strip()} {s7}")
+r7b = run(cfg7, "--auto")
+check("A2 --auto una seconda volta → muto, exit 0",
+      r7b.returncode == 0 and r7b.stdout.strip() == "" and r7b.stderr.strip() == "",
+      f"rc={r7b.returncode} out={r7b.stdout.strip()!r} err={r7b.stderr.strip()!r}")
+run(cfg7, "--remove")
+r7c = run(cfg7, "--auto")
+check("A3 dopo --remove, --auto non la rimette (marker di rinuncia)",
+      (cfg7 / "fable-director" / "statusline-optout").is_file()
+      and "statusLine" not in settings(cfg7) and r7c.stdout.strip() == "",
+      f"{settings(cfg7)} out={r7c.stdout.strip()!r}")
+run(cfg7)
+check("A4 install esplicito → torna, marker di rinuncia tolto",
+      "statusline-ctx.sh" in (settings(cfg7).get("statusLine") or {}).get("command", "")
+      and not (cfg7 / "fable-director" / "statusline-optout").exists(), str(settings(cfg7)))
+cfg8 = tmp / "c8"
+cfg8.mkdir()
+(cfg8 / "settings.json").write_text(json.dumps({"statusLine": third}))
+r8 = run(cfg8, "--auto")
+check("A5 --auto con statusLine di terzi → intatta, muto, exit 0",
+      r8.returncode == 0 and r8.stdout.strip() == "" and r8.stderr.strip() == ""
+      and settings(cfg8).get("statusLine") == third, f"rc={r8.returncode} {r8.stdout} {r8.stderr}")
+# A6: la prima sessione (SessionStart) la installa e lo dice al modello; la seconda tace
+home = tmp / "h9"
+(home / ".claude").mkdir(parents=True)
+e = dict(os.environ, HOME=str(home), CLAUDE_PLUGIN_ROOT=str(ROOT))
+e.pop("CLAUDE_CONFIG_DIR", None)
+k1 = subprocess.run(["bash", str(KERNEL)], env=e, text=True, capture_output=True, timeout=60,
+                    input=json.dumps({"source": "startup", "cwd": str(tmp)}))
+s9 = settings(home / ".claude").get("statusLine") or {}
+check("A6 SessionStart startup → statusLine scritta in settings.json e riga STATUSLINE al modello",
+      "statusline-ctx.sh" in s9.get("command", "") and "STATUSLINE installed in settings.json (auto)" in k1.stdout,
+      f"{s9} | {k1.stdout[-300:]}")
+k2 = subprocess.run(["bash", str(KERNEL)], env=e, text=True, capture_output=True, timeout=60,
+                    input=json.dumps({"source": "startup", "cwd": str(tmp)}))
+check("A7 seconda sessione → nessuna riga STATUSLINE",
+      "STATUSLINE installed" not in k2.stdout, k2.stdout[-300:])
+
 print()
 if FAILS:
     print(f"FAIL: {len(FAILS)} — " + ", ".join(FAILS))

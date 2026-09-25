@@ -78,7 +78,7 @@ Only if the plugin system is unusable:
    `fable-director/` folder.
 3. Step 3 (playbook) unchanged.
 
-## 6. Statusline (optional)
+## 6. Statusline (automatic since 1.50.1)
 
 Plain by default since 1.39: `Fable 5.1 · quota 21%, resets 17:30 · context 26%` — model,
 5-hour plan quota with its reset time (the "Current session" in /usage) and context, always;
@@ -94,7 +94,14 @@ the plugin ships an **installer** that writes it for you, resolving the real abs
 THIS installation (it self-locates next to the script — works both with a marketplace installed
 from GitHub and one added as a local directory).
 
-**Recommended path (anyone, after install or update):**
+**Nothing to do since 1.50.1:** the first session after the install runs the installer itself
+(`--auto`, from the SessionStart hook) and writes the statusLine into `settings.json` when none is
+there; the statusline shows from the next start of Claude Code. The same step re-points it when a
+plugin update moves the cache folder. It never touches a third-party statusLine, and never comes
+back after `/fable-director:statusline --remove` (a marker in `<config>/fable-director/` records the
+choice; an explicit install clears it).
+
+**By hand (older versions, or after a remove):**
 
 ```
 /fable-director:statusline

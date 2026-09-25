@@ -30,7 +30,7 @@ Then two one-off steps:
 
 1. Copy `fable-director/playbook-template.md` to `~/.claude/delega-playbook.md`
    — the playbook lives outside the plugin so updates never touch it.
-2. Enable the statusline: `/fable-director:statusline`, then restart Claude Code.
+2. Restart Claude Code once: the first session writes the statusline into `settings.json` by itself (`/fable-director:statusline --remove` turns it off).
 
 From the first session the plugin **enables its own auto-update** (announced
 in-session, reversible: set `"autoUpdate": false` under
@@ -132,7 +132,7 @@ do, in words, most urgent first (`quota 92% used, resets in 40 min · context
 
 ![See the limit coming: plan quotas, live budget and burn-rate in your statusline on every turn. The rate limit stops being a surprise — it becomes a dashboard you glance at.](assets/readme/card4-gauge.png)
 
-`/fable-director:statusline` installs it; on a phone or web client
+It installs itself at the first session (`/fable-director:statusline` by hand, `--remove` to turn it off); on a phone or web client
 `/fable-director:status` prints the same state as text; the dense line is the
 optional expert mode. Every segment: **[docs/STATUSLINE.md](docs/STATUSLINE.md)**.
 

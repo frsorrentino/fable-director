@@ -9,7 +9,9 @@
 #
 # Uso:
 #   bash statusline-install.sh          # installa / aggiorna il path
-#   bash statusline-install.sh --remove # rimuove SOLO la nostra statusLine
+#   bash statusline-install.sh --remove # rimuove SOLO la nostra statusLine (e la esclude dall'auto-install)
+#   bash statusline-install.sh --auto   # dal SessionStart hook (1.50.1): installa o aggiorna la nostra
+#                                       # senza chiedere, muto se c'e' gia', di terzi o rimossa con --remove
 #   bash statusline-install.sh --expert # riga storica con le sigle (default: plain, parole)
 #   bash statusline-install.sh --plain  # torna alla resa in parole
 #
@@ -29,6 +31,10 @@ fi
 
 MODE="install"
 [ "${1:-}" = "--remove" ] && MODE="remove"
+[ "${1:-}" = "--auto" ] && MODE="auto"
+# Marker di rinuncia: scritto da --remove, letto da --auto (una statusLine tolta
+# apposta non deve ricomparire alla sessione dopo); un install esplicito lo toglie.
+OPTOUT="$CFG_DIR/fable-director/statusline-optout"
 # --expert / --plain: modalita di resa (1.39). plain = parole, solo eccezioni
 # (default); expert = la riga storica con le sigle. Scrive
 # <config>/fable-director/statusline.json e NON tocca settings.json.
@@ -42,13 +48,17 @@ fi
 
 # Tutta la logica di merge in python: parsing/scrittura JSON deterministici,
 # preserva le altre chiavi, non tocca una statusLine di terzi.
-CLAUDE_SETTINGS="$SETTINGS" FD_TARGET="$TARGET" FD_MODE="$MODE" python3 - <<'PY'
+CLAUDE_SETTINGS="$SETTINGS" FD_TARGET="$TARGET" FD_MODE="$MODE" FD_OPTOUT="$OPTOUT" python3 - <<'PY'
 import json, os, sys, shutil
 from pathlib import Path
 
 settings = Path(os.environ["CLAUDE_SETTINGS"])
 target   = os.environ["FD_TARGET"]
 mode     = os.environ["FD_MODE"]
+optout   = Path(os.environ["FD_OPTOUT"])
+auto     = mode == "auto"
+if auto and optout.is_file():
+    sys.exit(0)   # rimossa apposta con --remove: non ricompare da sola
 
 command = f'bash "{target}"'
 marker  = "statusline-ctx.sh"   # firma per riconoscere una NOSTRA statusLine
@@ -93,14 +103,21 @@ if mode == "remove":
     if is_ours:
         data.pop("statusLine", None)
         backup_and_write(data, f"RIMOSSA statusLine fable-director. Backup: {settings}.bak")
+        try:
+            optout.parent.mkdir(parents=True, exist_ok=True)
+            optout.touch()
+        except OSError:
+            pass
     elif existing is not None:
         print("Nessuna rimozione: la statusLine presente NON è di fable-director. Lasciata intatta.")
     else:
         print("Nessuna statusLine da rimuovere.")
     sys.exit(0)
 
-# mode == install
+# mode == install | auto
 if existing is not None and not is_ours:
+    if auto:
+        sys.exit(0)   # statusLine di terzi: mai toccata, e in auto nemmeno un avviso
     print("ATTENZIONE: esiste già una statusLine di terzi in settings.json:", file=sys.stderr)
     print(f"  {existing_cmd}", file=sys.stderr)
     print("Non la sovrascrivo. Per usare quella di fable-director rimuovila a mano, poi rilancia.", file=sys.stderr)
@@ -111,11 +128,20 @@ if refresh:
     desired["refreshInterval"] = refresh
 
 if is_ours and isinstance(existing, dict) and existing == desired:
-    print("statusLine fable-director già installata e aggiornata. Nulla da fare.")
+    if not auto:
+        print("statusLine fable-director già installata e aggiornata. Nulla da fare.")
     sys.exit(0)
 
 data["statusLine"] = desired
 verb = "AGGIORNATA" if is_ours else "INSTALLATA"
+if auto:
+    # corta e in inglese (va nel contesto del modello): la riga entra nel cap del SessionStart
+    backup_and_write(data, f"{'updated' if is_ours else 'installed'} in settings.json")
+    sys.exit(0)
+try:
+    optout.unlink()   # install esplicito: la rinuncia decade
+except OSError:
+    pass
 tick = (f"\n  → refreshInterval: {refresh}s (aggiorna anche mentre aspetti "
         f"subagent in background; FD_STATUSLINE_REFRESH=0 per disattivarlo)"
         if refresh else "\n  → refreshInterval: disattivato (solo eventi)")

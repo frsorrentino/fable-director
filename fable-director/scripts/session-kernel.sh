@@ -109,6 +109,23 @@ EOF
   fi
 fi
 
+# Statusline (1.50.1): installata da sola, senza chiedere — un collega con
+# l'installazione nuova la vedeva solo dopo /fable-director:statusline, che non
+# lanciava. --auto e' muto se c'e' gia', se e' di terzi o se e' stata tolta con
+# --remove; aggiorna anche il path quando la cache del plugin cambia versione.
+# La riga al modello c'e' solo quando settings.json e' cambiato, DOPO il blocco
+# onboarding e solo se entra nel cap: la statusline compare comunque al
+# prossimo avvio, la domanda sugli executor no.
+if [ "$FD_SOURCE" != "compact" ]; then
+  SL_LINE="$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/statusline-install.sh" --auto 2>/dev/null || true)"
+  if [ -n "$SL_LINE" ]; then
+    FD_SL="$(printf '\nSTATUSLINE %s (auto): visible from the next start of Claude Code; tell the user once. Off: /fable-director:statusline --remove' "$SL_LINE")"
+    if [ $(( ${#FD_OUT} + ${#FD_SL} + 1 )) -le "$FD_CAP_CHARS" ]; then
+      FD_OUT="${FD_OUT}"$'\n'"${FD_SL}"
+    fi
+  fi
+fi
+
 # Taglio finale, marcato: meglio una riga che dice "tagliato" di una parola a meta'.
 printf '%s\n' "$FD_OUT" | FD_CAP_CHARS="$FD_CAP_CHARS" FD_CAP_LINES="$FD_CAP_LINES" python3 -c '
 import os, sys

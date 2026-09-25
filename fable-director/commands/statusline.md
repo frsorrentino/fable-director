@@ -1,5 +1,5 @@
 ---
-description: Installa/aggiorna (o rimuove con --remove) la statusline fable-director in settings.json
+description: Installa/aggiorna (o rimuove con --remove, per sempre) la statusline fable-director in settings.json — dalla 1.50.1 si installa da sola alla prima sessione, questo comando serve per rimuoverla o rimetterla
 allowed-tools: Bash
 ---
 
