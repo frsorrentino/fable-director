@@ -1,6 +1,7 @@
 {
   "name": "fable-director",
   "repo": "frsorrentino/fable-director",
+  "security": "advisory",
   "version_from": ".claude-plugin/plugin.json",
   "match": {
     "bash": [

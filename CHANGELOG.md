@@ -2,6 +2,15 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.50.x
+
+- **1.50.0 — observations: a private path for security, the offer on screen, the same command in every plugin.**
+  - **Security observations stay private.** `add … --security` marks a read or write outside the perimeter, a secret exposed, code run that was not asked for, data leaving the computer; `--severity high` a defect of ours that blocks the work. Claude sets both from what it saw, never asks the user. A security observation never enters the public issue: `/fable-director:observe send --security` prepares a separate anonymized report sent as a GitHub private vulnerability report (`"security": "advisory"` in `observe/tool.json`, `SECURITY.md` in the repository).
+  - **The offer comes earlier.** Sending is proposed when the oldest unsent observation waits at least `propose_after_days` days (default 3) or when one is of class D, not only from three observations; security and high ones are proposed at once.
+  - **One line on screen.** A `Stop` hook prints the offer to the user when the rule fires (how many observations, which command), instead of leaving it to the session-start context only.
+  - **Send with three buttons.** `send` prints the draft and an OPTIONS block; Claude asks with `AskUserQuestion`: «Send from my GitHub», «Send anonymously» (only when the maintainers' endpoint is configured), «Not now» (back in seven days). Only the chosen command runs.
+  - **`/fable-director:observe` generated from the claude-observe source** (`sync.py`), identical in every plugin that carries the copy; the note on what a hook cannot see (a skill that misled you, a script that "succeeded" with a wrong result, the workaround) stays. Copy at claude-observe commit `4ad78b7`.
+
 ## 1.49.x
 
 - **1.49.0 — four automatic checks taken from the plugins that cite us (analysis in `docs/concorrenti-2026-09-24.md`).**

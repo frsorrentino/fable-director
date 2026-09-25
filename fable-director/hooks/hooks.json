@@ -133,6 +133,15 @@
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/stop-budget-check.py\""
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/observe/observe.py\" stop",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "SessionEnd": [

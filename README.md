@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.49.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.50.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need
 to do.** It makes your agent declare what a job should cost before it delegates,
@@ -184,7 +184,13 @@ command only the script name, the subcommand and the option names are kept:
 every argument value becomes `<ARG>`, and the error text is scrubbed (home
 path, emails, URL queries, secrets). **Nothing leaves your computer** except
 one GitHub issue, anonymized, shown to you first and sent only when you say
-yes. `/fable-director:observe` reads the box and adds notes by hand. Turn it
+yes: `/fable-director:observe send` shows the draft and asks with three buttons
+(from your GitHub, anonymously, not now). An observation marked `--security`
+(a read or write outside the perimeter, a secret exposed, code run that was
+not asked for, data leaving the computer) never enters a public issue:
+`send --security` prepares a private report to the maintainers, see
+[SECURITY.md](SECURITY.md). `/fable-director:observe` also reads the box and
+adds notes by hand. Turn it
 off with `{"enabled": false}` in `~/.config/claude-observe/config.json`; stop
 only the offers with `{"propose": false}`. Source and record format:
 [claude-observe](https://github.com/frsorrentino/claude-observe).
