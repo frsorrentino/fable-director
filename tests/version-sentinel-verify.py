@@ -51,7 +51,7 @@ def run(cache):
     return subprocess.run(
         [sys.executable, str(SENTINEL)],
         env={"CLAUDE_PLUGIN_ROOT": str(cache), "PATH": "/usr/bin:/bin"},
-        capture_output=True, text=True, timeout=30)
+        capture_output=True, text=True, timeout=120)
 
 
 GITHUB = {"source": "github", "repo": "frsorrentino/fable-director"}

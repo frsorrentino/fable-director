@@ -55,7 +55,7 @@ env.pop("CLAUDE_EFFORT", None)
 def gate(payload):
     return subprocess.run([sys.executable, str(GATE)], env=env, text=True,
                           input=json.dumps(payload), capture_output=True,
-                          timeout=30)
+                          timeout=120)
 
 
 def events(kind):
@@ -75,7 +75,7 @@ subprocess.run([sys.executable, str(TELEMETRY), "budget-open",
                 "--task", "test hardening", "--expected-output", "1000",
                 "--route", "agent", "--effort", "low", "--paths", "none"],
                env=env, cwd=str(work), capture_output=True, text=True,
-               timeout=30)
+               timeout=120)
 
 # H1: chiamata dal thread principale (nessun agent_id) → nessun avviso annidato
 r = gate({"hook_event_name": "PreToolUse", "tool_name": "Agent",

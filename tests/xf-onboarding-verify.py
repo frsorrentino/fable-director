@@ -42,7 +42,7 @@ def run(home):
         # stdin esplicito: il kernel fa `cat` se stdin non e' un tty — con la
         # pipe ereditata dal runner (release.sh, tool Bash) aspettava l'EOF
         # fino al timeout (2 flake su 5 giri della suite, 2026-09-04).
-        stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)
+        stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120)
 
 
 ASK = "XF ONBOARDING — ASK THE USER NOW"

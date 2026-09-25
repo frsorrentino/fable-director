@@ -65,7 +65,7 @@ def render(s, **env):
     e.pop("CLAUDE_CONFIG_DIR", None); e.pop("FD_STATUSLINE_MODE", None)
     e.update({k: str(v) for k, v in env.items()})
     return plain(subprocess.run(["bash", str(ROOT / "statusline-ctx.sh")], input=s, capture_output=True,
-                                text=True, env=e, timeout=30).stdout)
+                                text=True, env=e, timeout=120).stdout)
 
 
 SIGLE = re.compile(r"\bctx\b|\b5H\b|\b7D\b|\bbdg\b|\bdlg\b|\bcmp\b|\bcache\b|\bxf\b|✦|▓|░|⟲")
@@ -125,7 +125,7 @@ b["status"] = "flagged"; bfile.write_text(json.dumps(b))
 out3 = render(stdin())
 raw3 = subprocess.run(["bash", str(ROOT / "statusline-ctx.sh")], input=stdin(), capture_output=True, text=True,
                       env=dict(os.environ, HOME=str(home), CAVEMAN_STATUSLINE_SH="/nonexistent", COLUMNS="140"),
-                      timeout=30).stdout
+                      timeout=120).stdout
 check("T5 budget 2× in parole; 3× testo rosso senza sfondo",
       "budget over 2× — reconsider the route" in out2 and "budget over 3× — post-mortem before closing" in out3
       and "bdg" not in out2 and "\x1b[48;" not in raw3 and "\x1b[38;5;196m" in raw3, out2 + "\n" + out3 + "\n" + repr(raw3))

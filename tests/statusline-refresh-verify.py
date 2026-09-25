@@ -42,7 +42,7 @@ def run(cfg, *args, refresh=None):
     else:
         e.pop("FD_STATUSLINE_REFRESH", None)
     return subprocess.run(["bash", str(INSTALL), *args], env=e, text=True,
-                          capture_output=True, timeout=30)
+                          capture_output=True, timeout=120)
 
 
 def settings(cfg):

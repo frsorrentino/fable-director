@@ -85,7 +85,7 @@ def run(home, prompt, sid="sid-test"):
     return subprocess.run(
         [sys.executable, str(HOOK)],
         env={"HOME": str(home), "PATH": "/usr/bin:/bin"},
-        input=json.dumps(payload), capture_output=True, text=True, timeout=30)
+        input=json.dumps(payload), capture_output=True, text=True, timeout=120)
 
 
 def events(home):

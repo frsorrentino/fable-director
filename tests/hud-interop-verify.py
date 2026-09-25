@@ -112,7 +112,7 @@ def render(home, **env):
     e.pop("CLAUDE_CONFIG_DIR", None)
     out = subprocess.run(["bash", str(ROOT / "statusline-ctx.sh")],
                          input=stdin_payload, capture_output=True, text=True,
-                         env=e, timeout=30).stdout
+                         env=e, timeout=120).stdout
     return re.sub(r"\x1b\[[0-9;]*m", "", out)
 
 

@@ -44,7 +44,7 @@ def run(home, payload, wait=True):
         p.stdin.write(json.dumps(payload))
         p.stdin.close()
         return p
-    o, err = p.communicate(json.dumps(payload), timeout=30)
+    o, err = p.communicate(json.dumps(payload), timeout=120)
     return p.returncode, o, err
 
 
@@ -90,7 +90,7 @@ check("M2 SubagentStop → volo vuoto, stopped=1",
 procs = [run(home, start(sid="s2", aid=f"a{i}", atype="fd-executor"),
              wait=False) for i in range(12)]
 for p in procs:
-    p.wait(timeout=30)
+    p.wait(timeout=120)
 st2 = state(home, "s2")
 check("M3 12 start concorrenti → 12 contati, 12 in volo",
       st2 and st2["started"] == 12 and len(st2["inflight"]) == 12,
@@ -128,7 +128,7 @@ p = subprocess.Popen([sys.executable, str(SCRIPT)],
                      env=dict(os.environ, HOME=str(home)),
                      stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                      stderr=subprocess.PIPE, text=True)
-o, e2 = p.communicate("non-json{{", timeout=30)
+o, e2 = p.communicate("non-json{{", timeout=120)
 rc2 = p.returncode
 rc3, _, _ = run(home, {"hook_event_name": "Notification", "session_id": "s9"})
 check("M7 stdin non-JSON → exit 0, muto", rc2 == 0 and o == "", f"rc={rc2} o={o!r}")

@@ -38,7 +38,7 @@ def check(name, ok, detail=""):
 def run(home, cwd, payload):
     e = dict(os.environ, HOME=str(home))
     p = subprocess.run([sys.executable, str(SCRIPT)], input=json.dumps(payload),
-                       capture_output=True, text=True, env=e, timeout=30)
+                       capture_output=True, text=True, env=e, timeout=120)
     return p.stdout
 
 

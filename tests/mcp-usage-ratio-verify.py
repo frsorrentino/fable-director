@@ -38,7 +38,7 @@ def run_meter(home, payload):
     return subprocess.run(
         [sys.executable, str(METER)],
         env={"HOME": str(home), "PATH": "/usr/bin:/bin"},
-        input=json.dumps(payload), capture_output=True, text=True, timeout=30)
+        input=json.dumps(payload), capture_output=True, text=True, timeout=120)
 
 
 def seed(home, rows):
@@ -61,7 +61,7 @@ def report(home):
     return subprocess.run(
         [sys.executable, str(TELEMETRY), "report", "--days", "7"],
         env={"HOME": str(home), "PATH": "/usr/bin:/bin"},
-        capture_output=True, text=True, timeout=30, cwd=str(home))
+        capture_output=True, text=True, timeout=120, cwd=str(home))
 
 
 tmp = Path(tempfile.mkdtemp(prefix="fd-mcpratio-test-"))

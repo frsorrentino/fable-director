@@ -67,7 +67,7 @@ def ffmpeg_install_hint():
     return "install ffmpeg with your package manager"
 
 
-def run_quiet(cmd, timeout=30):
+def run_quiet(cmd, timeout=120):   # 120 (25/09): l'import di faster_whisper (torch) sotto carico supera i 30 s e il doctor diceva 'packages broken'
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         return r.returncode, (r.stdout or "") + (r.stderr or "")

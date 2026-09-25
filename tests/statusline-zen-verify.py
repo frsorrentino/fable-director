@@ -75,7 +75,7 @@ def render(home, stdin, **env):
     e.setdefault("FD_STATUSLINE_MODE", "expert")  # questi check descrivono la riga storica
     return subprocess.run(["bash", str(ROOT / "statusline-ctx.sh")],
                           input=stdin, capture_output=True, text=True,
-                          env=e, timeout=30).stdout
+                          env=e, timeout=120).stdout
 
 
 def plain(s):

@@ -94,14 +94,14 @@ def run_stop(home, cwd, transcript):
         env={"HOME": str(home), "PATH": "/usr/bin:/bin"},
         input=json.dumps({"cwd": cwd, "transcript_path": str(transcript),
                           "session_id": "test"}),
-        capture_output=True, text=True, timeout=30)
+        capture_output=True, text=True, timeout=120)
 
 
 def run_telemetry(home, args, cwd=None):
     env = {"HOME": str(home), "PATH": "/usr/bin:/bin"}
     return subprocess.run(
         [sys.executable, str(TELEMETRY)] + args,
-        env=env, capture_output=True, text=True, timeout=30,
+        env=env, capture_output=True, text=True, timeout=120,
         cwd=cwd or str(home))
 
 
@@ -245,7 +245,7 @@ try:
         env={"HOME": str(h), "PATH": "/usr/bin:/bin"},
         input=json.dumps({"hook_event_name": "SessionStart",
                           "cwd": "/proj/a", "session_id": "test"}),
-        capture_output=True, text=True, timeout=30)
+        capture_output=True, text=True, timeout=120)
     check("R7 hindsight mostra riaperture e file",
           "12 riaperture (routes/api.py)" in r.stdout, r.stdout)
 

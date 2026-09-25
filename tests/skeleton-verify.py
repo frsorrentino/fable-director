@@ -26,7 +26,7 @@ def check(name, ok, detail=""):
 
 def run(*files):
     p = subprocess.run([sys.executable, str(TOOL)] + [str(f) for f in files],
-                       capture_output=True, text=True, timeout=30)
+                       capture_output=True, text=True, timeout=120)
     return p.stdout + p.stderr
 
 

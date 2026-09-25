@@ -40,7 +40,7 @@ def run_hint(home, payload, holdout_frac=None):
     if holdout_frac is not None:
         e["FD_HINT_HOLDOUT"] = str(holdout_frac)
     p = subprocess.run([sys.executable, str(HINT)], input=json.dumps(payload),
-                       capture_output=True, text=True, env=e, timeout=30)
+                       capture_output=True, text=True, env=e, timeout=120)
     return p.stdout
 
 

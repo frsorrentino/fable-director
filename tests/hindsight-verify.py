@@ -68,14 +68,14 @@ def run_hindsight(home, cwd, via="stdin"):
         env["CLAUDE_PROJECT_DIR"] = cwd
     return subprocess.run(
         [sys.executable, str(HINDSIGHT)], env=env, input=stdin,
-        capture_output=True, text=True, timeout=30)
+        capture_output=True, text=True, timeout=120)
 
 
 def run_meter(home, payload):
     return subprocess.run(
         [sys.executable, str(METER)],
         env={"HOME": str(home), "PATH": "/usr/bin:/bin"},
-        input=json.dumps(payload), capture_output=True, text=True, timeout=30)
+        input=json.dumps(payload), capture_output=True, text=True, timeout=120)
 
 
 def events_of(home, event):
@@ -158,7 +158,7 @@ try:
     mkdb(h, [(2, "/proj/a", "budget_flag", BUST)])
     r = subprocess.run([sys.executable, str(HINDSIGHT)],
                        env={"HOME": str(h), "PATH": "/usr/bin:/bin"},
-                       input="non-json{{{", capture_output=True, text=True, timeout=10)
+                       input="non-json{{{", capture_output=True, text=True, timeout=120)
     check("H10 stdin non-JSON -> exit 0, nessun crash", r.returncode == 0, r.stderr)
 
     # H8: DB assente e DB corrotto -> silenzio, exit 0

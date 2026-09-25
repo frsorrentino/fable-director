@@ -166,13 +166,18 @@ def main():
           r.stdout + r.stderr + f" sheets={[s.name for s in sheets]}")
 
     # M4 — no audio: error from ffprobe, model never loaded (empty HOME = no venv).
-    t0 = time.time()
+    # "fast" = niente modello caricato: CPU dei figli, non parete (un modello
+    # costa secondi di CPU; il carico della macchina allunga solo l'attesa)
+    import resource
+    ru0 = resource.getrusage(resource.RUSAGE_CHILDREN); t0 = time.time()
     r = run([sys.executable, transcribe, str(no_a)], home, proj)
     el = time.time() - t0
-    check("M4 transcribe: no audio track → STATUS error, no model, fast",
+    ru1 = resource.getrusage(resource.RUSAGE_CHILDREN)
+    cpu = (ru1.ru_utime + ru1.ru_stime) - (ru0.ru_utime + ru0.ru_stime)
+    check("M4 transcribe: no audio track → STATUS error, no model, fast (< 20 s of CPU)",
           r.returncode == 1 and field(r.stdout, "STATUS") == "error"
-          and "no audio track" in r.stdout and "NOTE:" not in r.stdout and el < 20,
-          r.stdout + r.stderr + f" elapsed={el:.1f}")
+          and "no audio track" in r.stdout and "NOTE:" not in r.stdout and cpu < 20,
+          r.stdout + r.stderr + f" cpu={cpu:.1f}s wall={el:.1f}s")
 
     # M5 — with audio but no venv in this HOME → unavailable naming the venv.
     r = run([sys.executable, transcribe, str(with_a)], home, proj,

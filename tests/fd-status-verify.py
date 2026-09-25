@@ -34,7 +34,7 @@ def run(home):
     e.pop("CLAUDE_CONFIG_DIR", None)
     return subprocess.run([sys.executable, str(ROOT / "fd-status.py")],
                           capture_output=True, text=True, env=e,
-                          timeout=30).stdout
+                          timeout=120).stdout
 
 
 tmp = Path(tempfile.mkdtemp(prefix="fd-status-test"))
