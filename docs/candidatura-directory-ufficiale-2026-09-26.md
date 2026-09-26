@@ -121,3 +121,13 @@ Tenere `name` con `displayName` «Fable Director»; README della scheda com'è; 
 6. **Descrizione breve**: togliere «New in 1.42» (invecchia sulla scheda).
 7. **Listed on**: solo Claude Code (consigliato) o anche Cowork.
 8. **privacyPolicyUrl**: blob GitHub (impostato) o GitHub Pages da attivare.
+
+## 8. Esito del 26/09, 09:50: la submission esisteva già
+
+- **Submission esistente**: https://claude.ai/directory/manage/plugins/bf73cad9-3052-48f2-b5e7-e0f487859ac6. Creata il 25/09 dall'organizzazione di Franz («You / your team», prima versione v1.51.0 · ed11ee8). La cronologia del portale non dice quale sessione l'ha inviata. Il plugin path è `fable-director`. Non è stata creata una seconda submission.
+- **Stato**: In review. v1.50.3 · e9e7454 «passed, ready to publish», con un reviewer. v1.51.0 · ed11ee8 in hold per policy: 6 × «Allowed tools broad», 5 × «Uses a credential from the user's machine», nessuna icona (corretto nella 1.52.0), 2 × «download-and-run command», nota «Allowed tools unscoped write» su `commands/handoff.md`. Nessun blocco.
+- **Impostazioni cambiate oggi**: Listed on = solo Claude Code (Cowork e Claude apps tolti). Auto-publish era già acceso. «This plugin collects or transmits user data» lasciato spento.
+- **Webhook push**: segreto generato dal portale e salvato in `~/.config/fable-director/directory-webhook.env` (mode 0600, mai nel repo). Hook GitHub id 686067517, evento push, JSON; ping 200 OK alle 09:48.
+- **Nuova versione**: «Check for new commits» premuto alle 09:43, ancora in corso alle 09:50. Questo commit è il primo push dopo il webhook e deve far rilevare `main` con la 1.52.0.
+- **Listing details** della submission sono quelli della prima versione (nessun displayName, privacy o icona). Il portale scrive che nome visualizzato e descrizione breve seguono la versione live.
+- Screenshot: `docs/history/directory-fable-director-2026-09-26-versions.png`.
