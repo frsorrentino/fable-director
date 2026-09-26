@@ -1,6 +1,6 @@
 ---
 name: verifica-modello
-description: Use when a new Claude model arrives or becomes the default (e.g. Claude Opus 5.5), or when asked whether CLAUDE.md, skills, agents or the plugin kernel still fit the current model's guidance — a zero-token check of both accounts (~/.claude, ~/.claude-pixel) and our installed plugins against the per-model rules file and the signals of the bundled prompt-audit guide, then the full pass with the native /doctor prompt-audit (Claude Code ≥ 2.1.283; /claude-api prompt-audit before); never edits.
+description: Use when a new Claude model arrives or becomes the default (e.g. Claude Opus 5.5), or when asked whether CLAUDE.md, skills, agents or the plugin kernel still fit the current model's guidance — a zero-token check of every configured account (`model-rules/_targets.json`) and our installed plugins against the per-model rules file and the signals of the bundled prompt-audit guide, then the full pass with the native /doctor prompt-audit (Claude Code ≥ 2.1.283; /claude-api prompt-audit before); never edits.
 ---
 
 # Verifica modello
