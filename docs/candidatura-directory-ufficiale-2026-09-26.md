@@ -109,7 +109,9 @@ Cosa manca o è debole:
 5. Data handling con il §3; Compliance con la mail; webhook on (come per chrome-bridge, segreto fuori dal repo in `~/.config/`); Listed on = Claude Code; Submit for review.
 6. Alla versione «passes every check» o quando il reviewer la libera: **Publish**.
 
-## 7. Decisioni che restano a Franz
+## 7. Decisioni prese da Franz il 26/09 alle 09:12 (tutte come consigliato)
+
+Tenere `name` con `displayName` «Fable Director»; README della scheda com'è; plugin resta in sottocartella; `allowed-tools` invariati; `XAI_API_KEY` dall'ambiente; descrizione breve senza «New in 1.42» (fatto); Listed on = solo Claude Code; `privacyPolicyUrl` sul blob GitHub. Le opzioni valutate:
 
 1. **Il nome.** «Fable» è il nome del modello Anthropic: il portale può mettere in hold «Name matches a known brand» o un reviewer può chiedere di cambiarlo. Dopo la pubblicazione il nome non cambia più, e cambiarlo ora rompe le installazioni `fable-director@fsorrentino` (salvo `renames` in marketplace.json). Opzioni: tenere e argomentare (il plugin è nato con Fable 5.1, «director» qualifica), oppure `displayName` diverso (es. «Delegation Director») lasciando `name`.
 2. **README della scheda.** La directory mostra `fable-director/README.md` (tecnico, senza card). Portare lì il README di radice con le card significa copiare le immagini dentro la cartella (5 PNG, 86-125 KiB l'una: ammesse, riferite con sintassi immagine Markdown) e tenere due README allineati, oppure spostare il plugin alla radice di un repo suo.
