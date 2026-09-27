@@ -31,8 +31,16 @@
 #   STATUS: ok|error
 #   OUTPUT: <sheet.jpg>[, <sheet-2.jpg> ...]
 #   DETAIL: audio: none|<codec> <ch>ch — <n> sheet(s) <cols>x<rows> @ <px>px
-# Exit 0 only on STATUS ok. Requires ffmpeg + ffprobe (+ fontconfig for drawtext).
+# Exit 0 only on STATUS ok. Requires ffmpeg + ffprobe with drawtext.
+#
+# Timestamp font: fontconfig's default when it works (Linux, macOS); else the
+# first font file that renders (Windows: %WINDIR%/Fonts/arial.ttf, since the
+# Windows ffmpeg builds ship no fonts.conf). FD_SHEET_FONT=<file> forces one.
+# No usable font -> sheets without timestamps, said in DETAIL, not an error.
 set -uo pipefail
+# Decimal point in printf/awk output whatever the user's locale (it_IT on
+# Windows printed "invalid number" for 5.000000).
+export LC_NUMERIC=C
 
 FPS=1; COLS=8; WIDTH=400; OUTDIR="."; MAXF=90; FILE=""; SCENES=""; USE_CACHE=1
 
@@ -47,7 +55,7 @@ while [ $# -gt 0 ]; do
     --out)    OUTDIR="${2:?--out needs a value}"; shift 2 ;;
     --max)    MAXF="${2:?--max needs a value}"; shift 2 ;;
     --no-cache) USE_CACHE=0; shift ;;
-    -h|--help) sed -n '2,36p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,39p' "$0"; exit 0 ;;
     -*)       fail "unrecognized argument: $1" ;;
     *)        [ -z "$FILE" ] && FILE="$1" || fail "only one input file"; shift ;;
   esac
@@ -90,6 +98,38 @@ echo "audio: $AUDIO_LINE"
 BASE=$(basename "$FILE"); BASE="${BASE%.*}"
 DRAW_STYLE="x=8:y=8:fontsize=22:fontcolor=yellow:box=1:boxcolor=black@0.6:boxborderw=4"
 
+# ---- timestamp font ---------------------------------------------------------
+# drawtext with no fontfile= asks fontconfig; on Windows that fails with
+# "Fontconfig error: Cannot load default config file". A fontfile= path skips
+# fontconfig; its drive colon is escaped (C\:/...) for the filter parser.
+# The Windows build can crash here, and bash reports "Segmentation fault" on
+# its own stderr: the subshell (kept from exec'ing ffmpeg by the trailing
+# exit) takes that report into the redirect.
+draw_ok() { ( ffmpeg -v error -f lavfi -i color=c=black:s=64x64:d=0.1 -vf "drawtext=text=x${1:+:$1}" -f null -; exit $? ) >/dev/null 2>&1; }
+FONT_OPT=""; LABELS=1
+if [ -n "${FD_SHEET_FONT:-}" ] || ! draw_ok ""; then
+  LABELS=0
+  FONTS=()
+  if [ -n "${FD_SHEET_FONT:-}" ]; then
+    FONTS=("$FD_SHEET_FONT")
+  else
+    WIN="${WINDIR:-${windir:-}}"; WIN="${WIN//\\//}"
+    [ -n "$WIN" ] && FONTS+=("$WIN/Fonts/arial.ttf" "$WIN/Fonts/segoeui.ttf" "$WIN/Fonts/consola.ttf")
+    FONTS+=(/System/Library/Fonts/Supplemental/Arial.ttf /Library/Fonts/Arial.ttf
+            /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf /usr/share/fonts/dejavu/DejaVuSans.ttf)
+  fi
+  for f in "${FONTS[@]}"; do
+    [ -f "$f" ] || continue
+    opt="fontfile='$(printf '%s' "${f//\\//}" | sed 's/:/\\:/g')'"
+    if draw_ok "$opt"; then FONT_OPT="$opt:"; LABELS=1; break; fi
+  done
+fi
+if [ "$LABELS" = 1 ]; then
+  LABEL_NOTE=""
+else
+  LABEL_NOTE=", no timestamps (drawtext found no usable font; FD_SHEET_FONT=<.ttf> sets one)"
+fi
+
 # ---- cache lookup -----------------------------------------------------------
 CACHE_DIR=""
 if [ "$USE_CACHE" = 1 ]; then
@@ -99,6 +139,7 @@ with open(sys.argv[1],"rb") as f:
 print(h.hexdigest())' "$FILE" 2>/dev/null)
   if [ -n "$SHA" ]; then
     if [ -n "$SCENES" ]; then KEY="scenes${SCENES}-c${COLS}-w${WIDTH}-m${MAXF}"; else KEY="fps${FPS}-c${COLS}-w${WIDTH}-m${MAXF}"; fi
+    [ "$LABELS" = 1 ] || KEY="$KEY-nolabel"
     CACHE_DIR="${FD_MEDIA_CACHE:-$HOME/.claude/fable-director/media-cache}/$SHA/sheet-$KEY"
     if [ -f "$CACHE_DIR/done" ] && ls "$CACHE_DIR"/*.jpg >/dev/null 2>&1; then
       OUTS=()
@@ -138,9 +179,12 @@ if [ -n "$SCENES" ]; then
     printf "%d %d %d %d", n, per, rows, cols }')"
   FRAMES_LINE="frames: $TOTAL (frame 0 + cuts) -> $NSHEETS sheet(s) ${TCOLS}x${ROWS} @ ${WIDTH}px"
   echo "$FRAMES_LINE"
-  VF="select='eq(n\\,0)+gt(scene\\,${SCENES})',scale=${WIDTH}:-2,drawtext=text='%{pts\\:hms}':${DRAW_STYLE},tile=${TCOLS}x${ROWS}"
+  DRAW=""; [ "$LABELS" = 1 ] && DRAW="drawtext=text='%{pts\\:hms}':${FONT_OPT}${DRAW_STYLE},"
+  VF="select='eq(n\\,0)+gt(scene\\,${SCENES})',scale=${WIDTH}:-2,${DRAW}tile=${TCOLS}x${ROWS}"
   if [ "$NSHEETS" -eq 1 ]; then PATTERN="$OUTDIR/${BASE}-scenes.jpg"; else PATTERN="$OUTDIR/${BASE}-scenes-%d.jpg"; fi
-  ERR=$(ffmpeg -v error -y -i "$FILE" -an -vf "$VF" -vsync vfr -frames:v "$NSHEETS" -q:v 3 "$PATTERN" 2>&1)
+  # -vsync is gone in ffmpeg 8+; -fps_mode exists since 5.1.
+  VSYNC=(-vsync vfr); ffmpeg -hide_banner -h long 2>/dev/null | grep -q -- '-fps_mode' && VSYNC=(-fps_mode vfr)
+  ERR=$(ffmpeg -v error -y -i "$FILE" -an -vf "$VF" "${VSYNC[@]}" -frames:v "$NSHEETS" -q:v 3 "$PATTERN" 2>&1)
   [ $? -eq 0 ] || fail "ffmpeg failed in scene mode: ${ERR:0:300}"
   if [ "$NSHEETS" -eq 1 ]; then
     [ -s "$PATTERN" ] || fail "ffmpeg produced no sheet in scene mode: ${ERR:0:300}"
@@ -152,7 +196,7 @@ if [ -n "$SCENES" ]; then
       OUTS+=("$OUTDIR/${BASE}-scenes-$k.jpg"); k=$((k+1))
     done
   fi
-  DETAIL_TAIL="${TOTAL} frames at cuts"
+  DETAIL_TAIL="${TOTAL} frames at cuts${LABEL_NOTE}"
 else
   # ---- fixed-rate mode --------------------------------------------------------
   read -r TOTAL NSHEETS PER ROWS TCOLS SPAN <<<"$(awk -v d="$DURATION" -v f="$FPS" -v c="$COLS" -v m="$MAXF" 'BEGIN{
@@ -172,7 +216,8 @@ else
     # Input-side -ss (fast keyframe seek) resets pts to 0: the drawtext offset
     # puts the ABSOLUTE time back on every frame (%{pts:hms:<offset>}).
     OFF=$(awk -v s="$START" 'BEGIN{printf "%d", s}')
-    VF="fps=${FPS},scale=${WIDTH}:-2,drawtext=text='%{pts\\:hms\\:${OFF}}':${DRAW_STYLE},tile=${TCOLS}x${ROWS}"
+    DRAW=""; [ "$LABELS" = 1 ] && DRAW="drawtext=text='%{pts\\:hms\\:${OFF}}':${FONT_OPT}${DRAW_STYLE},"
+    VF="fps=${FPS},scale=${WIDTH}:-2,${DRAW}tile=${TCOLS}x${ROWS}"
     ERR=$(ffmpeg -v error -y -ss "$START" -t "$SPAN" -i "$FILE" -vf "$VF" -frames:v 1 -q:v 3 "$OUT" 2>&1)
     if [ $? -ne 0 ] || [ ! -s "$OUT" ]; then
       fail "ffmpeg failed on sheet $((k+1)): ${ERR:0:300}"
@@ -180,7 +225,7 @@ else
     OUTS+=("$OUT")
     k=$((k+1))
   done
-  DETAIL_TAIL="${TOTAL} frames"
+  DETAIL_TAIL="${TOTAL} frames${LABEL_NOTE}"
 fi
 
 # ---- cache store ------------------------------------------------------------

@@ -27,6 +27,8 @@ only up to its guards (budget gate, data-class, key, provider type).
   M20 video-sheet.sh cache: second run is a CACHE: hit with the jpg copied
   M21 transcribe.py cache: seeded transcript → STATUS ok with NO venv, srt written
   M22 fd-telemetry.py report: media route line from a logged external_exec event
+  M23 video-sheet.sh with no fontconfig default font → timestamps from a font file
+  M24 video-sheet.sh with no usable font → sheet without timestamps, said in DETAIL
 
 Usage: python3 tests/media-tools-verify.py   (exit 0 = all green)
 """
@@ -399,6 +401,41 @@ def main():
           r0.returncode == 0 and "media route" in r.stdout
           and re.search(r"video-shotlist: 1 run, 1 file\(s\), 10 MB, ok-rate 1\.00, avg 4[.,]000 in / 700 out, 60 s, inline", r.stdout) is not None,
           r0.stdout + r0.stderr + r.stdout[-1500:] + r.stderr[-500:])
+
+    # M23/M24 — Windows ffmpeg builds ship no fonts.conf: drawtext without a
+    # fontfile= fails. An empty fonts.conf reproduces it on Linux.
+    fc = work / "fonts.conf"
+    fc.write_text('<?xml version="1.0"?>\n<fontconfig></fontconfig>\n')
+    env_nf = {"FONTCONFIG_FILE": str(fc)}
+    probe = subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=black:s=64x64:d=0.1",
+                            "-vf", "drawtext=text=x", "-f", "null", "-"],
+                           capture_output=True, env=dict(os.environ, **env_nf))
+    fallback = [f for f in ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                            "/usr/share/fonts/dejavu/DejaVuSans.ttf") if os.path.isfile(f)]
+    if probe.returncode == 0 or not fallback:
+        skip("M23 video-sheet: fallback font file when fontconfig has none",
+             "empty fonts.conf does not break drawtext here" if probe.returncode == 0 else "no DejaVuSans.ttf")
+    else:
+        r = run(["bash", sheet_sh, str(with_a), "--no-cache", "--out", str(proj / "s23")], home, proj,
+                env_extra=dict(env_nf, WINDIR=""))
+        j23 = proj / "s23" / "with-audio-sheet.jpg"
+        check("M23 video-sheet: no fontconfig font → fallback font file, timestamps kept",
+              r.returncode == 0 and field(r.stdout, "STATUS") == "ok" and j23.is_file()
+              and dims(j23) == "2000,300" and "no timestamps" not in r.stdout,
+              r.stdout + r.stderr)
+    r1 = run(["bash", sheet_sh, str(with_a), "--out", str(proj / "s24")], home, proj,
+             env_extra=dict(env_nf, FD_SHEET_FONT=str(work / "missing.ttf"), FD_MEDIA_CACHE=str(work / "mc24")))
+    r2 = run(["bash", sheet_sh, str(with_a), "--out", str(proj / "s24b")], home, proj,
+             env_extra={"FD_MEDIA_CACHE": str(work / "mc24")})
+    j24 = proj / "s24" / "with-audio-sheet.jpg"
+    j23 = proj / "s23" / "with-audio-sheet.jpg"
+    check("M24 video-sheet: no usable font → STATUS ok, no timestamps in DETAIL, own cache key",
+          r1.returncode == 0 and field(r1.stdout, "STATUS") == "ok" and j24.is_file()
+          and dims(j24) == "2000,300" and "no timestamps" in field(r1.stdout, "DETAIL")
+          and j24.read_bytes() != jpg.read_bytes()
+          and (not j23.is_file() or j24.read_bytes() != j23.read_bytes())
+          and "CACHE: miss" in r2.stdout and "no timestamps" not in r2.stdout,
+          r1.stdout + r1.stderr + r2.stdout)
 
     shutil.rmtree(work, ignore_errors=True)
     print(f"\n{len(passed)} passed, {len(failed)} failed, {len(skipped)} skipped")

@@ -4,6 +4,11 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.52.x
 
+- **1.52.2 — contact sheets on Windows.**
+  - **`video-sheet.sh` burns the timestamps on Windows.** The Windows ffmpeg builds ship no `fonts.conf`, so `drawtext` failed with a fontconfig error and no sheet came out. When fontconfig has no default font, the script now uses a font file that exists on the OS (`%WINDIR%/Fonts/arial.ttf`, the macOS Arial, DejaVu Sans). With no usable font it still makes the sheet, without timestamps, and says so in `DETAIL`. `FD_SHEET_FONT=<file>` picks the font.
+  - **Scene mode works on ffmpeg 8 and later**, which removed `-vsync`: the script uses `-fps_mode` when ffmpeg has it.
+  - **Decimal point in any locale.** With an Italian locale the duration line printed `invalid number`.
+
 - **1.52.1 — works on stock Windows.** Before, every hook called `python3`, which on Windows is the Microsoft Store alias: the kernel came out empty, the gates and the perimeter never ran, and each event logged an error.
   - **`scripts/py.sh`, one launcher for every hook, command and statusline.** It takes `python3`, then `python`, then `py -3`, skips the Store alias, and caches the path it finds on Windows (0.37 s the first time, 0.10 s after). It forces UTF-8 pipes, so the expert statusline keeps its gauge and folder instead of dying on a cp1252 `UnicodeEncodeError`. With no Python at all it prints one line and exits 0.
   - **The kernel always loads.** Its final cap falls back to bash when Python is missing, and the kernel then says that the gates are off. The executor-onboarding question no longer uses up an attempt when its text was not delivered. On Windows the kernel shows how to launch the plugin's scripts.
