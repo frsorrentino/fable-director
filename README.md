@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.52.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.52.1-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need
 to do.** It makes your agent declare what a job should cost before it delegates,
@@ -236,12 +236,22 @@ gracefully when absent.
 ## Requirements
 
 Claude Code ≥ 2.1.x (for the `context_window` / `rate_limits` statusline fields;
-older versions degrade silently), `python3` and `bash` on the PATH; `ffmpeg`
+older versions degrade silently), Python 3.8+ and `bash`; `ffmpeg`
 and `ffprobe` only for the video and audio tools (`media-doctor.py` checks
 them). Keep
 `maxEffortLevel` at or above `high`, or set it per model: a lower cap silently
 overrides the verifier's pinned tier
 ([INTERNALS](docs/INTERNALS.md#claude-fable-51-and-claude-code-21257--what-changed-what-didnt-2026-09)).
+
+### Windows
+
+Tested on Windows 11 with Claude Code 2.1.283: hooks, gates, perimeter, telemetry, `--verify` and the statusline work.
+
+- **Git for Windows.** Claude Code runs hooks through its Git Bash; nothing else to set up.
+- **Python 3.8+ from python.org**, reachable as `python` or `py`. `python3` on stock Windows is the Microsoft Store alias, which only prints an install hint: every hook goes through `scripts/py.sh`, which skips the alias, takes the first real interpreter and caches its path in `~/.claude/fable-director/python-path`.
+- **Without Python** the kernel still loads and says the gates are off, the statusline shows one line asking for Python, and no hook reports an error.
+- **To run a plugin script by hand**, use `bash <plugin>/scripts/py.sh <plugin>/scripts/<name>.py …`; the session kernel shows the full path on Windows.
+- **Not tested on Windows:** the video and audio tools (`video-sheet.sh`, `transcribe.py`, `tts-timing.py`). Without `fcntl`, the subagent meter falls back to atomic renames, so two subagents that stop at the same instant can lose one count.
 
 ## License
 

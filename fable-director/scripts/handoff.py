@@ -42,6 +42,12 @@ import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
+
+def pycmd(script):
+    """How to launch a plugin script in a message to the model or the user: through py.sh, with forward
+    slashes — on Windows `python3` is the Microsoft Store alias and Git Bash eats backslashes."""
+    return f'bash "{(Path(__file__).resolve().parent / "py.sh").as_posix()}" "{Path(script).as_posix()}"'
+
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
@@ -342,7 +348,7 @@ def cmd_prepare(here):
         print(f"  {s}")
     print("RULES: ~2k tokens max; facts with numbers, no narrative; only decisions the "
           "code does not show; if the file exists, overwrite it (same day = same handoff).")
-    print(f"THEN: python3 \"{Path(__file__).resolve()}\" --written \"{dest}\"")
+    print(f"THEN: {pycmd(__file__)} --written \"{Path(dest).as_posix()}\"")
 
 
 def cmd_written(path):

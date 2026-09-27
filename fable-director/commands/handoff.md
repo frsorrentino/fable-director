@@ -8,7 +8,7 @@ A long session pays its whole context again at every turn; a cold resume re-cach
 1. Run:
 
 ```
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff.py" --prepare ${ARGUMENTS}
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" "${CLAUDE_PLUGIN_ROOT}/scripts/handoff.py" --prepare ${ARGUMENTS}
 ```
 
    If it prints `STATUS: refused`, report its DETAIL line to the user as-is and stop: a budget is open, the task is not at a verified boundary, and mid-task the reasoning in this context is load-bearing.

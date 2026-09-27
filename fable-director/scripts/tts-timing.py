@@ -39,6 +39,12 @@ import sys
 import time
 from pathlib import Path
 
+
+def pycmd(script):
+    """How to launch a plugin script in a message to the model or the user: through py.sh, with forward
+    slashes — on Windows `python3` is the Microsoft Store alias and Git Bash eats backslashes."""
+    return f'bash "{(Path(__file__).resolve().parent / "py.sh").as_posix()}" "{Path(script).as_posix()}"'
+
 try:
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
@@ -127,7 +133,7 @@ def find_edge_tts(opts):
         if c.is_file() and os.access(c, os.X_OK):
             return str(c)
     die(f"edge-tts not found (looked in {VENV_BIN}, PATH) — set up the venv "
-        f"(explicit, ~370 MB): python3 \"{Path(__file__).with_name('media-doctor.py')}\" "
+        f"(explicit, ~370 MB): {pycmd(Path(__file__).with_name('media-doctor.py'))} "
         f"--setup", status="unavailable")
 
 

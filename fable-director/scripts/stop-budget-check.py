@@ -41,6 +41,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import re
 import sys
 from datetime import datetime, timezone
@@ -257,9 +258,18 @@ def run_verify(budget, state, cwd, rw_stats):
     except (ValueError, TypeError):
         pass
     import subprocess
+    # Windows: shell=True e' cmd.exe (quoting POSIX rotto, `python3` = alias dello
+    # Store). Il comando va a bash di Git — which(), non "bash" nudo: CreateProcess
+    # cerca prima System32, dove bash.exe e' il lanciatore WSL — con python3/python
+    # che puntano all'interprete di questo hook.
+    argv, env = cmd, None
+    bash = shutil.which("bash") if os.name == "nt" else None
+    if bash:
+        argv = [bash, "-c", 'python3() { "$FD_PY_EXE" "$@"; }; python() { "$FD_PY_EXE" "$@"; }; ' + cmd]
+        env = dict(os.environ, FD_PY_EXE=sys.executable)
     try:
-        r = subprocess.run(cmd, shell=True, cwd=str(cwd), capture_output=True,
-                           text=True, timeout=VERIFY_TIMEOUT_S)
+        r = subprocess.run(argv, shell=not bash, cwd=str(cwd), capture_output=True, env=env,
+                           text=True, encoding="utf-8", errors="replace", timeout=VERIFY_TIMEOUT_S)
         rc = r.returncode
         tail = (r.stderr or r.stdout or "").strip().splitlines()[-1:] or [""]
     except subprocess.TimeoutExpired:

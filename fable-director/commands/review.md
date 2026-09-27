@@ -9,7 +9,7 @@ Steps:
 
 1. Run and read:
 ```
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/fd-telemetry.py" report --days ${ARGUMENTS:-30}
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" "${CLAUDE_PLUGIN_ROOT}/scripts/fd-telemetry.py" report --days ${ARGUMENTS:-30}
 ```
 2. Read `~/.claude/delega-playbook.md` (if it exists): entries with `uses:0` for a long time, `[candidata]` never confirmed, counters ko>ok.
 

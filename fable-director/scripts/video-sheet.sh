@@ -93,7 +93,7 @@ DRAW_STYLE="x=8:y=8:fontsize=22:fontcolor=yellow:box=1:boxcolor=black@0.6:boxbor
 # ---- cache lookup -----------------------------------------------------------
 CACHE_DIR=""
 if [ "$USE_CACHE" = 1 ]; then
-  SHA=$(python3 -c 'import hashlib,sys; h=hashlib.sha1()
+  SHA=$(bash "$(dirname "$0")/py.sh" -c 'import hashlib,sys; h=hashlib.sha1()
 with open(sys.argv[1],"rb") as f:
     for b in iter(lambda: f.read(1<<20), b""): h.update(b)
 print(h.hexdigest())' "$FILE" 2>/dev/null)

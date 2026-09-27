@@ -4,6 +4,13 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.52.x
 
+- **1.52.1 — works on stock Windows.** Before, every hook called `python3`, which on Windows is the Microsoft Store alias: the kernel came out empty, the gates and the perimeter never ran, and each event logged an error.
+  - **`scripts/py.sh`, one launcher for every hook, command and statusline.** It takes `python3`, then `python`, then `py -3`, skips the Store alias, and caches the path it finds on Windows (0.37 s the first time, 0.10 s after). It forces UTF-8 pipes, so the expert statusline keeps its gauge and folder instead of dying on a cp1252 `UnicodeEncodeError`. With no Python at all it prints one line and exits 0.
+  - **The kernel always loads.** Its final cap falls back to bash when Python is missing, and the kernel then says that the gates are off. The executor-onboarding question no longer uses up an attempt when its text was not delivered. On Windows the kernel shows how to launch the plugin's scripts.
+  - **`--verify` runs in Git Bash on Windows** instead of `cmd.exe`, where POSIX quoting broke. `python3` and `python` in the command point to the hook's own interpreter.
+  - **Commands and messages** (`/status`, `/handoff`, `/review`, `verifica-modello`, the delegation gate's deny text, the doctors' hints) show `bash …/py.sh …` with forward slashes, a form that runs on Windows too.
+  - README: a Windows section with what you need and what is not tested.
+
 - **1.52.0 — ready for the Anthropic directory, and the model check on the native `/doctor prompt-audit`.**
   - **Directory listing fields.** `plugin.json` carries `displayName` (Fable Director), `homepage`, `repository`, `privacyPolicyUrl` and `icon` (`.claude-plugin/icon.svg`); `LICENSE` sits in the plugin folder too. `docs/privacy.md` says what the plugin reads, what it writes on disk, what leaves the machine and when (nothing by default; external routes, error reports and model downloads only on your setup or your yes). A four-line **Data handling** section in both READMEs. Dossier for the submission in `docs/candidatura-directory-ufficiale-2026-09-26.md`.
   - **Install command fixed.** README, INSTALL and ONBOARDING said `fable-director@pixelfarm`; the marketplace has been `fsorrentino` since 1.31.0, so the copy-pasted command failed. Same for the `extraKnownMarketplaces` key in the opt-out note.

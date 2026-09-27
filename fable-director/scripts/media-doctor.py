@@ -50,6 +50,12 @@ MODEL_MB = {"tiny": 75, "base": 145, "small": 470, "medium": 1500, "large-v3": 3
 HERE = Path(__file__).resolve().parent
 
 
+def pycmd(script):
+    """How to launch a plugin script in a message to the model or the user: through py.sh, with forward
+    slashes — on Windows `python3` is the Microsoft Store alias and Git Bash eats backslashes."""
+    return f'bash "{(Path(__file__).resolve().parent / "py.sh").as_posix()}" "{Path(script).as_posix()}"'
+
+
 def venv_python(venv):
     return venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
 
@@ -160,7 +166,7 @@ def doctor(venv):
 
     # venv + packages
     py = venv_python(venv)
-    setup_cmd = f"python3 \"{HERE / 'media-doctor.py'}\" --setup"
+    setup_cmd = f"{pycmd(HERE / 'media-doctor.py')} --setup"
     if py.is_file():
         rc, out = run_quiet([str(py), "-c",
                              "import faster_whisper, edge_tts; "
@@ -200,10 +206,10 @@ def doctor(venv):
                         f"API key MISSING — export {p.get('api_key_env')}=... or api_key in config"))
         else:
             line(False, "gemini-media", "no \"type\": \"media\" provider in "
-                 f"{CONFIG_PATH.name} — python3 \"{HERE / 'external-exec.py'}\" --doctor "
+                 f"{CONFIG_PATH.name} — {pycmd(HERE / 'external-exec.py')} --doctor "
                  "adds it (and says so)")
     else:
-        line(False, "gemini-media", f"no {CONFIG_PATH} — python3 \"{HERE / 'cross-verify.py'}\" "
+        line(False, "gemini-media", f"no {CONFIG_PATH} — {pycmd(HERE / 'cross-verify.py')} "
              "--init (template includes gemini-media), then put the Gemini key")
 
     # tesseract (optional)

@@ -213,7 +213,7 @@ def main():
           r_ref.returncode == 1 and "STATUS: refused" in r_ref.stdout and "budget is open" in r_ref.stdout
           and r_ok.returncode == 0 and p_ok and p_ok.group(1).startswith(str(fd(h8) / "handoffs" / slug(proj)))
           and p_here and p_here.group(1) == str(proj / "docs" / f"handoff-{today}.md")
-          and r_ok.stdout.count("\n  ") == 7 and "THEN: python3" in r_ok.stdout,
+          and r_ok.stdout.count("\n  ") == 7 and "THEN: bash " in r_ok.stdout and "py.sh" in r_ok.stdout,
           r_ref.stdout + r_ok.stdout + r_here.stdout + r_ok.stderr)
 
     # H9 — written: event logged; report prints the Handoff block.

@@ -229,10 +229,10 @@ check("S16 report: sezione cambi involontari separata dai reversal",
 
 # S7 hooks.json
 h = json.loads((HERE.parent / "fable-director" / "hooks" / "hooks.json").read_text())["hooks"]
-ok7 = all(ev in h and any("model-switch.py" in hk["command"] and hk["command"].startswith("python3")
+ok7 = all(ev in h and any("model-switch.py" in hk["command"] and hk["command"].startswith('bash "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh"')
                           for g in h[ev] for hk in g["hooks"])
           for ev in ("PreModelSwitch", "PostModelSwitch"))
-check("S7 hooks.json: Pre e Post registrati con prefisso python3", ok7)
+check("S7 hooks.json: Pre e Post registrati via py.sh", ok7)
 
 # S8
 r = run([str(HOOK)], home, "{not json")

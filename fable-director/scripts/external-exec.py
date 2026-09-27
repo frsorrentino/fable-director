@@ -108,6 +108,12 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
+
+def pycmd(script):
+    """How to launch a plugin script in a message to the model or the user: through py.sh, with forward
+    slashes — on Windows `python3` is the Microsoft Store alias and Git Bash eats backslashes."""
+    return f'bash "{(Path(__file__).resolve().parent / "py.sh").as_posix()}" "{Path(script).as_posix()}"'
+
 # Windows cp1252: output con caratteri non-Latin-1 crasherebbe (issue #1).
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -416,10 +422,10 @@ Prefer paid models? Same config entries with your paid API key and
 "billing": "paid" — consent-gated (--paid-ok), never auto-proposed.
 
 Setup:
-  python3 "{here / 'cross-verify.py'}" --init
+  {pycmd(here / 'cross-verify.py')} --init
   (then put the key in the config or the indicated env var)
 Re-check:
-  python3 "{here / 'external-exec.py'}" --doctor [--ping]""")
+  {pycmd(here / 'external-exec.py')} --doctor [--ping]""")
         sys.exit(1)
     try:
         cfg = json.loads(CONFIG_PATH.read_text())
@@ -550,7 +556,7 @@ Re-check:
               + " · ".join(checks))
     print(f"\nresult: {'all configured' if not problems else str(problems) + ' provider(s) to fix'}"
           + ("" if ping else " (static — add --ping for a live check, 1 request per provider)"))
-    print(f"media tools (ffmpeg, whisper venv, edge-tts): python3 \"{here / 'media-doctor.py'}\"")
+    print(f"media tools (ffmpeg, whisper venv, edge-tts): {pycmd(here / 'media-doctor.py')}")
     sys.exit(0 if not problems else 1)
 
 

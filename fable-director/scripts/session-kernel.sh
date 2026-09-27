@@ -11,7 +11,12 @@
 # dopo una compattazione il testo iniettato può non esserci più.
 FD_INPUT=""
 [ -t 0 ] || FD_INPUT="$(cat 2>/dev/null || true)"
-FD_SOURCE="$(printf '%s' "$FD_INPUT" | python3 -c $'import json,sys\ntry:\n    d=json.load(sys.stdin)\n    print((d or {}).get("source") or "")\nexcept Exception:\n    print("")' 2>/dev/null || true)"
+# Interprete Python risolto UNA volta (Windows: `python3` e' l'alias dello Store,
+# vedi py.sh). Senza Python il kernel esce lo stesso, con l'avviso che i gate
+# sono spenti: prima usciva vuoto (l'ultimo passo era un pipe in python3).
+. "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" 2>/dev/null || true
+fd_py() { [ -n "${FD_PYTHON:-}" ] && "$FD_PYTHON" "$@"; }
+FD_SOURCE="$(printf '%s' "$FD_INPUT" | fd_py -c $'import json,sys\ntry:\n    d=json.load(sys.stdin)\n    print((d or {}).get("source") or "")\nexcept Exception:\n    print("")' 2>/dev/null || true)"
 
 # Cap dell'harness (Claude Code 2.1.260, letto dal binario): l'output di un
 # SessionStart vale come additionalContext, tetto 8000 caratteri / 200 righe,
@@ -27,9 +32,19 @@ fd_core() {
   printf 'FABLE-DIRECTOR KERNEL (delegation policy — full body: skill fable-director:delega-efficiente):\n'
   cat "${CLAUDE_PLUGIN_ROOT}/kernel.md" 2>/dev/null || true
 
+  if [ -z "${FD_PYTHON:-}" ]; then
+    printf '\nFD ⚠ NO PYTHON 3 on this machine (tried python3, python, py -3): the gates, the perimeter, the Stop check, telemetry and the statusline are OFF, whatever the lines above say. Tell the user once: install Python 3.8+ (python.org) and restart Claude Code.\n'
+  fi
+  # Windows (Git Bash): `python3` e i path nudi degli script finiscono sull'alias
+  # dello Store — il modello deve lanciarli dal launcher.
+  case "${OSTYPE:-}" in
+    msys*|cygwin*|win*)
+      printf '\nFD Windows: run every plugin script as bash "%s/scripts/py.sh" "%s/scripts/NAME.py" ARGS — never python3 or the bare path (python3 here is the Microsoft Store alias).\n' "${CLAUDE_PLUGIN_ROOT//\\//}" "${CLAUDE_PLUGIN_ROOT//\\//}" ;;
+  esac
+
   # Sentinella versione: avvisa se la cache in esecuzione è più vecchia della
   # sorgente marketplace locale (la cache non si auto-aggiorna mai).
-  python3 "${CLAUDE_PLUGIN_ROOT}/scripts/version-sentinel.py" 2>/dev/null || true
+  fd_py "${CLAUDE_PLUGIN_ROOT}/scripts/version-sentinel.py" 2>/dev/null || true
 
   # Sessione forkata: budget e telemetria sono per-cwd, non per-sessione. Padre e
   # fork condividono lo stesso file di budget — è un limite dichiarato nel README,
@@ -49,11 +64,11 @@ fd_core() {
 
   # Soft-deps shipped by the plugin (media-tools): added to the user's registry
   # once, never overwriting — one line only when something changes.
-  python3 "${CLAUDE_PLUGIN_ROOT}/scripts/soft-deps-sync.py" 2>/dev/null || true
+  fd_py "${CLAUDE_PLUGIN_ROOT}/scripts/soft-deps-sync.py" 2>/dev/null || true
 
   # Handoff from a previous session in this cwd (< 14 days): one line <= 110
   # chars, the file does the rest.
-  printf '%s' "$FD_INPUT" | python3 "${CLAUDE_PLUGIN_ROOT}/scripts/handoff.py" --resume-line 2>/dev/null || true
+  printf '%s' "$FD_INPUT" | fd_py "${CLAUDE_PLUGIN_ROOT}/scripts/handoff.py" --resume-line 2>/dev/null || true
 
   # Hint legenda one-shot: la statusline usa sigle compatte — una volta sola,
   # suggerisci al modello di indicare il comando che le spiega.
@@ -68,7 +83,7 @@ fd_core() {
   # dove non c'è evidenza (zero token), tetto 5 righe dove c'è. Saltato dopo una
   # compattazione: stessa sessione, avviso già dato, ripeterlo è solo costo.
   if [ "$FD_SOURCE" != "compact" ]; then
-    printf '%s' "$FD_INPUT" | python3 "${CLAUDE_PLUGIN_ROOT}/scripts/session-hindsight.py" 2>/dev/null || true
+    printf '%s' "$FD_INPUT" | fd_py "${CLAUDE_PLUGIN_ROOT}/scripts/session-hindsight.py" 2>/dev/null || true
   fi
 }
 FD_OUT="$(fd_core)"
@@ -88,6 +103,8 @@ rm -f "$HOME/.claude/fable-director/xf-onboarding-shown" 2>/dev/null || true
 # su Claude Code vecchi): compact/fork/clear sono la stessa sessione che
 # ricomincia, e i 3 tentativi finivano bruciati senza che nessuno rispondesse.
 case "$FD_SOURCE" in compact|fork|clear) XF_SKIP=1;; *) XF_SKIP=0;; esac
+# Senza Python la domanda porterebbe a comandi che non partono: nessun tentativo.
+[ -n "${FD_PYTHON:-}" ] || XF_SKIP=1
 if [ "$XF_SKIP" = "0" ] && [ ! -f "$XF_CFG" ] && [ ! -f "$XF_DONE" ]; then
   mkdir -p "$HOME/.claude/fable-director" 2>/dev/null || true
   N=$(cat "$XF_COUNT" 2>/dev/null || echo 0)
@@ -95,14 +112,14 @@ if [ "$XF_SKIP" = "0" ] && [ ! -f "$XF_CFG" ] && [ ! -f "$XF_DONE" ]; then
   if [ "$N" -lt 3 ]; then
     FD_XF="$(cat <<EOF
 
-XF ONBOARDING — ASK THE USER NOW (attempt $((N + 1))/3): external free-tier executors are not configured. Before anything else, ask ONE multiple-choice question with the AskUserQuestion tool (plain question if unavailable): header "Executors"; question "fable-director can route non-quality-sensitive batch work and cross-family verification to free external models, at zero Claude tokens. Connect one now?"; options (1) "Gemini — free API key" (Google AI Studio, daily-reset limits), (2) "Codex CLI — ChatGPT plan" (usage included in the plan), (3) "Both", (4) "No — don't ask again". On 1-3: run python3 "${CLAUDE_PLUGIN_ROOT}/scripts/external-exec.py" --doctor and follow its guidance (paid API keys: same config entries with billing:"paid", consent-gated, never auto-proposed). On 4: run touch "$XF_DONE" so this never reappears. If the user skips it, do nothing — asked again next session (max 3, then silence).
+XF ONBOARDING — ASK THE USER NOW (attempt $((N + 1))/3): external free-tier executors are not configured. Before anything else, ask ONE multiple-choice question with the AskUserQuestion tool (plain question if unavailable): header "Executors"; question "fable-director can route non-quality-sensitive batch work and cross-family verification to free external models, at zero Claude tokens. Connect one now?"; options (1) "Gemini — free API key" (Google AI Studio, daily-reset limits), (2) "Codex CLI — ChatGPT plan" (usage included in the plan), (3) "Both", (4) "No — don't ask again". On 1-3: run (cd "${CLAUDE_PLUGIN_ROOT}/scripts" && bash py.sh external-exec.py --doctor) and follow its guidance (paid API keys: same config entries with billing:"paid", consent-gated, never auto-proposed). On 4: run touch "$XF_DONE" so this never reappears. If the user skips it, do nothing — asked again next session (max 3, then silence).
 EOF
 )"
     # Il blocco entra solo se resta sotto il cap: altrimenti verrebbe troncato
     # a meta' e la domanda non arriverebbe mai — e il tentativo NON si consuma.
     if [ $(( ${#FD_OUT} + ${#FD_XF} + 1 )) -le "$FD_CAP_CHARS" ]; then
       FD_OUT="${FD_OUT}"$'\n'"${FD_XF}"
-      echo $((N + 1)) > "$XF_COUNT" 2>/dev/null || true
+      XF_NEXT=$((N + 1))   # scritto solo dopo che il testo e' uscito davvero (sotto)
     fi
   else
     : > "$XF_DONE" 2>/dev/null || true
@@ -127,9 +144,14 @@ if [ "$FD_SOURCE" != "compact" ]; then
 fi
 
 # Taglio finale, marcato: meglio una riga che dice "tagliato" di una parola a meta'.
-printf '%s\n' "$FD_OUT" | FD_CAP_CHARS="$FD_CAP_CHARS" FD_CAP_LINES="$FD_CAP_LINES" python3 -c '
+# Fail-open: se Python manca o fallisce, taglio in bash — il kernel esce comunque.
+FD_FINAL="$(printf '%s\n' "$FD_OUT" | FD_CAP_CHARS="$FD_CAP_CHARS" FD_CAP_LINES="$FD_CAP_LINES" fd_py -c '
 import os, sys
-t = sys.stdin.read()
+try:
+    sys.stdout.reconfigure(newline="\n")   # Windows: niente \r\n che consuma il cap
+except Exception:
+    pass
+t = sys.stdin.read().replace("\r\n", "\n")
 C, L = int(os.environ["FD_CAP_CHARS"]), int(os.environ["FD_CAP_LINES"])
 cut = False
 lines = t.split("\n")
@@ -140,4 +162,10 @@ if len(t) > C:
 if cut:
     t = t.rstrip() + "\n[fd: SessionStart output cut at the 8000-char/200-line hook cap]"
 sys.stdout.write(t if t.endswith("\n") else t + "\n")
-'
+' 2>/dev/null)"
+if [ -z "$FD_FINAL" ]; then
+  FD_FINAL="${FD_OUT:0:$FD_CAP_CHARS}"
+  [ "${#FD_OUT}" -gt "$FD_CAP_CHARS" ] && FD_FINAL="${FD_FINAL}"$'\n''[fd: SessionStart output cut at the 8000-char/200-line hook cap]'
+fi
+printf '%s\n' "$FD_FINAL" && [ -n "${XF_NEXT:-}" ] && { echo "$XF_NEXT" > "$XF_COUNT"; } 2>/dev/null
+exit 0

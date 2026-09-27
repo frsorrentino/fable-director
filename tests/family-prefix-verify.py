@@ -166,8 +166,8 @@ r = run("gemini: ciao")
 check("F8 provider non in config: una riga, turno normale", "not in cross-family.json" in r.stdout and "Normal turn" in r.stdout, r.stdout)
 # F9 hooks
 h = json.loads((HERE.parent / "fable-director" / "hooks" / "hooks.json").read_text())["hooks"]
-check("F9 hooks.json: family-prefix.py su UserPromptSubmit con python3",
-      any("family-prefix.py" in hk["command"] and hk["command"].startswith("python3")
+check("F9 hooks.json: family-prefix.py su UserPromptSubmit via py.sh",
+      any("family-prefix.py" in hk["command"] and hk["command"].startswith('bash "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh"')
           for g in h["UserPromptSubmit"] for hk in g["hooks"]))
 
 # F10/F11 filtro sul testo esterno (testi sintetici)

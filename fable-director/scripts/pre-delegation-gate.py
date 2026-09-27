@@ -35,6 +35,12 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+
+def pycmd(script):
+    """How to launch a plugin script in a message to the model or the user: through py.sh, with forward
+    slashes — on Windows `python3` is the Microsoft Store alias and Git Bash eats backslashes."""
+    return f'bash "{(Path(__file__).resolve().parent / "py.sh").as_posix()}" "{Path(script).as_posix()}"'
+
 # Windows cp1252: senza utf-8 il deny con ≈ → × crasha e il fail-open lo
 # ingoia → ogni delega senza budget passerebbe in silenzio (issue #1).
 try:
@@ -239,9 +245,9 @@ def external_failover(data, budget):
                 f"('{budget.get('type')}', effort {budget.get('effort') or 'n/d'}, "
                 f"data-class {budget.get('data_class') or 'n/d'}) is eligible for the "
                 f"external free route; '{prov}' has credit today. Ready to run per item:\n"
-                f"  python3 {ee} --provider {prov} --spec-file SPEC.md --schema-json "
+                f"  {pycmd(ee)} --provider {prov} --spec-file SPEC.md --schema-json "
                 f"--effort low --type {budget.get('type')} --out OUT.json\n"
-                f"and record the switch: python3 {tel} budget-amend --route external "
+                f"and record the switch: {pycmd(tel)} budget-amend --route external "
                 f"--reason \"quota {float(used):.0f}%\". Quality-sensitive items stay on Claude.")
     except Exception:
         return None
@@ -1080,7 +1086,7 @@ def main():
             + "-" + hashlib.sha256(s.encode()).hexdigest()[:8])
     bfile = Path.home() / ".claude" / "fable-director" / "budgets" / f"{slug}.json"
     telemetry = Path(__file__).with_name("fd-telemetry.py")
-    open_cmd = (f'{telemetry} budget-open --task "..." --expected-output N '
+    open_cmd = (f'{pycmd(telemetry)} budget-open --task "..." --expected-output N '
                 f'[--expected-input N] [--type slug] '
                 f'[--route agent|workflow] [--reason "axis..."]')
 

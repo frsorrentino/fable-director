@@ -44,6 +44,12 @@ import sys
 import time
 from pathlib import Path
 
+
+def pycmd(script):
+    """How to launch a plugin script in a message to the model or the user: through py.sh, with forward
+    slashes — on Windows `python3` is the Microsoft Store alias and Git Bash eats backslashes."""
+    return f'bash "{(Path(__file__).resolve().parent / "py.sh").as_posix()}" "{Path(script).as_posix()}"'
+
 try:
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
@@ -140,12 +146,12 @@ def ensure_faster_whisper(opts):
                if opts["--venv"] else VENV_PY)
     if os.environ.get("FD_TRANSCRIBE_REEXEC") == "1":
         die(f"faster_whisper not importable even from {venv_py} — reinstall: "
-            f"python3 \"{Path(__file__).with_name('media-doctor.py')}\" --setup",
+            f"{pycmd(Path(__file__).with_name('media-doctor.py'))} --setup",
             status="unavailable")
     if not venv_py.is_file():
         die("faster-whisper not installed and no venv at "
-            f"{venv_py.parent.parent} — set it up (explicit, ~370 MB): python3 "
-            f"\"{Path(__file__).with_name('media-doctor.py')}\" --setup "
+            f"{venv_py.parent.parent} — set it up (explicit, ~370 MB): "
+            f"{pycmd(Path(__file__).with_name('media-doctor.py'))} --setup "
             f"[--prefetch small]", status="unavailable")
     env = dict(os.environ, FD_TRANSCRIBE_REEXEC="1")
     os.execve(str(venv_py), [str(venv_py), str(Path(__file__).resolve())]

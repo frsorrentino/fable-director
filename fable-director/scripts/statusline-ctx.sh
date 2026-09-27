@@ -16,6 +16,11 @@
 
 input=$(cat)
 
+# Interprete risolto una volta per refresh (py.sh: su Windows `python3` e' l'alias
+# dello Store; il percorso trovato e' in cache, niente probe ogni 5 s). Senza
+# Python la statusline lo dice, invece di restare vuota.
+. "$(dirname "$0")/py.sh" 2>/dev/null || { printf 'fable-director: no Python 3 found — install Python 3.8+\n'; exit 0; }
+
 # Diagnostica: se esiste il flag file, salva l'ultimo stdin ricevuto (per capire
 # quali campi il piano/account corrente espone). Attiva: touch <config>/fable-director/.statusline-debug
 FD_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/fable-director"
@@ -30,7 +35,7 @@ badge=""
 # Campi assenti → "-" → il segmento si omette. Il budget file è di fable-director
 # (fd-telemetry.py budget-open / stop-budget-check.py): qui SOLO lettura.
 read -r model pct rl rlt wk wkt bdg xf dlg cache cmp grind eff bar win lk fw prn pru stuck vrf prio dir <<EOF
-$(printf '%s' "$input" | python3 -c '
+$(printf '%s' "$input" | "$FD_PYTHON" -c '
 import json,sys,os,time
 from pathlib import Path
 model=pct=rl=rlt=wk=wkt=bdg=xf=dlg=cache=cmp=eff=bar=win=dir="-"
@@ -583,6 +588,7 @@ vrf=str(vrf).replace(" ",","); prio=str(prio).replace(" ",",")
 print(model,pct,rl,rlt,wk,wkt,bdg,xf,dlg,cache,cmp,grind,eff,bar,win,lk,fw,prn,pru,stuck,vrf,prio,dir)
 ' 2>/dev/null)
 EOF
+dir=${dir%$'\r'}   # Windows: print() chiude con \r\n, il \r finiva nel nome cartella
 
 # [MODE 1.39] plain (default): parole, solo eccezioni — resa in
 # statusline-plain.py con gli stessi token. expert: la riga storica qui sotto.
@@ -590,7 +596,7 @@ EOF
 # (statusline-install.sh --expert / --plain).
 FD_MODE="${FD_STATUSLINE_MODE:-}"
 if [ -z "$FD_MODE" ] && [ -f "$FD_DIR/statusline.json" ]; then
-  FD_MODE=$(python3 -c 'import json,sys
+  FD_MODE=$("$FD_PYTHON" -c 'import json,sys
 try: print((json.load(open(sys.argv[1])) or {}).get("mode") or "")
 except Exception: print("")' "$FD_DIR/statusline.json" 2>/dev/null)
 fi
@@ -600,7 +606,7 @@ if [ "$FD_MODE" != "expert" ]; then
   FD_SL_CMP="$cmp" FD_SL_GRIND="$grind" FD_SL_EFF="$eff" FD_SL_WIN="$win" FD_SL_PRN="$prn" \
   FD_SL_PRU="$pru" FD_SL_STUCK="$stuck" FD_SL_VRF="$vrf" FD_SL_PRIO="$prio" \
   FD_SL_BADGE="$badge" FD_SL_LK="$lk" FD_SL_DIR="$dir" \
-  python3 "$(dirname "$0")/statusline-plain.py"
+  "$FD_PYTHON" "$(dirname "$0")/statusline-plain.py"
   exit 0
 fi
 

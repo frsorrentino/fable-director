@@ -8,7 +8,7 @@ description: Use when a new Claude model arrives or becomes the default (e.g. Cl
 Two passes, the first at zero model tokens:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/model-rules-check.py" --model <model id> --audit-signals
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" "${CLAUDE_PLUGIN_ROOT}/scripts/model-rules-check.py" --model <model id> --audit-signals
 ```
 
 Without `--model` it runs every rules file. Exit 0 = clean, 1 = findings (the signals never change the exit code).

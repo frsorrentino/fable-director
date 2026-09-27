@@ -83,4 +83,4 @@ Renders are event-driven **plus** a 5-second timer (`refreshInterval`, written b
 
 With `"statusline_links": true` in `~/.claude/fable-director/plan-<acct>.json`, four segments become OSC 8 hyperlinks (Ctrl+click): model → status.anthropic.com, `5H`/`7D`/`✦≤` → your plan's usage page (where the real per-model window lives), `xf` → AI Studio usage, `pr #42` → the pull request. **Off by default on purpose**: on terminals that open links in-place (some webview-based ones) a click can replace the terminal page and kill your session. Test yours first, in a throwaway terminal window: `printf '\e]8;;https://example.com\e\\test\e]8;;\e\\\n'` — enable only if Ctrl+click opens a **new** browser tab. URL length never counts toward the width degradation.
 
-Health check for external free-tier models: `python3 <plugin>/scripts/external-exec.py --doctor [--ping]`
+Health check for external free-tier models: `bash <plugin>/scripts/py.sh <plugin>/scripts/external-exec.py --doctor [--ping]`

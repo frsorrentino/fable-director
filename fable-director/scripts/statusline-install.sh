@@ -48,7 +48,7 @@ fi
 
 # Tutta la logica di merge in python: parsing/scrittura JSON deterministici,
 # preserva le altre chiavi, non tocca una statusLine di terzi.
-CLAUDE_SETTINGS="$SETTINGS" FD_TARGET="$TARGET" FD_MODE="$MODE" FD_OPTOUT="$OPTOUT" python3 - <<'PY'
+CLAUDE_SETTINGS="$SETTINGS" FD_TARGET="$TARGET" FD_MODE="$MODE" FD_OPTOUT="$OPTOUT" bash "$SCRIPT_DIR/py.sh" - <<'PY'
 import json, os, sys, shutil
 from pathlib import Path
 
