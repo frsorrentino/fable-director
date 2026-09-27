@@ -9,6 +9,7 @@ Full release history. The README shows only the latest few entries.
   - **The kernel always loads.** Its final cap falls back to bash when Python is missing, and the kernel then says that the gates are off. The executor-onboarding question no longer uses up an attempt when its text was not delivered. On Windows the kernel shows how to launch the plugin's scripts.
   - **`--verify` runs in Git Bash on Windows** instead of `cmd.exe`, where POSIX quoting broke. `python3` and `python` in the command point to the hook's own interpreter.
   - **Commands and messages** (`/status`, `/handoff`, `/review`, `verifica-modello`, the delegation gate's deny text, the doctors' hints) show `bash …/py.sh …` with forward slashes, a form that runs on Windows too.
+  - **Error reports on Windows** (claude-observe 75afa20): its hooks go through its own launcher, and file and pipe I/O is UTF-8, so errors with `→`, emoji or CJK are no longer lost.
   - README: a Windows section with what you need and what is not tested.
 
 - **1.52.0 — ready for the Anthropic directory, and the model check on the native `/doctor prompt-audit`.**
