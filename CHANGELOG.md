@@ -10,6 +10,7 @@ Full release history. The README shows only the latest few entries.
   - **`--verify` runs in Git Bash on Windows** instead of `cmd.exe`, where POSIX quoting broke. `python3` and `python` in the command point to the hook's own interpreter.
   - **Commands and messages** (`/status`, `/handoff`, `/review`, `verifica-modello`, the delegation gate's deny text, the doctors' hints) show `bash …/py.sh …` with forward slashes, a form that runs on Windows too.
   - **Error reports on Windows** (claude-observe 75afa20): its hooks go through its own launcher, and file and pipe I/O is UTF-8, so errors with `→`, emoji or CJK are no longer lost.
+  - **No user name in error reports from Windows** (claude-observe d3fa492): the home folder is removed in every form (`C:\Users\…`, `C:/Users/…`, `/c/Users/…`, `/mnt/c/Users/…`, `\\?\C:\…`, doubled backslashes inside JSON, any case, names with spaces), and so is the user name when it appears alone as a path segment. Records written before are cleaned again when the draft is built.
   - README: a Windows section with what you need and what is not tested.
 
 - **1.52.0 — ready for the Anthropic directory, and the model check on the native `/doctor prompt-audit`.**

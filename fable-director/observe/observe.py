@@ -252,14 +252,52 @@ def account_name():
 
 
 # ------------------------------------------------------------------ privacy: redattore e normalizzazione
+# una home in qualunque forma (27/09, invio anonimo da Windows): C:\Users\x, C:/Users/x, /c/Users/x, /mnt/c/Users/x,
+# /cygdrive/c/Users/x, \\?\C:\Users\x, i \\ dei traceback dentro JSON, /home/x, /Users/x; maiuscole o no. Di qualunque utente
+SEP = r"[\\/]+"
+DRIVE = r"(?:(?:[\\/]{2}\?[\\/]+)?\b[a-z]:|/mnt/[a-z]|/cygdrive/[a-z]|/[a-z](?=[\\/]))"
+SEG = r"[^\\/\s\"'`<>|:*?,;()\[\]]"
+# il nome della cartella puo' avere spazi («Mario Rossi»): con gli spazi solo se dopo viene un separatore
+HOME_ANY_RE = re.compile(rf"(?i){DRIVE}?{SEP}(?:users|home|documents and settings){SEP}(?:{SEG}+(?: {SEG}+)+(?=[\\/])|{SEG}+)")
+
+
+def home_res():
+    """Le home di questa macchina come regex senza distinzione di separatore, lettera di unita' e maiuscole (anche una
+    USERPROFILE fuori da Users, D:\\Profili\\x), e il nome utente come segmento di percorso."""
+    homes = {os.path.expanduser("~"), os.environ.get("USERPROFILE") or "", os.environ.get("HOME") or ""}
+    pats = []
+    for h in sorted(homes, key=len, reverse=True):
+        parts = [x for x in re.split(r"[\\/]+", h) if x and x != "?"]
+        if not parts:
+            continue
+        drive = re.fullmatch(r"([A-Za-z]):?", parts[0]) if len(parts) > 1 else None
+        if drive and (parts[0].endswith(":") or len(parts[0]) == 1):
+            d = drive.group(1)
+            head = rf"(?:(?:[\\/]{{2}}\?[\\/]+)?\b{d}:|/mnt/{d}|/cygdrive/{d}|/{d}(?=[\\/]))"
+            parts = parts[1:]
+        else:
+            head = ""
+        pats.append(head + "".join(SEP + re.escape(x) for x in parts))
+    names = {os.path.basename(re.sub(r"[\\/]+$", "", h.replace("\\", "/"))) for h in homes if h}
+    names |= {os.environ.get(k) or "" for k in ("USERNAME", "USER", "LOGNAME")}
+    names = sorted((n for n in names if len(n) >= 2 and n.lower() not in ("users", "home")), key=len, reverse=True)
+    return ([re.compile(rf"(?i){p}(?![^\\/\s\"'`<>|:*?,;()\[\]])") for p in pats],
+            re.compile(rf"(?i)(?<=[\\/])(?:{'|'.join(map(re.escape, names))})(?=[\\/\s\"'`<>|:*?,;()\[\]]|$)") if names else None)
+
+
+HOME_RES, USER_SEG_RE = home_res()
+
+
 def scrub(text, limit=300):
     """Il testo di un errore come si puo' tenere: niente home, email, query degli URL, segreti, valori digitati."""
     t = str(text or "")
-    home = os.path.expanduser("~")
-    if home and home != "/":
-        t = t.replace(home, "~")
     t = re.sub(r"[\w.+-]+@[\w-]+\.[\w.-]+", "<EMAIL>", t)
     t = re.sub(r"(https?://[^/\s?#\"'»]+)[^\s\"'»]*", r"\1/…", t)
+    for r in HOME_RES:
+        t = r.sub("~", t)
+    t = HOME_ANY_RE.sub("~", t)
+    if USER_SEG_RE is not None:
+        t = USER_SEG_RE.sub("<USER>", t)
     t = re.sub(r"(?i)\b(token|password|passwd|secret|api[_-]?key|authorization|bearer)(\"?\s*[:=]\s*|\s+)\S+", r"\1\2<SECRET>", t)
     t = re.sub(r"(?i)\b(value_after|value|text)(\"?\s*[:=]?\s*)(\"[^\"]*\"|'[^']*'|«[^»]*»)", r"\1\2<STR>", t)
     t = re.sub(r"\b(?=[A-Za-z0-9_\-+/]*\d)(?=[A-Za-z0-9_\-+/]*[A-Za-z])[A-Za-z0-9_\-+/=]{24,}\b", "<SECRET>", t)
@@ -417,6 +455,10 @@ def claude_code_version():
     exe = os.environ.get("CLAUDE_CODE_EXECPATH") or ""
     if VERSION_RE.fullmatch(os.path.basename(exe)):
         return os.path.basename(exe)
+    # AI_AGENT=claude-code_2-1-283_harness: su Windows (npm) l'unica traccia, CLAUDE_CODE_EXECPATH li' non c'e' (27/09)
+    m = re.fullmatch(r"claude-code_(\d+(?:-\d+)+)(?:_.*)?", os.environ.get("AI_AGENT") or "")
+    if m:
+        return m.group(1).replace("-", ".")
     try:   # installazione npm (su Windows sempre): <pacchetto>/bin/claude.exe → <pacchetto>/package.json
         pkg = json.load(open(Path(exe).parent.parent / "package.json", encoding="utf-8")) if exe else {}
         if str(pkg.get("name") or "").startswith("@anthropic-ai/claude-code") and VERSION_RE.fullmatch(str(pkg.get("version") or "")):
@@ -948,7 +990,7 @@ def draft(tool, recs, target=None, security=False):
         env_ = ", ".join(x for x in (f"{tool} {c['tool_version']}" if c.get("tool_version") else "",
                                      f"Claude Code {c['claude_code']}" if c.get("claude_code") else "", c.get("model") or "",
                                      c.get("os") or "") if x)
-        rows.append(f"- `{v.get('call')}` — {scrub(v.get('error') or '', 300)} (×{v.get('count')}, "
+        rows.append(f"- `{scrub(v.get('call') or '', 200)}` — {scrub(v.get('error') or '', 300)} (×{v.get('count')}, "
                     f"{when(v.get('first_seen'))}–{when(v.get('last_seen'))}{'; ' + env_ if env_ else ''}"
                     f"{'; after ' + ', '.join(c['recent_tools']) if c.get('recent_tools') else ''})")
         if v.get("workaround") and not v.get("anonymized"):
@@ -963,7 +1005,7 @@ def draft(tool, recs, target=None, security=False):
                           "(https://github.com/frsorrentino/claude-observe), for the maintainers only — never a public issue. "
                           "Parameter values are never stored.", "", *rows])
     else:
-        title = f"[{tool}] field observations: {kinds}, most frequent `{vs[0].get('call')}`"
+        title = f"[{tool}] field observations: {kinds}, most frequent `{scrub(vs[0].get('call') or '', 200)}`"
         body = "\n".join([f"Collected on {time.strftime('%Y-%m-%d')} by claude-observe (https://github.com/frsorrentino/claude-observe): "
                           "errors recorded by a hook and notes added by hand; parameter values are never stored.", "", *rows])
     text = redact_out(f"{title}\n\n{body}", tool)
