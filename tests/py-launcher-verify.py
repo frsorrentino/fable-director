@@ -115,8 +115,9 @@ try:
     bad = [c for c in cmds if c.lstrip().startswith("python")]
     viapy = [c for c in cmds if ".py" in c.split()[-1] or ".py\"" in c]
     check("L6a hooks.json: nessun comando che inizia con python", not bad, bad)
-    check("L6b hooks.json: ogni script .py passa da py.sh",
-          all('scripts/py.sh\\"' in json.dumps(c) or "scripts/py.sh\"" in c for c in cmds if ".py" in c), viapy)
+    check("L6b hooks.json: ogni script .py passa da py.sh (scripts/ o observe/)",
+          all(c.startswith(('bash "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" ', 'bash "${CLAUDE_PLUGIN_ROOT}/observe/py.sh" '))
+              for c in cmds if ".py" in c), viapy)
 
     # L7
     offenders = []

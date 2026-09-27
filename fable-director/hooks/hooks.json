@@ -13,7 +13,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/py.sh\" \"${CLAUDE_PLUGIN_ROOT}/observe/observe.py\" session-start",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/observe/py.sh\" \"${CLAUDE_PLUGIN_ROOT}/observe/observe.py\" session-start",
             "timeout": 10
           }
         ]
@@ -138,7 +138,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/py.sh\" \"${CLAUDE_PLUGIN_ROOT}/observe/observe.py\" stop",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/observe/py.sh\" \"${CLAUDE_PLUGIN_ROOT}/observe/observe.py\" stop",
             "timeout": 5
           }
         ]
@@ -181,7 +181,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/py.sh\" \"${CLAUDE_PLUGIN_ROOT}/observe/observe.py\" hook",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/observe/py.sh\" \"${CLAUDE_PLUGIN_ROOT}/observe/observe.py\" hook",
             "timeout": 5
           }
         ]
