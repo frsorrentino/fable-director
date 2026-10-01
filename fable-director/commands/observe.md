@@ -28,5 +28,3 @@ bash "${CLAUDE_PLUGIN_ROOT}/observe/py.sh" "${CLAUDE_PLUGIN_ROOT}/observe/observ
   exposed, code run that was not asked for, data leaving the computer. `--severity high`: a defect of ours that blocks
   the work (data lost, a wrong command run, a session lost). You set these flags yourself from what you saw; never ask
   the user to classify. Never put secrets, passwords, tokens or a client's personal data in the text.
-- What a hook cannot see, specific to fable-director: a skill that misled you (delega-efficiente, analisi-video,
-  verifica-modello), a script that "succeeded" with a wrong result, and above all the workaround that worked.

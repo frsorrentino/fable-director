@@ -2,14 +2,14 @@
 
 Full release history. The README shows only the latest few entries.
 
-## Unreleased
-
-- **Session telemetry survives `claude -p`.** Since Claude Code 2.1.287 every SessionEnd hook shares one 1.5 s bound, and the `session-summary` hook was cancelled mid-work (Python alone takes up to 1 s to start). The hook now goes through `scripts/detach.sh`, which hands stdin to a detached process and returns in about 0.2 s.
-- **A `verify` skill for this repository** (`.claude/skills/verify`). Claude Code 2.1.286 runs a project or user skill named `verify` before every commit that is not docs-only or tests-only. This one runs the test suites and, since the repository is public, a privacy check on the staged diff: home path, git email, API keys, private corpora.
-- **Delegation skill: Claude Code 2.1.285-2.1.287.** Forks keep the parent's permission mode. Auto-mode subagents stop at the report. Stalled Workflow agents no longer restart from the prompt. CLAUDE.md is no longer attached twice after a resume. A fallback from 1M to 200K calls for a handoff.
-- **Playbook: «You should know» next to `fd-verifier`.** They complement each other: the built-in side agent watches passively and only on screen (it draws nothing under `claude -p`). The done stays with `fd-verifier` and the tests.
-
 ## 1.52.x
+
+- **1.52.4 — session telemetry with `claude -p`, and Claude Code 2.1.285-2.1.287.**
+  - **Session telemetry survives `claude -p`.** Since Claude Code 2.1.287 every SessionEnd hook shares one 1.5 s bound, and the `session-summary` hook was cancelled mid-work (Python alone takes up to 1 s to start). The hook now goes through `scripts/detach.sh`, which hands stdin to a detached process and returns in about 0.2 s.
+  - **A `verify` skill for this repository** (`.claude/skills/verify`). Claude Code 2.1.286 runs a project or user skill named `verify` before every commit that is not docs-only or tests-only. This one runs the test suites and, since the repository is public, a privacy check on the staged diff: home path, git email, API keys, private corpora.
+  - **Delegation skill: Claude Code 2.1.285-2.1.287.** Forks keep the parent's permission mode. Auto-mode subagents stop at the report. Stalled Workflow agents no longer restart from the prompt. CLAUDE.md is no longer attached twice after a resume. A fallback from 1M to 200K calls for a handoff.
+  - **Playbook: «You should know» next to `fd-verifier`.** They complement each other: the built-in side agent watches passively and only on screen (it draws nothing under `claude -p`). The done stays with `fd-verifier` and the tests.
+  - **Error reports** (claude-observe 1822704): the anonymous option is ready in the code but stays hidden, since this plugin configures no endpoint. A network failure on sending is retried once, and a refusal from the service is shown as it is.
 
 - **1.52.3 — steady quota with several sessions on one account.**
   - **The quota no longer jumps between sessions.** Each session of the same account rewrote `quota-<account>.json` with its own last reading, so a session idle for hours could put back an old value (62% → 58% → 61%). The statusline now merges with the file: in the same window the higher value wins, a later reset (new window) wins, an earlier one is ignored, and a reading without the 5-hour bucket keeps the one on file until that window expires.
