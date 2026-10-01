@@ -47,6 +47,14 @@ avviso se il binario `claude` non c'è.
 - cosa scrive, cioè gli stessi file di oggi;
 - che senza il modulo il plugin funziona come prima.
 
+## Decisione presa in implementazione
+
+Il gate del mod non entra nel plugin. Fa risparmiare tempo solo quando nega, circa 1 s per
+ogni rifiuto. Quando lascia passare, il gate Python gira comunque. Per pareggiare il Python
+sul deny il mod dovrebbe duplicare il testo del rifiuto e la telemetria `gate_deny`: due
+copie da tenere allineate per un secondo risparmiato. Entra solo `agent.spawn`, che è una
+capacità nuova. Senza un consumatore, anche `FD_MODS` non entra.
+
 ## Aperti, da chiudere prima di pubblicare
 
 - **Windows.** Va verificato su Windows che `$.env.get('HOME')` restituisca qualcosa, oppure si

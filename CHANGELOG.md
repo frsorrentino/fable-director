@@ -2,6 +2,14 @@
 
 Full release history. The README shows only the latest few entries.
 
+## Unreleased
+
+- **1.53.0 — a hooks module next to the classic hooks (Claude Code ≥ 2.1.287).**
+  - **Quotas up to date without a statusline.** The module takes the figures the engine pushes after each turn (`session.measure`) and writes `quota-<account>.json`, its history and the claude-hud snapshot. It uses the same merge rule as the statusline, so the two never disagree. The gates and `/fable-director:status` now see the real quota under `claude -p`, on the phone and over Remote Control.
+  - **`fd-executor` always on sonnet.** `agent.spawn` pins its model even when the caller passes `model: "opus"`. Measured: asked opus, it ran on `claude-sonnet-5-5`.
+  - **Nothing changes where the module does not load.** On older Claude Code, or with Mods off for the account, the classic hooks run as before (checked on 2.1.284). The delegation gate stays in Python: a module copy would save about one second only on a deny, at the price of two deny texts and two telemetry paths.
+  - `release.sh` validates and tests the module (`claude plugin test`) and leaves the engine's generated types out of the zip.
+
 ## 1.52.x
 
 - **1.52.4 — session telemetry with `claude -p`, and Claude Code 2.1.285-2.1.287.**

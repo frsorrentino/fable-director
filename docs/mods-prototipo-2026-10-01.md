@@ -1,7 +1,7 @@
 # Mods prototipo — Claude Code 2.1.287 (2026-10-01)
 
-Tre mod in `mods/`, nessuno collegato al plugin. Si caricano a mano con
-`claude --plugin-dir mods/<nome>`. Ogni mod ha i suoi test (`claude plugin test mods/<nome>`).
+Tre mod prototipo. Il codice è nel commit `a07ec85`: la cartella `mods/` è stata tolta quando
+quello che serviva è entrato nel plugin (`fable-director/hooks/mods/`, 1.53.0).
 
 ## fd-usage — quote e costo da `session.measure`
 

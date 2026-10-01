@@ -42,6 +42,13 @@ python3 tests/transcript-contract/run.py
 for t in tests/*.py; do
   python3 "$t"
 done
+# hooks module (Claude Code >= 2.1.287): its tests run on the engine itself
+if command -v claude >/dev/null 2>&1; then
+  claude plugin validate fable-director
+  claude plugin test fable-director
+else
+  echo "WARN: claude not on PATH, hooks module tests skipped"
+fi
 
 echo "== 3/6 zip =="
 ZIP="../fable-director-plugin-$VER.zip"
@@ -50,7 +57,7 @@ rm -f "$ZIP"
     fable-director-marketplace/.claude-plugin \
     fable-director-marketplace/INSTALL.md \
     fable-director-marketplace/fable-director \
-    -x '*/.git/*' '*/__pycache__/*' '*.bak*' '*.pyc' )
+    -x '*/.git/*' '*/__pycache__/*' '*.bak*' '*.pyc' '*/.claude-plugin/types/*' )
 unzip -l "$ZIP" | tail -1
 
 echo "== 4/6 commit + push =="

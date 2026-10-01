@@ -13,6 +13,7 @@ fable-director is a Claude Code plugin that runs on your computer. It has no ser
 ## What the plugin writes on your disk
 
 - `~/.claude/fable-director/`: telemetry (`telemetry.db`, token counts and events, never message text), open budgets and receipts, subagent and workflow state, handoffs, the media cache (contact sheets and transcripts, per file), the anonymizer maps (`anonymizer/maps/`, mode 0600, the only place where original values sit next to their placeholders), the optional venv for local transcription (`tools/venv`).
+- On Claude Code ≥ 2.1.287 with Mods on, the plugin's hooks module writes the same quota files the statusline writes (`quota-<account>.json`, `quota-history-<account>.jsonl`, `usage-snapshot-<account>.json` in `~/.claude/fable-director/`) and reads nothing else. It sends nothing anywhere.
 - `~/.claude/settings.json`: the `statusLine` entry at the first session, and, for an install from a GitHub marketplace, `extraKnownMarketplaces.<name>.autoUpdate: true` once. Both are announced in-session, both keep a backup of the file next to it, and an `autoUpdate` you set yourself (true or false) is never touched.
 - `${XDG_STATE_HOME:-~/.local/state}/claude-observe/fable-director.jsonl` (mode 0600): failures of the plugin's own scripts, with every argument value replaced by `<ARG>` and the error text scrubbed of home paths, emails, URL queries and secrets. Disable with `{"enabled": false}` in `~/.config/claude-observe/config.json`.
 - With `/fable-director:handoff --here`: one Markdown file in the project's `docs/`, on your request.

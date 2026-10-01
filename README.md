@@ -237,7 +237,8 @@ gracefully when absent.
 ## Requirements
 
 Claude Code ≥ 2.1.x (for the `context_window` / `rate_limits` statusline fields;
-older versions degrade silently), Python 3.8+ and `bash`; `ffmpeg`
+older versions degrade silently; ≥ 2.1.287 with Mods on also loads the plugin's
+hooks module, which only adds), Python 3.8+ and `bash`; `ffmpeg`
 and `ffprobe` only for the video and audio tools (`media-doctor.py` checks
 them). Keep
 `maxEffortLevel` at or above `high`, or set it per model: a lower cap silently
