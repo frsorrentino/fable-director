@@ -149,7 +149,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/py.sh\" \"${CLAUDE_PLUGIN_ROOT}/scripts/fd-telemetry.py\" session-summary",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/detach.sh\" \"${CLAUDE_PLUGIN_ROOT}/scripts/fd-telemetry.py\" session-summary",
             "timeout": 30
           }
         ]

@@ -2,6 +2,10 @@
 
 Full release history. The README shows only the latest few entries.
 
+## Unreleased
+
+- **Session telemetry survives `claude -p`.** Since Claude Code 2.1.287 every SessionEnd hook shares one 1.5 s bound, and the `session-summary` hook was cancelled mid-work (Python alone takes up to 1 s to start). The hook now goes through `scripts/detach.sh`, which hands stdin to a detached process and returns in about 0.2 s.
+
 ## 1.52.x
 
 - **1.52.3 — steady quota with several sessions on one account.**

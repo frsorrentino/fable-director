@@ -115,9 +115,13 @@ try:
     bad = [c for c in cmds if c.lstrip().startswith("python")]
     viapy = [c for c in cmds if ".py" in c.split()[-1] or ".py\"" in c]
     check("L6a hooks.json: nessun comando che inizia con python", not bad, bad)
-    check("L6b hooks.json: ogni script .py passa da py.sh (scripts/ o observe/)",
-          all(c.startswith(('bash "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" ', 'bash "${CLAUDE_PLUGIN_ROOT}/observe/py.sh" '))
+    # detach.sh (SessionEnd entro il limite di 1,5 s) passa a sua volta da py.sh: L6c.
+    check("L6b hooks.json: ogni script .py passa da py.sh (scripts/ o observe/) o da detach.sh",
+          all(c.startswith(('bash "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" ', 'bash "${CLAUDE_PLUGIN_ROOT}/observe/py.sh" ',
+                            'bash "${CLAUDE_PLUGIN_ROOT}/scripts/detach.sh" '))
               for c in cmds if ".py" in c), viapy)
+    det = (PLUGIN / "scripts" / "detach.sh").read_text()
+    check("L6c detach.sh lancia lo script con bash py.sh", 'bash "$here/py.sh"' in det, det[:200])
 
     # L7
     offenders = []
