@@ -228,6 +228,7 @@ stdin = json.dumps({"model": {"display_name": "Fable 5.1", "id": "claude-fable-5
                                                          "cache_read_input_tokens": 295000, "output_tokens": 50}},
                     "rate_limits": {"five_hour": {"used_percentage": 22, "resets_at": RESET_AT},
                                     "seven_day": {"used_percentage": 10, "resets_at": RESET_AT + 300000}}})
+QUOTA.unlink(missing_ok=True)  # fusione a pari reset (1.52.3): il 75% di set_quota vincerebbe sul 22%
 r = run(["bash", str(SCRIPTS / "statusline-ctx.sh")], stdin)
 snap = json.loads((BASE / "sessions" / f"{SID}.json").read_text())
 q = json.loads(QUOTA.read_text())

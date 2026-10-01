@@ -4,6 +4,9 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.52.x
 
+- **1.52.3 — steady quota with several sessions on one account.**
+  - **The quota no longer jumps between sessions.** Each session of the same account rewrote `quota-<account>.json` with its own last reading, so a session idle for hours could put back an old value (62% → 58% → 61%). The statusline now merges with the file: in the same window the higher value wins, a later reset (new window) wins, an earlier one is ignored, and a reading without the 5-hour bucket keeps the one on file until that window expires.
+  - **Same rule for `usage-snapshot-<account>.json`**, and `quota-history` gets a row only when the merged value changes: the `fd-status` burn-rate no longer sees fake drops.
 - **1.52.2 — contact sheets on Windows.**
   - **`video-sheet.sh` burns the timestamps on Windows.** The Windows ffmpeg builds ship no `fonts.conf`, so `drawtext` failed with a fontconfig error and no sheet came out. When fontconfig has no default font, the script now uses a font file that exists on the OS (`%WINDIR%/Fonts/arial.ttf`, the macOS Arial, DejaVu Sans). With no usable font it still makes the sheet, without timestamps, and says so in `DETAIL`. `FD_SHEET_FONT=<file>` picks the font.
   - **Scene mode works on ffmpeg 8 and later**, which removed `-vsync`: the script uses `-fps_mode` when ffmpeg has it.

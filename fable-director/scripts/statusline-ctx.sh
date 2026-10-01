@@ -110,12 +110,40 @@ try:
             import hashlib as _hq
             acct=_hq.sha256((os.environ.get("CLAUDE_CONFIG_DIR") or str(Path.home()/".claude")).encode()).hexdigest()[:8]
             qf=qd/f"quota-{acct}.json"
-            new=json.dumps(q)
-            # write-if-changed + atomica: render frequente, lettori concorrenti
+            # Fusione col file esistente (1.52.3): piu sessioni dello stesso
+            # account ridisegnano a turno, ognuna con la SUA ultima lettura;
+            # senza fusione vince chi ridisegna per ultima, anche se ferma da
+            # ore. Dentro una finestra la quota non scende mai: a pari reset il
+            # massimo e il dato piu recente; reset piu avanti = finestra nuova,
+            # vince il nuovo; reset piu indietro = lettura vecchia, si ignora.
+            # Un bucket assente nella lettura non cancella quello presente,
+            # salvo finestra gia scaduta.
             old_q=qf.read_text() if qf.is_file() else None
-            if new!=old_q:
+            try: old_d=json.loads(old_q) if old_q else {}
+            except Exception: old_d={}
+            if not isinstance(old_d,dict): old_d={}
+            def _rs(x):
+                try: return float(x)
+                except Exception: return None
+            mq=dict(q)
+            for pk,rk in (("weekly_used_pct","weekly_resets_at"),("five_hour_used_pct","five_hour_resets_at")):
+                ov,orr=old_d.get(pk),_rs(old_d.get(rk))
+                nv,nr=q.get(pk),_rs(q.get(rk))
+                if ov is None: continue
+                if nv is None:
+                    if orr is None or orr>time.time():
+                        mq[pk]=ov
+                        if old_d.get(rk) is not None: mq[rk]=old_d.get(rk)
+                    continue
+                if orr is None or nr is None: continue
+                if nr<orr-600: mq[pk]=ov; mq[rk]=old_d.get(rk)
+                elif abs(nr-orr)<=600:
+                    try: mq[pk]=max(float(ov),float(nv))
+                    except Exception: pass
+            # write-if-changed + atomica: render frequente, lettori concorrenti
+            if mq!=old_d:
                 tmpq=qf.with_name(f"{qf.name}.{os.getpid()}.tmp")
-                tmpq.write_text(new); os.replace(tmpq,qf)
+                tmpq.write_text(json.dumps(mq)); os.replace(tmpq,qf)
                 # Snapshot gemello nello schema esterno di claude-hud
                 # (five_hour/seven_day + used_percentage/resets_at ISO):
                 # un utente claude-hud lo consuma via display.externalUsagePath.
@@ -125,14 +153,14 @@ try:
                         try: return _dts.fromtimestamp(int(ts),_tzs.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
                         except Exception: return None
                     snap={"updated_at":_dts.now(_tzs.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")}
-                    if r is not None:
-                        e={"used_percentage":round(float(r))}
-                        i=_iso(fh.get("resets_at"))
+                    if mq.get("five_hour_used_pct") is not None:
+                        e={"used_percentage":round(float(mq["five_hour_used_pct"]))}
+                        i=_iso(mq.get("five_hour_resets_at"))
                         if i: e["resets_at"]=i
                         snap["five_hour"]=e
-                    if w is not None:
-                        e={"used_percentage":round(float(w))}
-                        i=_iso(w_reset)
+                    if mq.get("weekly_used_pct") is not None:
+                        e={"used_percentage":round(float(mq["weekly_used_pct"]))}
+                        i=_iso(mq.get("weekly_resets_at"))
                         if i: e["resets_at"]=i
                         snap["seven_day"]=e
                     us=qd/f"usage-snapshot-{acct}.json"
@@ -144,8 +172,9 @@ try:
                 try:
                     from datetime import datetime as _dth, timezone as _tzh
                     hf=qd/f"quota-history-{acct}.jsonl"
-                    rowh=json.dumps({"ts":_dth.now(_tzh.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),"w":q.get("weekly_used_pct"),"r":q.get("five_hour_used_pct")})
-                    with open(hf,"a") as _fh: _fh.write(rowh+"\n")
+                    rowh=json.dumps({"ts":_dth.now(_tzh.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),"w":mq.get("weekly_used_pct"),"r":mq.get("five_hour_used_pct")})
+                    if (mq.get("weekly_used_pct"),mq.get("five_hour_used_pct"))!=(old_d.get("weekly_used_pct"),old_d.get("five_hour_used_pct")):
+                        with open(hf,"a") as _fh: _fh.write(rowh+"\n")
                     if hf.stat().st_size>60000:
                         _tl=hf.read_text().splitlines()[-300:]
                         tmph=hf.with_name(f"{hf.name}.{os.getpid()}.tmp")
