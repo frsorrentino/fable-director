@@ -1,0 +1,1 @@
+{ "name": "fd-gate", "version": "0.1.0", "description": "fable-director prototype: the pre-budget gate as a mod (tool.call on Agent/Task/Workflow) and the executor model pinned at agent.spawn" }

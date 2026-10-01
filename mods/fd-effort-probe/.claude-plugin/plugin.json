@@ -1,0 +1,1 @@
+{ "name": "fd-effort-probe", "version": "0.1.0", "description": "fable-director experiment: per-step effort via turn.step, opt-in with FD_EFFORT_PROBE, every step's cost logged" }
