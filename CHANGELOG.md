@@ -2,7 +2,7 @@
 
 Full release history. The README shows only the latest few entries.
 
-## Unreleased
+## 1.53.x
 
 - **1.53.0 — a hooks module next to the classic hooks (Claude Code ≥ 2.1.287).**
   - **Quotas up to date without a statusline.** The module takes the figures the engine pushes after each turn (`session.measure`) and writes `quota-<account>.json`, its history and the claude-hud snapshot. It uses the same merge rule as the statusline, so the two never disagree. The gates and `/fable-director:status` now see the real quota under `claude -p`, on the phone and over Remote Control.
