@@ -53,6 +53,12 @@ Route verdict: on every non-trivial task, one line — cheaper/external route ye
 
 - NEVER read a workflow's full output/TaskOutput dump. Extract via script from `<transcriptDir>/journal.jsonl` (raw result per agent; map agentId→item by grepping each `agent-*.jsonl` prompt).
 - Run failed partway (session limit, hang): relaunch with `resumeFromRunId` — completed agents replay from cache, only failures re-run. Hung run: `TaskStop` first. Never restart from zero.
+- Claude Code 2.1.285-2.1.287, what changed for delegation:
+  - A fork runs under its parent's permission mode: from plan mode it stays in plan mode and cannot exit it, from `dontAsk` it cannot ask. A fork is not a way to write from a read-only session.
+  - In auto mode a subagent ends as soon as it hands its report back: no extra turns after the report. Per-agent anchors measured before 2.1.285 can be slightly high.
+  - A Workflow subagent whose connection stalls no longer restarts from its original prompt, so a stall no longer pays the agent twice. A real hang still takes `TaskStop` and a resume.
+  - A folder's CLAUDE.md is no longer attached twice after a resume or a compaction. Post-resume context measured before 2.1.287 includes that duplicate.
+  - The fallback notice says when the fallback dropped the window from 1M to 200K. A long session past 200K on that fallback compacts at once: hand off (`/fable-director:handoff`) instead of going on.
 - Workflow economics (measured 2026-09-03 on a 16-agent legal panel: 4 waves, 49 agent transcripts, 10.4M eq of agents + 8.4M eq of launcher thread, ~70% waste):
   - A five-hour window at Fable 5.1 rates absorbed 2.3M / 3.7M / 4.9M eq before the wall; a judge-type agent costs 350-580k eq, a reader 130-260k, a verifier 110-200k. Size the fan-out to the window BEFORE launching — the gate does the arithmetic from `--agents N` (warning above the remaining window, deny above 2×, options listed). Chunk wide stages so that what is in flight at the wall stays small: the loss at the wall = in-flight width × per-agent cost, paid again after the reset.
   - Resume replays only the longest UNCHANGED PREFIX of agent() calls (prompt + opts). Pass `args` as an object (never a JSON string), keep volatile parameters (dates) out of the early stages, edit the script only after the last cached call. The gate compares every resume with the launch record and says which agents will re-run.

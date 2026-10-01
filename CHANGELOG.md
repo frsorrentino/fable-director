@@ -5,6 +5,8 @@ Full release history. The README shows only the latest few entries.
 ## Unreleased
 
 - **Session telemetry survives `claude -p`.** Since Claude Code 2.1.287 every SessionEnd hook shares one 1.5 s bound, and the `session-summary` hook was cancelled mid-work (Python alone takes up to 1 s to start). The hook now goes through `scripts/detach.sh`, which hands stdin to a detached process and returns in about 0.2 s.
+- **A `verify` skill for this repository** (`.claude/skills/verify`). Claude Code 2.1.286 runs a project or user skill named `verify` before every commit that is not docs-only or tests-only. This one runs the test suites and, since the repository is public, a privacy check on the staged diff: home path, git email, API keys, private corpora.
+- **Delegation skill: Claude Code 2.1.285-2.1.287.** Forks keep the parent's permission mode. Auto-mode subagents stop at the report. Stalled Workflow agents no longer restart from the prompt. CLAUDE.md is no longer attached twice after a resume. A fallback from 1M to 200K calls for a handoff.
 
 ## 1.52.x
 
