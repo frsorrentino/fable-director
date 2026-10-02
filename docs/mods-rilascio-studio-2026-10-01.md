@@ -66,3 +66,28 @@ capacità nuova. Senza un consumatore, anche `FD_MODS` non entra.
 - **Account con l'interruttore spento.** Non si può provare dal tuo account. Il comportamento
   atteso è quello di 2.1.284, cioè modulo saltato e hook classici attivi, ma non è misurato
   su 2.1.287.
+
+## Verifiche dopo la 1.53.0 (2026-10-02, issue anthropics/claude-code#91870)
+
+- **Subagenti in worktree con il modulo acceso.** Il commento 5949411806 segnala che un hook
+  `tool.call` di un mod fa perdere la cartella di lavoro ai subagenti isolati in worktree. Il
+  modulo 1.53.0 registra solo `session.measure` e `agent.spawn`. Prova dal vivo col plugin
+  installato: un subagente general-purpose con `isolation: "worktree"` esegue Bash con `pwd` in
+  `.claude/worktrees/agent-…`. `cat rel.txt` e Read con il percorso relativo leggono la
+  versione del worktree (`COMMITTED`) e non quella del padre (`PARENT-DIRTY`). Nessun effetto.
+  Glob non era disponibile in quella sessione e non è stato provato. Regola per il futuro: un
+  hook `tool.call` nel modulo va riprovato su questo caso prima di pubblicarlo.
+- **Mods spenti dall'interruttore** (commento 5950552972). Config separata: HOME e
+  `CLAUDE_CONFIG_DIR` di prova, `.claude.json` di prova con
+  `cachedGrowthBookFeatures.tengu_plugin_hooks_modules: false`, un finto gateway su
+  `ANTHROPIC_BASE_URL` e il plugin installato dal marketplace del repo.
+  - Con il servizio dei flag raggiungibile, la cache viene riscaricata e torna `true`: il
+    modulo carica.
+  - Con `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` vale il predefinito del binario, che è
+    acceso: il modulo carica.
+  - Solo con il servizio dei flag irraggiungibile vale la cache a `false`. Si riproduce allora
+    «not loaded: … the rollout switch served off».
+  - In quello stato il plugin ricade sugli hook classici senza errori. Il gate nega Agent senza
+    budget (`no_budget`), la telemetria scrive `gate_deny` e `session_summary`, stderr è vuoto.
+    Il file quote non viene scritto, come prima della 1.53.0: sul gateway non arrivano quote.
+  - Controllo con la chiave a `true` e la stessa rete bloccata: il modulo carica.
