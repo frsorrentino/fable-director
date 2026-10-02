@@ -5,6 +5,7 @@
       tight" (≈1,9×), nessun deny
   W2  window fit: finestra al 60% → deny "cannot finish", con chunk e orario di reset
   W3  resume: mai deny (avviso al più); gli agenti già nel journal vengono sottratti
+  W4d lint lineare su uno script da 400 KB (era O(n²) sulla regex dei PDF)
   W4  lint: agent() senza model: su sessione Fable, effort max ×3, 2 PDF, args come
       stringa JSON → quattro avvisi, delega permessa
   W5  heavy launcher: contesto 600k → avviso con l'eq di ri-cache
@@ -137,6 +138,18 @@ check("W3 resume oltre il residuo: avviso, mai deny; agenti nel journal sottratt
 
 # W4 + W5 lint e heavy launcher (quota tornata al 22%)
 set_quota(22)
+# W4d lint lineare: uno script da 400 KB (un commento lungo senza .pdf, più un .pdf in
+# fondo) passa dal gate in pochi secondi. Prima la regex dei PDF era O(n²): 32 KB = 5 s.
+import time as _time
+big = ("export const meta = { name: 'big', description: 'd' }\n// " + "y" * 400_000
+       + "\nawait agent({ prompt: 'leggi /data/x/Atto.pdf', model: 'sonnet' })\n")
+_t0 = _time.monotonic()
+out_big, r_big = gate({"script": big})
+_dt = _time.monotonic() - _t0
+check("W4d lint su script da 400 KB: rientra entro 10 s e trova ancora il PDF",
+      _dt < 10 and "1 .pdf path(s)" in out_big.get("systemMessage", ""),
+      f"{_dt:.1f}s " + r_big.stdout[:200] + r_big.stderr[-200:])
+
 out, r = gate({"scriptPath": str(SCRIPT), "args": '{"data": "2026-09-03"}'})
 msg = out.get("systemMessage", "")
 check("W4 lint: model: assente su Fable, effort max ×2+, 2 PDF, args stringa → avvisi, delega permessa",

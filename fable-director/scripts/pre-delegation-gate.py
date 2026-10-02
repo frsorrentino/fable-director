@@ -663,7 +663,11 @@ def workflow_lint(data):
             n_calls = len(re.findall(r"\bagent\s*\(", text))
             n_model = len(re.findall(r"\bmodel\s*:", text))
             n_max = len(re.findall(r"\beffort\s*:\s*['\"](?:max|xhigh)['\"]", text))
-            pdfs = sorted(set(m.lower() for m in re.findall(r"[\w./\\-]+\.pdf\b", text, re.I)))
+            # Match only from a token start: unanchored, every position of a long
+            # run of path characters rescanned the whole run (O(n²): a 32 KB
+            # comment took 5 s, a 400 KB script kept the gate busy for minutes).
+            pdfs = (sorted(set(m.lower() for m in re.findall(r"(?<![\w./\\-])[\w./\\-]+\.pdf\b", text, re.I)))
+                    if ".pdf" in text.lower() else [])
             model = str(session_snapshot(data).get("model") or "")
             top = model.startswith(("claude-fable", "claude-opus", "claude-mythos"))
             if n_calls and n_calls > n_model and (top or not model):
