@@ -75,8 +75,11 @@ capacità nuova. Senza un consumatore, anche `FD_MODS` non entra.
   installato: un subagente general-purpose con `isolation: "worktree"` esegue Bash con `pwd` in
   `.claude/worktrees/agent-…`. `cat rel.txt` e Read con il percorso relativo leggono la
   versione del worktree (`COMMITTED`) e non quella del padre (`PARENT-DIRTY`). Nessun effetto.
-  Glob non era disponibile in quella sessione e non è stato provato. Regola per il futuro: un
-  hook `tool.call` nel modulo va riprovato su questo caso prima di pubblicarlo.
+  Glob non era disponibile in quella sessione e non è stato provato. Claude Code 2.1.288 ha
+  corretto il difetto dei `tool.call` nei worktree: un hook `tool.call` nel modulo non è più
+  escluso per questo motivo, ma va comunque riprovato su questo caso prima di pubblicarlo.
+  Dalla 2.1.288 anche `claude plugin test` non dà più i Mods per spenti quando la loro
+  impostazione salvata è vecchia.
 - **Mods spenti dall'interruttore** (commento 5950552972). Config separata: HOME e
   `CLAUDE_CONFIG_DIR` di prova, `.claude.json` di prova con
   `cachedGrowthBookFeatures.tengu_plugin_hooks_modules: false`, un finto gateway su

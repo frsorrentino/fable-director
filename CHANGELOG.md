@@ -2,6 +2,11 @@
 
 Full release history. The README shows only the latest few entries.
 
+## Unreleased
+
+- **The Workflow gate stays fast on large scripts.** The lint's PDF regex rescanned every run of path characters from each position (O(n²)): a 32 KB comment took 5 s and a 400 KB script kept the PreToolUse hook busy for minutes. It now matches only from a token start and runs only when the script mentions `.pdf`: a 400 KB script takes 0.2 s.
+- **Delegation skill: Claude Code 2.1.288.** A plugin agent spawned by name keeps its own effort and tools. Checked: `fd-executor` by name on sonnet at `low`, `fd-verifier` as a teammate at `high`.
+
 ## 1.53.x
 
 - **1.53.0 — a hooks module next to the classic hooks (Claude Code ≥ 2.1.287).**
