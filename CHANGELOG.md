@@ -2,6 +2,14 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.54.x
+
+- **1.54.0 — a check that can fail, and reliability by task type.**
+  - **Every delegation needs a real check.** The gate now denies a delegation whose budget has no `--verify` command, or only prose; before, it warned once. `budget-open` refuses a check that cannot fail: `true`, `echo`, `exit 0`, `… || true`, `…; exit 0`, a pipe ending in `tail`/`head`/`wc`, `grep -c` without a comparison, `git status`, `git diff` without `--quiet`, `--exit-zero`. The reason says how to fix it, and `budget-amend --verify "cmd"` fixes it without closing the budget.
+  - **The Stop hook runs the checks it used to skip.** `test -s …`, `grep -q …`, `git diff --quiet`, `cd dir && npm run check` and scripts by path were treated as prose and never run.
+  - **Reliability by task type, from the path and not only the outcome.** `--type` reads the last 20 closes of that type: failed (flagged, abandoned, red verify) and hard path (fail streak or escalation in the session, output over 2× the estimate, ≥ 3 reopens). A fragile type needs an `fd-verifier` run before `budget-close --outcome ok` (or `--no-verifier "reason"`, kept in the receipt), and its verify re-runs after every write. A reliable type re-runs it at most every 15 minutes.
+  - **Task contract shared with claude-master, optional.** `fable-director/schemas/task-contract.v1.json` is the same file claude-master uses for its plans; a test checks the bytes match when both are on the machine. Nothing reads it at runtime yet: with fable-director alone, nothing changes.
+
 ## 1.53.x
 
 - **1.53.1 — the Workflow gate on large scripts, and Claude Code 2.1.288.**
