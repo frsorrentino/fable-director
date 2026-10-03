@@ -71,7 +71,7 @@ def events(kind):
 
 print("gate: delega annidata + effort nativo")
 
-subprocess.run([sys.executable, str(TELEMETRY), "budget-open",
+subprocess.run([sys.executable, str(TELEMETRY), "budget-open", "--verify", "test -d .",
                 "--task", "test hardening", "--expected-output", "1000",
                 "--route", "agent", "--effort", "low", "--paths", "none"],
                env=env, cwd=str(work), capture_output=True, text=True,

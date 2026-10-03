@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/frsorrentino/claude-master/schemas/task-contract.v1.json",
+  "title": "Task contract",
+  "description": "One unit of work: what goes out to the session (task) and what comes back (result). Shared by claude-master (the map between sessions: plan, plan run, task registry) and fable-director (the loop inside a node: budget-open --verify, telemetry). Copied, never imported, into both repos; a test in each checks the copies are identical. A change bumps schema_version.",
+  "type": "object",
+  "required": ["schema_version", "task"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": 1},
+    "task": {"$ref": "#/$defs/task"},
+    "result": {"$ref": "#/$defs/result"},
+    "measures": {"$ref": "#/$defs/measures"}
+  },
+  "$defs": {
+    "task": {
+      "description": "The outbound half. Every field is required: a task without a check, a perimeter or a lane is not a task.",
+      "type": "object",
+      "required": ["id", "title", "plan", "where", "check", "perimeter", "lane", "depends_on", "route", "hold", "attempts_max", "data_class", "requested_by"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,80}$"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 200},
+        "type": {"description": "Task category slug; it becomes fable-director's budget-open --type, which links the node to the reliability of its type.", "type": "string", "pattern": "^[a-z0-9-]{1,60}$"},
+        "plan": {"description": "The approved plan this task belongs to (its id), or null for a task outside any plan. Approving the plan approves push, release and publication of its tasks, except those with hold true.", "type": ["string", "null"]},
+        "where": {
+          "type": "object",
+          "required": ["project", "session", "host", "account"],
+          "additionalProperties": false,
+          "properties": {
+            "project": {"description": "Absolute path of the folder the task works in.", "type": "string", "minLength": 1},
+            "session": {"description": "Name of the session that runs it, or null: plan run opens one.", "type": ["string", "null"]},
+            "host": {"enum": ["local", "win"]},
+            "account": {"description": "Account name as in claude-master's config, or null: deduced from the folder.", "type": ["string", "null"]}
+          }
+        },
+        "check": {
+          "description": "A command that can fail: exit 0 = green. It becomes fable-director's budget-open --verify inside the node, and the registry reruns it before marking the task done. Fake checks (true, echo, a pipe into tail, || true, grep -c without a comparison) are refused by fable-director's verify-lint. Inside the node fable-director's Stop hook runs it with a 60 s limit (FD_VERIFY_TIMEOUT_S): a longer check is rerun only by the registry, with timeout_s.",
+          "type": "object",
+          "required": ["cmd", "cwd", "timeout_s"],
+          "additionalProperties": false,
+          "properties": {
+            "cmd": {"type": "string", "minLength": 1},
+            "cwd": {"description": "Folder to run it in; null = where.project.", "type": ["string", "null"]},
+            "timeout_s": {"type": "integer", "minimum": 1, "maximum": 7200}
+          }
+        },
+        "perimeter": {"description": "Globs the task may write, relative to where.project. It becomes budget-open --paths; [] = declared read-only (review, research), --paths none.", "type": "array", "items": {"type": "string", "minLength": 1}},
+        "lane": {"description": "Set by the possible damage, not by the model's confidence. open: local commits, tests, docs. wide: shared code (relay, kernel, hooks, marketplace), deterministic checks plus a review before merging. closed: push, release, publication, public posts, client texts, production writes, deletions; it opens only for a task of an approved plan without hold, or with a recorded ok.", "enum": ["open", "wide", "closed"]},
+        "depends_on": {
+          "description": "Only tasks whose output really enters this one, each naming what passes. If nothing can be named, there is no edge and the tasks run in parallel.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["task", "passes"],
+            "additionalProperties": false,
+            "properties": {
+              "task": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,80}$"},
+              "passes": {"type": "string", "minLength": 1, "maxLength": 200}
+            }
+          }
+        },
+        "route": {"description": "How plan run executes the node, from fable-director's routing when present. script: plan run runs check-only work itself, no session. cheap: a session that hands the mechanical part to a cheap executor. session: a session on the top model. win: a session on the win host.", "enum": ["script", "cheap", "session", "win"]},
+        "run": {"description": "route script only: the command plan run executes in where.project (no session); the check then decides.", "type": ["string", "null"]},
+        "hold": {"description": "true = «do not publish yet»: the closed lane stays shut even inside an approved plan.", "type": "boolean"},
+        "attempts_max": {"description": "Retries of this unit only, never of the batch; past it the task goes to the person.", "type": "integer", "minimum": 1, "maximum": 3},
+        "data_class": {"description": "As fable-director's --data-class: restricted never leaves the machine.", "enum": ["public", "internal", "restricted"]},
+        "requested_by": {"type": "string", "minLength": 1},
+        "constraints": {"description": "Constraints the registry attached from earlier tasks of the same project or topic (the learning edge).", "type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "result": {
+      "description": "The return half. No free-text tables: outcome, reason, proof.",
+      "type": "object",
+      "required": ["task", "attempt", "outcome", "reason", "proof", "at"],
+      "additionalProperties": false,
+      "properties": {
+        "task": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,80}$"},
+        "attempt": {"type": "integer", "minimum": 1, "maximum": 3},
+        "outcome": {"enum": ["green", "red"]},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 500},
+        "proof": {
+          "type": "object",
+          "required": ["kind", "value"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {"enum": ["check", "commit", "link"]},
+            "value": {"description": "The command with its exit code and last lines, the commit hash, or the URL.", "type": "string", "minLength": 1},
+            "rc": {"type": ["integer", "null"]}
+          }
+        },
+        "perimeter": {"description": "On red: the narrowed perimeter for the retry (the files to fix).", "type": "array", "items": {"type": "string", "minLength": 1}},
+        "at": {"description": "Epoch seconds.", "type": "integer"}
+      }
+    },
+    "measures": {
+      "description": "Written by fable-director's telemetry when it is installed and active; absent otherwise. claude-master reads, never writes these.",
+      "type": "object",
+      "required": ["cost_eq", "turns", "attempts"],
+      "additionalProperties": false,
+      "properties": {
+        "cost_eq": {"type": ["number", "null"]},
+        "turns": {"type": ["integer", "null"]},
+        "attempts": {"type": "integer", "minimum": 0},
+        "tokens_in": {"type": ["integer", "null"]},
+        "tokens_out": {"type": ["integer", "null"]},
+        "model": {"type": ["string", "null"]},
+        "verify_rc": {"description": "Exit code of the --verify run by fable-director's Stop hook, or its error text.", "type": ["integer", "string", "null"]},
+        "reliability": {
+          "description": "fable-director's reliability of the task type; plan run may use it to pick the route or ask for an adversarial verify on fragile types.",
+          "type": "object",
+          "required": ["tier", "n", "failed", "strained"],
+          "additionalProperties": false,
+          "properties": {
+            "tier": {"enum": ["new", "standard", "reliable", "fragile"]},
+            "n": {"type": "integer", "minimum": 0},
+            "failed": {"type": "integer", "minimum": 0},
+            "strained": {"type": "integer", "minimum": 0}
+          }
+        }
+      }
+    }
+  }
+}

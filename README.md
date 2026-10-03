@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.53.1-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.54.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need
 to do.** It makes your agent declare what a job should cost before it delegates,
@@ -110,7 +110,8 @@ advises.**
 ![Some rules are walls, some are advice: hooks on your machine deny — delegating with no declared price, spending past 3x, writing where you said never, sending restricted data outside. Policy guides the model's choices. Walls are deterministic: no model gets to talk its way through one.](assets/readme/card6-walls.png)
 
 Enforced deterministically, on your machine: delegation without an open budget
-is denied; spend past 3× blocks the turn until a post-mortem is written; writes
+is denied, and so is delegation without a check that can fail (`--verify`: a
+command, not prose, and not `true`, `| tail` or `|| true`); spend past 3× blocks the turn until a post-mortem is written; writes
 outside the declared paths are denied, and so are the destructive git commands
 you deny-list; `--data-class restricted` blocks the external routes. Advisory:
 the routing axes themselves, the never-delegate rules, script promotion and the
@@ -224,6 +225,10 @@ gracefully when absent.
   style, **~65% fewer output tokens** (measured).
 - **[`superpowers`](https://github.com/obra/superpowers-marketplace)** — process
   discipline: a well-framed task delegates better.
+- **`claude-master`** (same author, optional) — runs a plan of tasks across
+  sessions. Both plugins carry the same task contract
+  (`fable-director/schemas/task-contract.v1.json`): a plan node's check becomes
+  the node's `--verify`. Nothing changes when only one of the two is installed.
 
 ## Documentation
 

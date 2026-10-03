@@ -45,15 +45,15 @@ FDT = str(SCRIPTS / "fd-telemetry.py"); GATE = str(SCRIPTS / "pre-delegation-gat
 base = home / ".claude" / "fable-director"
 
 # budget normale nell'altra sessione (serve al gate)
-r = run([FDT, "budget-open", "--task", "batch curiosita", "--expected-output", "100",
+r = run([FDT, "budget-open", "--verify", "test -d .", "--task", "batch curiosita", "--expected-output", "100",
          "--cwd", oth], home, sid="s-other")
 assert r.returncode == 0, r.stderr
 # Q8
-r = run([FDT, "budget-open", "--task", "x", "--expected-output", "10", "--priority", "urgent",
+r = run([FDT, "budget-open", "--verify", "test -d .", "--task", "x", "--expected-output", "10", "--priority", "urgent",
          "--cwd", inc], home, sid="s-inc")
 check("Q8 --priority non valido rifiutato", r.returncode != 0 and "invalid --priority" in (r.stderr + r.stdout))
 # Q1
-r = run([FDT, "budget-open", "--task", "sito cliente giu", "--expected-output", "500",
+r = run([FDT, "budget-open", "--verify", "test -d .", "--task", "sito cliente giu", "--expected-output", "500",
          "--priority", "incident", "--cwd", inc], home, sid="s-inc")
 pf = base / "priority.json"
 pr = json.loads(pf.read_text()) if pf.is_file() else {}

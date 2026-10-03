@@ -223,11 +223,23 @@ VERIFY_MIN_GAP_S = int(os.environ.get("FD_VERIFY_MIN_GAP_S") or 300)
 
 
 def verify_command(budget):
-    """Il --verify e' un COMANDO solo se inizia con un runner noto; la prosa
-    ("checklist: ...") resta prosa e non viene mai eseguita."""
+    """Il --verify e' un COMANDO se verify-lint lo riconosce come tale (runner
+    noti, `test`, `grep -q`, `git diff --quiet`, script per percorso); la prosa
+    ("checklist: ...") resta prosa e non viene mai eseguita. Un verify finto si
+    esegue lo stesso: il gate lo ha gia' negato, qui non costa niente."""
     v = str((budget or {}).get("verify") or "").strip()
-    first = v.split()[0] if v else ""
-    return v if first in VERIFY_RUNNERS else None
+    if not v:
+        return None
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "verify_lint", Path(__file__).with_name("verify-lint.py"))
+        vl = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(vl)
+        kind, _ = vl.classify(v, (budget or {}).get("cwd"))
+        return v if kind in ("command", "fake") else None
+    except Exception:
+        first = v.split()[0]
+        return v if first in VERIFY_RUNNERS else None
 
 
 def run_verify(budget, state, cwd, rw_stats):
@@ -250,10 +262,14 @@ def run_verify(budget, state, cwd, rw_stats):
         return None  # niente di nuovo da verificare
     # Dopo un PASS le scritture nuove rilanciano al piu' ogni VERIFY_MIN_GAP_S
     # (una suite lunga non gira a ogni turno); dopo un FAIL la correzione
-    # merita il ricontrollo subito.
+    # merita il ricontrollo subito. L'intervallo segue l'affidabilita' del tipo
+    # di compito (budget-open, dalla telemetria): un tipo fragile si ricontrolla
+    # a ogni scrittura, uno affidabile al piu' ogni 3 intervalli.
+    tier = ((budget or {}).get("reliability") or {}).get("tier")
+    gap = {"fragile": 0, "reliable": VERIFY_MIN_GAP_S * 3}.get(tier, VERIFY_MIN_GAP_S)
     try:
         if prev_rc == 0 and last_at and \
-                (now - datetime.fromisoformat(last_at)).total_seconds() < VERIFY_MIN_GAP_S:
+                (now - datetime.fromisoformat(last_at)).total_seconds() < gap:
             return None
     except (ValueError, TypeError):
         pass

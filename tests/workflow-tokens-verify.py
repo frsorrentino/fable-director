@@ -64,7 +64,7 @@ def fresh_home():
 
 def budget_open(home, proj, expected_out, extra=None):
     return run(SCRIPTS / "fd-telemetry.py",
-               ["budget-open", "--task", "wf-test", "--expected-output",
+               ["budget-open", "--verify", "test -d .", "--task", "wf-test", "--expected-output",
                 str(expected_out), "--cwd", proj] + (extra or []), home)
 
 

@@ -28,8 +28,10 @@ Sottocomandi:
                via agent con effort pinnato in frontmatter: fd-executor=low,
                fd-verifier=high — il tool Agent non ha parametro effort per-call);
                il gate verifica la coerenza dichiarato/pinnato (warn, mai deny);
-               --verify "cmd/checklist" = evidenza di accettazione dichiarata
-               (il gate avvisa una volta se assente, mai nega);
+               --verify "cmd" = il controllo che puo' fallire (verify-lint.py):
+               uno finto (true, echo, `| tail`, `|| true`, grep -c senza
+               confronto) e' rifiutato; il gate nega le deleghe senza un
+               comando; --type porta la fascia di affidabilita' del tipo;
                --data-class public|internal|restricted = classificazione input:
                restricted BLOCCA external-exec.py e cross-verify.py per il cwd;
                --paths "glob[,glob]" = perimetro scritture del task (enforced
@@ -37,10 +39,11 @@ Sottocomandi:
                --agents N = fan-out previsto: la stima viene confrontata con
                l'ancora empirica per agente (~20k out, ~17k in di cold start —
                playbook confermata) e avvisa se sotto, mai nega
-  budget-amend --add-paths "glob[,glob]" [--reason S]
+  budget-amend --add-paths "glob[,glob]" [--verify "cmd"] [--reason S]
                estende il perimetro del budget aperto (emendamento esplicito,
-               loggato come perimeter_amend)
-  budget-close [--outcome ok|flagged|abandoned]
+               loggato come perimeter_amend) o corregge il controllo
+  budget-close [--outcome ok|flagged|abandoned] [--no-verifier "motivo"]
+               (tipo fragile: ok solo dopo un fd-verifier o con la rinuncia)
                marca il budget file closed e logga task_close; il consuntivo
                (actual in/out) viene catturato dallo state file dello Stop
                hook → alimenta la sezione calibrazione del report
@@ -748,6 +751,132 @@ def similar_tasks_line(task_type, exclude_declared_at=None):
     return head + (": " + "; ".join(parts) if parts else "") + "."
 
 
+def verify_lint():
+    """verify-lint.py come modulo (nome con trattino: importlib)."""
+    spec = importlib.util.spec_from_file_location(
+        "verify_lint", Path(__file__).with_name("verify-lint.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+# Affidabilita' per tipo di compito, dal PERCORSO e non solo dall'esito
+# («Loops and Graphs», approvato il 03/10/2026): un tipo che fallisce o fatica
+# spesso riceve piu' verifiche, uno affidabile meno. Soglie in
+# docs/plans/2026-10-03-verify-vero-e-affidabilita.md.
+REL_WINDOW_DAYS = 90
+REL_LAST_N = 20
+REL_MIN_N = 3
+REL_RELIABLE_MIN_N = 5
+VERIFIER_AGENT = "fable-director:fd-verifier"
+
+
+def type_reliability(task_type, exclude_declared_at=None):
+    """{tier, n, failed, strained, agents} sugli ultimi REL_LAST_N task_close
+    dello stesso tipo. Fallito = flagged/abandoned o verify rosso alla
+    chiusura. Faticoso = fail_streak/escalation nella sua finestra di sessione,
+    output oltre 2x la stima, o reopens >= 3. None senza tipo o senza DB."""
+    if not task_type or not DB_PATH.is_file():
+        return None
+    since = (datetime.now(timezone.utc)
+             - timedelta(days=REL_WINDOW_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, timeout=1.0)
+        rows = con.execute("SELECT payload FROM events WHERE event='task_close' "
+                           "AND ts>=? ORDER BY ts DESC LIMIT 2000", (since,)).fetchall()
+        tasks = []
+        for (pl,) in rows:
+            try:
+                t = json.loads(pl)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if t.get("type") != task_type:
+                continue
+            if exclude_declared_at and t.get("declared_at") == exclude_declared_at:
+                continue
+            tasks.append(t)
+            if len(tasks) >= REL_LAST_N:
+                break
+        failed = strained = 0
+        for t in tasks:
+            vrc = t.get("verify_rc")
+            if t.get("outcome") in ("flagged", "abandoned") or \
+                    (vrc is not None and str(vrc) != "0"):
+                failed += 1
+                continue
+            exp, act = t.get("expected_output_tokens"), t.get("actual_output_tokens")
+            hard = bool(exp and act and act > 2 * exp) or int(t.get("reopens") or 0) >= 3
+            sid, a, b = t.get("owner_sid"), t.get("declared_at"), t.get("closed_at")
+            if not hard and sid and a and b:
+                hard = con.execute(
+                    "SELECT 1 FROM events WHERE event IN ('fail_streak','escalation') "
+                    "AND session_id=? AND ts>=? AND ts<=? LIMIT 1", (sid, a, b)).fetchone() is not None
+            strained += hard
+        agents = {}
+        for (pl,) in con.execute("SELECT payload FROM events WHERE event='delegation_outcome' "
+                                 "AND ts>=? AND payload NOT LIKE '%\"status\": \"unknown\"%'",
+                                 (since,)):
+            try:
+                d = json.loads(pl)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            a = agents.setdefault(d.get("agent_type") or "?", [0, 0])
+            a[0] += 1
+            a[1] += d.get("status") in ("concerns", "blocked")
+        con.close()
+    except sqlite3.Error:
+        return None
+    n = len(tasks)
+    if n < REL_MIN_N:
+        tier = "new"
+    elif failed * 3 >= n or (failed + strained) * 2 >= n:
+        tier = "fragile"
+    elif n >= REL_RELIABLE_MIN_N and failed == 0 and strained * 5 <= n:
+        tier = "reliable"
+    else:
+        tier = "standard"
+    return {"tier": tier, "n": n, "failed": failed, "strained": strained,
+            "agents": {k: v for k, v in agents.items() if v[0] >= 5}}
+
+
+def reliability_line(rel, task_type):
+    if not rel:
+        return None
+    n, f, s = rel["n"], rel["failed"], rel["strained"]
+    if rel["tier"] == "new":
+        return None
+    facts = f"{f} of the last {n} failed, {s} more had a hard path"
+    effect = {
+        "fragile": ("fragile: before budget-close --outcome ok, run an "
+                    "fd-verifier on the result (or --no-verifier \"reason\"); "
+                    "the verify re-runs after every write"),
+        "reliable": "reliable: the verify re-runs at most every 15 minutes",
+        "standard": "standard checks",
+    }[rel["tier"]]
+    return f"FD ⚖ {task_type}: {facts} → {effect}."
+
+
+def verifier_ran(budget):
+    """Un fd-verifier concluso nella sessione del budget, dopo l'apertura."""
+    sid, since = budget.get("owner_sid"), budget.get("declared_at")
+    if not sid or not since or not DB_PATH.is_file():
+        return False
+    try:
+        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, timeout=1.0)
+        rows = con.execute("SELECT payload FROM events WHERE event='delegation_outcome' "
+                           "AND session_id=? AND ts>=?", (sid, since)).fetchall()
+        con.close()
+    except sqlite3.Error:
+        return False
+    for (pl,) in rows:
+        try:
+            if json.loads(pl).get("agent_type") == VERIFIER_AGENT:
+                return True
+        except (json.JSONDecodeError, TypeError):
+            continue
+    return False
+
+
 def cmd_budget_open(args):
     cost_ack = "--cost-ack" in args
     if cost_ack:
@@ -797,6 +926,15 @@ def cmd_budget_open(args):
             f"project (scratchpad, /tmp) are never constrained anyway. If the "
             f"task genuinely has no bounded write area, say so on purpose: "
             f"--paths none")
+    # Controllo vero (A, 03/10/2026): un --verify che non puo' fallire non e'
+    # un controllo, su qualunque rotta. Su una rotta che delega serve un
+    # comando: la prosa non la esegue nessun hook. Il gate nega lo stesso
+    # alla prima delega, ma qui il motivo arriva prima di lavorare.
+    vkind, vreason = verify_lint().classify(opts["--verify"], opts["--cwd"] or os.getcwd())
+    if vkind == "fake":
+        sys.exit(vreason)
+    if opts["--route"] in DELEGATING_ROUTES and vkind != "command":
+        sys.exit(f"--route {opts['--route']} needs a --verify command: {vreason}")
     if str(opts["--paths"] or "").strip().lower() == "none":
         opts["--paths"] = None
         opts["--paths-waived"] = True
@@ -921,6 +1059,9 @@ def cmd_budget_open(args):
         "cwd": str(cwd),
         "status": "open",
     }
+    rel = type_reliability(opts["--type"])
+    if rel:
+        budget["reliability"] = {k: rel[k] for k in ("tier", "n", "failed", "strained")}
     bfile = BUDGETS / f"{cwd_slug(cwd)}.json"
     write_json_atomic(bfile, budget)
     log_event("task_open", budget, cwd=cwd)
@@ -952,6 +1093,9 @@ def cmd_budget_open(args):
     sim = similar_tasks_line(budget.get("type"), budget.get("declared_at"))
     if sim:
         print("FD ≈ " + sim)
+    rline = reliability_line(rel, budget.get("type"))
+    if rline:
+        print(rline)
     # Stima in USD (opt-in, mai inventata): solo se l'utente ha dichiarato il
     # listino in pricing.json ({"input_usd_per_mtok": N}). La stima eq è in
     # input-equivalenti di listino, quindi USD = eq × prezzo input. Utile per
@@ -1040,15 +1184,34 @@ def cmd_budget_amend(args):
     decision record (quante volte il lavoro reale sfonda il perimetro
     dichiarato è un dato di calibrazione, come le stime)."""
     opts = parse_opts(args, {"--add-paths": None, "--reason": None,
-                             "--cwd": None, "--route": None})
-    if not opts["--add-paths"] and not opts["--route"]:
-        sys.exit("budget-amend requires --add-paths \"glob[,glob]\" and/or --route ROUTE")
+                             "--cwd": None, "--route": None, "--verify": None})
+    if not opts["--add-paths"] and not opts["--route"] and not opts["--verify"]:
+        sys.exit("budget-amend requires --add-paths \"glob[,glob]\", --route ROUTE "
+                 "and/or --verify \"command\"")
     cwd, bfile = resolve_budget_file(opts["--cwd"])
     if not bfile.is_file():
         sys.exit(f"nessun budget file: {bfile}")
     budget = json.loads(bfile.read_text())
     if budget.get("status") != "open":
         sys.exit("budget-amend requires an OPEN budget")
+    if opts["--verify"]:
+        # Il controllo si corregge senza chiudere il budget (la baseline
+        # dell'enforcement resta), ma passa dallo stesso lint di budget-open e
+        # resta negli emendamenti: quante volte il done dichiarato cambia a
+        # meta' lavoro e' un dato, come i perimetri sfondati.
+        vkind, vreason = verify_lint().classify(opts["--verify"], budget.get("cwd") or cwd)
+        if vkind != "command":
+            sys.exit(vreason)
+        budget = json.loads(bfile.read_text())
+        prev = budget.get("verify")
+        budget["verify"] = opts["--verify"]
+        budget.setdefault("amendments", []).append({
+            "verify": opts["--verify"], "from": prev, "reason": opts["--reason"],
+            "at": now_iso()})
+        write_json_atomic(bfile, budget)
+        print(f"verify amended: {opts['--verify']}")
+        if not opts["--add-paths"] and not opts["--route"]:
+            return
     if opts["--route"]:
         # Cambio di rotta a meta' task = reversal (decisione iniziale
         # falsificata, non errore): loggato, e il budget ricorda la rotta nuova.
@@ -1289,11 +1452,28 @@ def receipt_lines(budget, cwd, sid):
 
 def cmd_budget_close(args):
     opts = parse_opts(args, {"--outcome": "ok", "--cwd": None,
-                             "--actual-output": None})
+                             "--actual-output": None, "--no-verifier": None})
     cwd, bfile = resolve_budget_file(opts["--cwd"])
     if not bfile.is_file():
         sys.exit(f"nessun budget file: {bfile}")
     budget = json.loads(bfile.read_text())
+    # Tipo fragile (B, 03/10/2026): un «ok» passa solo con un fd-verifier
+    # concluso nella sessione dopo l'apertura, o con una rinuncia motivata
+    # che resta nella ricevuta. flagged/abandoned non chiedono niente.
+    if (opts["--outcome"] == "ok" and budget.get("status") == "open"
+            and (budget.get("reliability") or {}).get("tier") == "fragile"):
+        if opts["--no-verifier"]:
+            budget["no_verifier"] = opts["--no-verifier"]
+        elif verifier_ran(budget):
+            budget["verifier_ran"] = True
+        else:
+            r = budget["reliability"]
+            sys.exit(f"budget-close refused: task type '{budget.get('type')}' is fragile "
+                     f"({r.get('failed')} of the last {r.get('n')} failed, "
+                     f"{r.get('strained')} more had a hard path) and no "
+                     f"{VERIFIER_AGENT} ran on this task. Run one on the result, "
+                     f"or close with --no-verifier \"reason\" (kept in the receipt), "
+                     f"or --outcome flagged|abandoned.")
     budget["status"] = "closed"
     budget["outcome"] = opts["--outcome"]
     budget["closed_at"] = now_iso()
@@ -1367,7 +1547,8 @@ def cmd_budget_close(args):
             "expected_input_tokens", "actual_output_tokens",
             "actual_input_tokens", "outcome", "verify", "data_class",
             "paths", "amendments", "declared_at", "closed_at", "owner_sid",
-            "reopens", "rework_worst")}
+            "reopens", "rework_worst", "reliability", "verifier_ran",
+            "no_verifier")}
         receipt["cwd"] = cwd
         try:
             receipt["plugin_version"] = json.loads(

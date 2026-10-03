@@ -83,7 +83,7 @@ def main():
     check("B2 slug is a legal filename", not bad, f"illegal chars: {bad}")
 
     # C — budget roundtrip through the real CLI.
-    r = run("fd-telemetry.py", ["budget-open", "--task", "win verify",
+    r = run("fd-telemetry.py", ["budget-open", "--verify", "test -d .", "--task", "win verify",
                                 "--expected-output", "500",
                                 "--cwd", str(proj)], env=env)
     check("C1 budget-open succeeds", r.returncode == 0,

@@ -25,6 +25,7 @@ Casi budget file:
 - assente / closed / stale / corrotto → deny: apri un budget.
 """
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -730,7 +731,7 @@ def log_gate_deny(data, kind, budget=None):
     try:
         ti = data.get("tool_input") or {}
         payload = {
-            "kind": kind,  # no_budget | stale_budget | flagged | quota_guard
+            "kind": kind,  # no_budget | stale_budget | flagged | quota_guard | verify_*
             "tool": data.get("tool_name"),
             "subagent_type": ti.get("subagent_type"),
             "model": ti.get("model") or "inherit",
@@ -925,28 +926,42 @@ def nested_notice(data):
         return None
 
 
-def verify_contract(budget, bfile):
-    """Contratto qualità: il kernel chiede un done VERIFICABILE prima di
-    delegare — --verify lo rende machine-readable. Assente → UNA avvertenza
-    per budget (flag verify_warned nel file, scrittura atomica), mai deny:
-    il lavoro esplorativo non merita attrito, ma la delega senza evidenza
-    di accettazione dichiarata deve almeno costare una riga di coscienza.
-    Best-effort: qualunque errore → None."""
+def verify_gate(budget, open_cmd_hint):
+    """Controllo obbligatorio e vero (A, 03/10/2026, «Loops and Graphs»): ogni
+    compito delegato porta un --verify che PUO' fallire. Fino alla 1.53 era
+    un avviso una tantum; misurato il 03/10 su 30 giorni: 37 budget su 161
+    senza verify e circa meta' dei restanti in prosa, che nessun hook esegue.
+    Ritorna (kind, messaggio) da negare, o None. Fail-open: un lint che non
+    si carica non nega niente."""
     try:
-        if not isinstance(budget, dict):
-            return None
-        if budget.get("verify") or budget.get("verify_warned"):
-            return None
-        budget["verify_warned"] = True
-        tmp = bfile.with_name(f"{bfile.name}.{os.getpid()}.tmp")
-        tmp.write_text(json.dumps(budget, ensure_ascii=False))
-        os.replace(tmp, bfile)
-        return ("FD ⚠ delegation without declared acceptance evidence — the "
-                "budget has no --verify (a command that passes / an "
-                "enumerable checklist). Delegation allowed — but pin the "
-                "verifiable done NOW and declare it at the next budget-open.")
+        spec = importlib.util.spec_from_file_location(
+            "verify_lint", Path(__file__).with_name("verify-lint.py"))
+        vl = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(vl)
+        kind, reason = vl.classify(budget.get("verify"), budget.get("cwd"))
     except Exception:
         return None
+    if kind == "command":
+        return None
+    return (f"verify_{kind}",
+            "✕ FABLE-DIRECTOR delegation DENIED — the open budget has no check "
+            f"that can fail.\n{reason}\nFix it without closing the budget, then "
+            f"retry:\n{open_cmd_hint} budget-amend --verify \"<command>\"")
+
+
+def reliability_notice(data, budget):
+    """Tipo di compito fragile (B): ricorda a ogni delega che non e' gia' la
+    verifica che l'«ok» finale chiede un fd-verifier. None altrimenti."""
+    rel = budget.get("reliability") or {}
+    if rel.get("tier") != "fragile":
+        return None
+    st = str((data.get("tool_input") or {}).get("subagent_type") or "")
+    if st.endswith("fd-verifier"):
+        return None
+    return (f"FD ⚖ task type '{budget.get('type')}' is fragile "
+            f"({rel.get('failed')} of the last {rel.get('n')} failed, "
+            f"{rel.get('strained')} more had a hard path): budget-close --outcome ok "
+            f"will need an fable-director:fd-verifier run on the result.")
 
 
 CONTRACT_PARTS = (
@@ -1136,6 +1151,11 @@ def main():
                 log_gate_deny(data, "priority_hold", budget)
                 deny(hold)
                 return
+            vdeny = verify_gate(budget, pycmd(telemetry))
+            if vdeny:
+                log_gate_deny(data, vdeny[0], budget)
+                deny(vdeny[1])
+                return
             # Registro PRIMA del checkpoint: se l'ask viene approvato l'hook non
             # gira di nuovo — senza questo, proprio le deleghe più costose
             # sparirebbero dal [DLG]. Se l'utente nega, sovrastima di 1: stesso
@@ -1150,8 +1170,9 @@ def main():
             msgs = [m for m in (announce_model(data),
                                 nested_notice(data),
                                 effort_coherence(data, budget),
-                                verify_contract(budget, bfile),
-                                contract_lint(data),
+                                reliability_notice(data, budget),
+                                (None if (budget.get("reliability") or {}).get("tier")
+                                 == "reliable" else contract_lint(data)),
                                 fit_warn,
                                 resume_hygiene(data),
                                 workflow_lint(data),

@@ -56,7 +56,7 @@ def budget_file(home, cwd):
 
 home = tempfile.mkdtemp()
 cwd = tempfile.mkdtemp()
-base = ["budget-open", "--task", "t", "--expected-output", "100", "--cwd", cwd]
+base = ["budget-open", "--verify", "test -d .", "--task", "t", "--expected-output", "100", "--cwd", cwd]
 
 r = run(home, *base, "--route", "agent")
 check("P1 agent senza --paths -> rifiuta",

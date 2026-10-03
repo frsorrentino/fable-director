@@ -106,7 +106,7 @@ const judge = await agent('judge', { effort: 'max' })
 return { readers, judge }
 """)
 
-r = run([sys.executable, FDT, "budget-open", "--task", "panel", "--expected-output", "400000",
+r = run([sys.executable, FDT, "budget-open", "--verify", "test -d .", "--task", "panel", "--expected-output", "400000",
          "--expected-input", "300000", "--agents", "16", "--route", "workflow", "--cost-ack",
          "--paths", "none", "--cwd", str(proj)])
 assert r.returncode == 0, r.stderr
