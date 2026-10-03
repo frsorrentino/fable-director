@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.54.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.55.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need
 to do.** It makes your agent declare what a job should cost before it delegates,
@@ -229,6 +229,8 @@ gracefully when absent.
   sessions. Both plugins carry the same task contract
   (`fable-director/schemas/task-contract.v1.json`): a plan node's check becomes
   the node's `--verify`. Nothing changes when only one of the two is installed.
+  Instructions you repeat in 3+ sessions (`fd-telemetry.py repeats`) become
+  its constraints on your yes; without it, playbook candidates.
 
 ## Documentation
 

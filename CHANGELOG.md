@@ -2,6 +2,15 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.55.x
+
+- **1.55.0 — instructions you keep repeating, proposed as rules.**
+  - **`fd-telemetry.py repeats`** reads your own turns in the last 7 days of transcripts and groups similar sentences (3-word shingles, Jaccard ≥ 0.5). A group is proposed when it carries a rule marker and shows up in 3 different sessions: 3 times in one session is insistence, not habit. Zero model tokens; nothing leaves the machine.
+  - **Noise stays out.** Pasted blocks, hook injections, messages relayed by other sessions (they count as one session in all), compaction summaries, sessions with a single human turn (scripted `claude -p` prompts) and resumed conversations copied into a new file.
+  - **Already written, ignored N times.** A repetition that is already in a CLAUDE.md, in memory or in claude-master's constraints is not proposed again: it is listed apart, because there the problem is not a missing rule.
+  - **Nothing is registered on its own.** `repeats accept ID` writes the rule to claude-master (`task constraint add --project P | --topic T`) when it is installed, otherwise a `[candidata]` line in your playbook; `repeats dismiss ID` drops it. `/fable-director:status` shows a line when there are new proposals.
+  - **Playbook: Markdown first, HTML by script.** A readable report is written as Markdown and turned into HTML by a script; the source puts HTML written by the model at about 7× the tokens (not measured here).
+
 ## 1.54.x
 
 - **1.54.0 — a check that can fail, and reliability by task type.**
