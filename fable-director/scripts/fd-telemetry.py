@@ -59,6 +59,10 @@ Sottocomandi:
                aggrega gli eventi: cache metrics, overhead delega, spreco per categoria,
                hit-rate verifiche, densità per tipo task (soglia override: N≥10).
                Le metriche sono ALLARMI, non target.
+  repeats [scan|accept ID|dismiss ID|pending] [--days N]
+               istruzioni ripetute in 3+ sessioni (repeat-finder.py): proposte
+               di vincoli, mai registrate senza il si' dell'utente; eventi
+               repeat_proposed/repeat_accepted con soli conteggi
   cache-get KEY / cache-put KEY (--file F | --output S) --verified
                cache idempotente opt-in per output LLM su input invariati.
                Si scrive SOLO con --verified (output passato da verifica deterministica
@@ -2727,6 +2731,14 @@ def cmd_effort(args):
         print("deliverables: no task budget closed for this client.")
 
 
+def cmd_repeats(args):
+    """Delega a repeat-finder.py (stesso interprete): un solo posto per la logica."""
+    import subprocess
+    r = subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "repeat-finder.py")]
+                       + list(args))
+    sys.exit(r.returncode)
+
+
 def main():
     if len(sys.argv) < 2:
         sys.exit(__doc__)
@@ -2735,7 +2747,8 @@ def main():
                 "budget-amend": cmd_budget_amend,
                 "log": cmd_log, "session-summary": cmd_session_summary,
                 "report": cmd_report, "effort": cmd_effort,
-                "cache-get": cmd_cache_get, "cache-put": cmd_cache_put}
+                "cache-get": cmd_cache_get, "cache-put": cmd_cache_put,
+                "repeats": cmd_repeats}
     if cmd not in dispatch:
         sys.exit(f"sottocomando sconosciuto: {cmd}\n{__doc__}")
     dispatch[cmd](args)

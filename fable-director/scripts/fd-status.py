@@ -443,6 +443,31 @@ def main():
         except Exception:
             pass
 
+    # Istruzioni ripetute (repeat-finder.py): si legge l'ultima scansione;
+    # se manca o ha piu' di un giorno la si rilancia staccata, senza
+    # aspettarla (sono decine di secondi sui transcript di una settimana).
+    try:
+        rf = BASE / "repeats.json"
+        if not rf.is_file() or (datetime.now().timestamp() - rf.stat().st_mtime) > 86400:
+            import subprocess
+            subprocess.Popen([sys.executable, str(Path(__file__).resolve().parent / "repeat-finder.py"),
+                              "scan", "--days", "7"], stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             start_new_session=True)
+        if rf.is_file():
+            props = json.loads(rf.read_text()).get("proposals") or []
+            try:
+                st = json.loads((BASE / "repeats-state.json").read_text())
+            except Exception:
+                st = {}
+            done = set(st.get("accepted") or []) | set(st.get("dismissed") or [])
+            n = sum(1 for x in props if x.get("id") not in done)
+            if n:
+                add("rep", f"{n} repeated instruction{'s' if n > 1 else ''} this week — "
+                           "`fd-telemetry.py repeats`")
+    except Exception:
+        pass
+
     # Bollettino: stesso linguaggio della statusline (box, barre, glifi).
     # Va in conversazione come testo monospace: niente colori, il disegno
     # regge da solo. Larghezza = contenuto piu largo, titolo con orologio.
@@ -461,6 +486,7 @@ def main():
         "xf": ("external calls", "free-tier calls today per provider, on their own reset window"),
         "dlg": ("delegations", "agents launched this session and tokens they produced, per model"),
         "agt": ("agent effort", "declared effort tier versus what the agent actually ran"),
+        "rep": ("repeated instructions", "said in 3+ sessions and not written anywhere: propose them as rules"),
         "rcpt": ("last receipt", "how the last closed task in this folder went"),
         "new": ("unknown bucket", "a rate-limit bucket this plugin does not know yet"),
         "": ("", ""),
