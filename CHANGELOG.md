@@ -2,6 +2,14 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.56.x
+
+- **1.56.0 — model and effort advice for each session, for the claude-master app.**
+  - **One advice per live session**, in the snapshot the statusline already writes (`~/.claude/fable-director/sessions/<session_id>.json`, key `advice`): model, effort, a one-line reason in Italian, `switch_cost_tokens` (the cache a switch rewrites), `when` and `differs`. claude-master's relay shows it in the app's Model and Effort selectors (contract 1.37).
+  - **Deterministic rules, zero tokens** (`scripts/advice.py`): 5-hour quota ≥ 90% or week ≥ 85% → Opus 5.5 at medium at most; Fable's premium window ≥ 80% → Opus 5.5 high with `/advisor fable`; a main session on a non-top model → Opus 5.5; `xhigh`/`max` → `high`. Otherwise, the current choice.
+  - **Never mid-task.** `when` is `now` only with a fresh context (< 50k) and no open budget; otherwise the advice waits for `/clear` or the next task. It is never applied by itself, and with no quota data there are no numbers.
+  - The snapshot also carries `account` and `cwd`.
+
 ## 1.55.x
 
 - **1.55.1 — after a handoff, `/clear` instead of a new session.**

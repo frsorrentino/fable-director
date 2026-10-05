@@ -34,6 +34,7 @@ badge=""
 # Tutte le metriche in UNA passata python (statusline gira spesso: un solo processo).
 # Campi assenti → "-" → il segmento si omette. Il budget file è di fable-director
 # (fd-telemetry.py budget-open / stop-budget-check.py): qui SOLO lettura.
+export FD_SL_SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
 read -r model pct rl rlt wk wkt bdg xf dlg cache cmp grind eff bar win lk fw prn pru stuck vrf prio dir <<EOF
 $(printf '%s' "$input" | "$FD_PYTHON" -c '
 import json,sys,os,time
@@ -196,6 +197,17 @@ try:
             if not ctx and p is not None and cw.get("context_window_size"):
                 ctx=int(float(p)/100.0*int(cw.get("context_window_size")))
             snapd={"session_id":str(_sid),"model":(d.get("model") or {}).get("id"),"effort":el,"ctx_tokens":ctx,"ctx_size":cw.get("context_window_size"),"five_hour_used_pct":(round(float(r),1) if r is not None else None),"five_hour_resets_at":fh.get("resets_at"),"ts":int(time.time())}
+            # (1.56) account, cwd e consiglio modello/effort per il relay di
+            # claude-master (contratto 1.37 A): advice.py, regole nel docstring.
+            import hashlib as _ha
+            snapd["account"]=_ha.sha256((os.environ.get("CLAUDE_CONFIG_DIR") or str(Path.home()/".claude")).encode()).hexdigest()[:8]
+            snapd["cwd"]=(d.get("workspace") or {}).get("current_dir") or d.get("cwd") or ""
+            try:
+                import importlib.util as _iu
+                _sp=_iu.spec_from_file_location("fd_advice",os.path.join(os.environ.get("FD_SL_SCRIPTS") or ".","advice.py"))
+                _am=_iu.module_from_spec(_sp); _sp.loader.exec_module(_am)
+                snapd["advice"]=_am.for_snapshot(snapd)
+            except Exception: pass
             sd=Path.home()/".claude"/"fable-director"/"sessions"
             sd.mkdir(parents=True,exist_ok=True)
             sf=sd/(str(_sid).replace("/","-")+".json")
@@ -203,7 +215,8 @@ try:
             try:
                 if sf.is_file(): olds=json.loads(sf.read_text())
             except Exception: olds={}
-            if any(olds.get(k)!=snapd[k] for k in snapd if k!="ts") or time.time()-float(olds.get("ts") or 0)>300:
+            _noat=lambda v: {k:x for k,x in v.items() if k!="at"} if isinstance(v,dict) else v
+            if any(_noat(olds.get(k))!=_noat(snapd[k]) for k in snapd if k!="ts") or time.time()-float(olds.get("ts") or 0)>300:
                 tmps=sf.with_name(f"{sf.name}.{os.getpid()}.tmp")
                 tmps.write_text(json.dumps(snapd)); os.replace(tmps,sf)
                 for _old in sd.glob("*.json"):
