@@ -6,11 +6,11 @@ contratto claude-master 1.37 parte A).
   A2 settimana ≥ 85% → Opus 5.5 medium
   A3 finestra premium (plan fraction) ≥ 80% su Fable → Opus 5.5 high + /advisor fable
   A4 quota ok, Fable high → nessun cambio, differs false
-  A5 effort xhigh/max senza pressione → high, stesso modello
+  A5 effort xhigh/max con quota ≥ 70% → high; sotto il 70% resta (scelta voluta)
   A6 modello non di punta come sessione principale → Opus 5.5
   A7 when: contesto fresco e nessun budget → now; contesto pieno o budget aperto → next_task
   A8 switch_cost_tokens = ctx_tokens; source fable-director; at intero
-  A9 quota assente → nessun numero inventato, consiglio solo su effort/modello
+  A9 quota assente → nessun numero inventato, xhigh resta
   A10 CLI --session riscrive l'advice nello snapshot (scrittura atomica, altre chiavi intatte)
   A11 statusline reale: lo snapshot porta account, cwd e advice
 
@@ -67,9 +67,11 @@ a = adv.compute(snap(), q(), {}, False, NOW)
 check("A4 quota ok, Fable high → invariato", a["model"] == FABLE and a["effort"] == "high"
       and a["differs"] is False, str(a))
 
-a = adv.compute(snap(effort="max"), q(), {}, False, NOW)
-check("A5 max senza pressione → high", a["model"] == FABLE and a["effort"] == "high"
-      and a["differs"] is True, str(a))
+a = adv.compute(snap(effort="max"), q(w=72), {}, False, NOW)
+b = adv.compute(snap(effort="max"), q(r=69, w=50), {}, False, NOW)
+check("A5 max con settimana 72% → high; con 5h 69% resta max",
+      a["model"] == FABLE and a["effort"] == "high" and a["differs"] is True
+      and b["effort"] == "max" and b["differs"] is False, f"{a} {b}")
 
 a = adv.compute(snap(model="claude-sonnet-5-5", effort="medium"), q(), {}, False, NOW)
 check("A6 Sonnet come principale → Opus", a["model"] == OPUS and a["differs"] is True, str(a))
@@ -85,8 +87,8 @@ check("A8 campi", a2["switch_cost_tokens"] == 300_000 and a2["source"] == "fable
                                           "at", "source", "when", "differs"}, str(a2))
 
 a = adv.compute(snap(effort="xhigh"), None, None, False, NOW)
-check("A9 quota assente → solo effort, nessun numero", a["model"] == FABLE
-      and a["effort"] == "high" and "%" not in a["reason"], str(a))
+check("A9 quota assente → xhigh resta, nessun numero", a["model"] == FABLE
+      and a["effort"] == "xhigh" and a["differs"] is False and "%" not in a["reason"], str(a))
 
 # A10 CLI
 home = Path(tempfile.mkdtemp(prefix="fd-adv"))
@@ -118,7 +120,7 @@ r = subprocess.run(["bash", str(SCRIPTS / "statusline-ctx.sh")], input=json.dump
 f2 = base / "sessions" / "s2.json"
 d2 = json.loads(f2.read_text()) if f2.is_file() else {}
 check("A11 statusline: account, cwd, advice", d2.get("account") == acct
-      and d2.get("cwd") == str(home) and (d2.get("advice") or {}).get("effort") == "high"
+      and d2.get("cwd") == str(home) and (d2.get("advice") or {}).get("effort") == "max"
       and (d2.get("advice") or {}).get("when") == "now", r.stderr[-300:] + str(d2))
 
 print(f"\n{len(passed)} passed, {len(failed)} failed")

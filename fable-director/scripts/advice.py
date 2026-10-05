@@ -11,7 +11,8 @@ Regole (la prima che scatta vince; deterministiche, zero token):
      di plan-<acct>.json) >= 80%   plan-<acct>.json, mai una misura)
   4. sessione principale non di punta -> Opus 5.5: la principale pianifica e
      verifica, l'esecuzione va agli agenti
-  5. effort xhigh/max           -> high: consuma quota in silenzio
+  5. effort xhigh/max, con 5h o settimana >= 70% -> high: consuma quota in
+     silenzio. Sotto il 70% (o senza dati di quota) il max scelto apposta resta.
   altrimenti la scelta attuale.
 
 Un cambio di modello o di effort riscrive la cache: switch_cost_tokens = il
@@ -83,9 +84,10 @@ def compute(snap, quota, plan, budget_open, now):
     elif base and not any(base.startswith(t) for t in TOP):
         m, e = OPUS, _cap(effort, "high")
         why = "la sessione principale pianifica e verifica: Opus 5.5; l'esecuzione va agli agenti"
-    elif effort in ("xhigh", "max"):
+    elif effort in ("xhigh", "max") and max(r or 0, w or 0) >= 70:
         m, e = model, "high"
-        why = f"effort {effort} consuma quota in silenzio: high basta, alzalo per il compito difficile"
+        why = (f"quota alta (5h {r or 0:.0f}%, settimana {w or 0:.0f}%): effort {effort} "
+               f"la consuma in silenzio, high basta")
     else:
         m, e = model, effort
         why = (f"quota ok (5h {r:.0f}%, settimana {w:.0f}%): {_name(m)} {e} va bene"
