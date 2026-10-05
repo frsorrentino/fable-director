@@ -274,9 +274,9 @@ def cmd_prompt(data):
         pass
     print(f"[fd-handoff] context {marker.get('pct', '?')}%, last task closed at a "
           f"verified boundary ({marker.get('boundary', '?')}). Before starting this "
-          f"prompt, ask the user in ONE line: \"Save a handoff and restart in a fresh "
-          f"session (/fable-director:handoff — about half the cost of continuing), or "
-          f"go on here?\" — then do what they say. If this prompt is clearly a "
+          f"prompt, ask the user in ONE line: \"Save a handoff and then send /clear "
+          f"(/fable-director:handoff — about half the cost of continuing), or "
+          f"go on here?\" — then do what they say; /clear is theirs to send. If this prompt is clearly a "
           f"continuation of the closed task, skip the question.")
 
 

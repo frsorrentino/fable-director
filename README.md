@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.55.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.55.1-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need
 to do.** It makes your agent declare what a job should cost before it delegates,
@@ -129,7 +129,7 @@ Model, five-hour plan quota with its reset time, context — the three numbers
 that are your margin, always on screen — so you see the rate limit coming
 **before** it hits. Everything else shows up only when there is something to
 do, in words, most urgent first (`quota 92% used, resets in 40 min · context
-83% full — finish the task and start a new session`).
+83% full — /fable-director:handoff, then /clear`).
 
 ![See the limit coming: plan quotas, live budget and burn-rate in your statusline on every turn. The rate limit stops being a surprise — it becomes a dashboard you glance at.](assets/readme/card4-gauge.png)
 

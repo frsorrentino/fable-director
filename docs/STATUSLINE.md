@@ -29,7 +29,7 @@ Fable 5.1 high · ▸ shop · quota 21%, resets 17:30 · context 26%   caveman
 
 ```
 Fable 5.1 · quota 92%, resets 17:30 · context 83%
-└ quota 92% used, resets in 40 min · context 83% full — finish the task and start a new session
+└ quota 92% used, resets in 40 min · context 83% full — /fable-director:handoff, then /clear
 ```
 
 **Turn it on:** `/fable-director:statusline`, then restart Claude Code.

@@ -119,7 +119,7 @@ def main():
         # /1M quando la finestra e' estesa: 26% di 1M non e' 26% di 200k
         normal.append((RED if pct >= 80 else YEL if pct >= 60 else GREY, f"context {pct:.0f}%{win}"))
         if pct >= 80:
-            exc.append((5, RED, f"context {pct:.0f}% full — /fable-director:handoff, then a new session"))
+            exc.append((5, RED, f"context {pct:.0f}% full — /fable-director:handoff, then /clear"))
 
     # --- agenti (E5) -----------------------------------------------------------
     m = re.match(r"⟲(\d+)", dlg)

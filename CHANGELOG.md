@@ -4,6 +4,10 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.55.x
 
+- **1.55.1 — after a handoff, `/clear` instead of a new session.**
+  - **The proposal says `/clear`.** The kernel, `/fable-director:handoff`, the `[fd-handoff]` question and the statusline (`context N% full — /fable-director:handoff, then /clear`) now point to `/clear`: the startup hooks run again and announce the handoff, and the window and the MCP connections stay. The cost is the same, since the cache is lost either way.
+  - **A new process only when something read at startup changed:** Claude Code version, plugin update, settings, hooks, MCP servers. Only the user can send `/clear`, from the terminal or the phone.
+
 - **1.55.0 — instructions you keep repeating, proposed as rules.**
   - **`fd-telemetry.py repeats`** reads your own turns in the last 7 days of transcripts and groups similar sentences (3-word shingles, Jaccard ≥ 0.5). A group is proposed when it carries a rule marker and shows up in 3 different sessions: 3 times in one session is insistence, not habit. Zero model tokens; nothing leaves the machine.
   - **Noise stays out.** Pasted blocks, hook injections, messages relayed by other sessions (they count as one session in all), compaction summaries, sessions with a single human turn (scripted `claude -p` prompts) and resumed conversations copied into a new file.

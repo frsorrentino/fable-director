@@ -3,7 +3,7 @@ description: Write a ~2k-token handoff of this session to disk (decisions, verif
 allowed-tools: Bash, Write, Read
 ---
 
-A long session pays its whole context again at every turn; a cold resume re-caches all of it (measured: 296k tokens, ~$6, to reopen one session). A handoff on disk plus a fresh session costs a fraction. Do exactly this:
+A long session pays its whole context again at every turn; a cold resume re-caches all of it (measured: 296k tokens, ~$6, to reopen one session). A handoff on disk plus `/clear` costs a fraction. Do exactly this:
 
 1. Run:
 
@@ -21,4 +21,4 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" "${CLAUDE_PLUGIN_ROOT}/scripts/handof
 
 3. Run the `THEN:` command it printed (`--written PATH`): it logs the event and prints the size.
 
-4. Tell the user in two lines: the path, and that closing this session and opening `claude` in the same folder is enough — the handoff is announced at startup.
+4. Tell the user in two lines: the path, and that sending `/clear` is enough — the startup hooks run again and announce the handoff, and the window and MCP connections stay. You cannot run `/clear` yourself: the user sends it (terminal or phone). A new `claude` process only when something read at process start changed: Claude Code version, plugin update, settings, hooks, MCP servers.

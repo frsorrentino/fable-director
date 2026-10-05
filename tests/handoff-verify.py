@@ -235,8 +235,8 @@ def main():
 
     # H10 — statusline text (the plain suite covers the rendering; here the string).
     src = (SCRIPTS / "statusline-plain.py").read_text()
-    check("H10 statusline: 'context N% full — /fable-director:handoff, then a new session'",
-          "full — /fable-director:handoff, then a new session" in src
+    check("H10 statusline: 'context N% full — /fable-director:handoff, then /clear'",
+          "full — /fable-director:handoff, then /clear" in src
           and "finish the task and start a new session" not in src)
 
     print(f"\n{len(passed)} passed, {len(failed)} failed")
