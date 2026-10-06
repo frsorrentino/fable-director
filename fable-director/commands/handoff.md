@@ -1,6 +1,6 @@
 ---
 description: Write a ~2k-token handoff of this session to disk (decisions, verified facts, open items, paths, what to invoke next) so a fresh session can continue at a fraction of the cost — only at a verified task boundary; --here writes it into the project's docs/
-allowed-tools: Bash, Write, Read
+allowed-tools: Bash(bash "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" "${CLAUDE_PLUGIN_ROOT}/scripts/handoff.py":*), Write, Read
 ---
 
 A long session pays its whole context again at every turn; a cold resume re-caches all of it (measured: 296k tokens, ~$6, to reopen one session). A handoff on disk plus `/clear` costs a fraction. Do exactly this:

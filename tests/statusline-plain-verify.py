@@ -61,7 +61,7 @@ def stdin(pct=26, rl=40, wk=46, effort=None, reset_in=2400, transcript=None):
 
 
 def render(s, **env):
-    e = dict(os.environ, HOME=str(home), CAVEMAN_STATUSLINE_SH="/nonexistent", COLUMNS="140")
+    e = dict(os.environ, HOME=str(home), COLUMNS="140")
     e.pop("CLAUDE_CONFIG_DIR", None); e.pop("FD_STATUSLINE_MODE", None)
     e.update({k: str(v) for k, v in env.items()})
     return plain(subprocess.run(["bash", str(ROOT / "statusline-ctx.sh")], input=s, capture_output=True,
@@ -124,7 +124,7 @@ out2 = render(stdin())
 b["status"] = "flagged"; bfile.write_text(json.dumps(b))
 out3 = render(stdin())
 raw3 = subprocess.run(["bash", str(ROOT / "statusline-ctx.sh")], input=stdin(), capture_output=True, text=True,
-                      env=dict(os.environ, HOME=str(home), CAVEMAN_STATUSLINE_SH="/nonexistent", COLUMNS="140"),
+                      env=dict(os.environ, HOME=str(home), COLUMNS="140"),
                       timeout=120).stdout
 check("T5 budget 2× in parole; 3× testo rosso senza sfondo",
       "budget over 2× — reconsider the route" in out2 and "budget over 3× — post-mortem before closing" in out3

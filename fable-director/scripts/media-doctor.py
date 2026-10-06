@@ -45,7 +45,8 @@ TOOLS_DIR = Path.home() / ".claude" / "fable-director" / "tools"
 DEFAULT_VENV = TOOLS_DIR / "venv"
 CONFIG_PATH = Path.home() / ".claude" / "fable-director" / "cross-family.json"
 HF_CACHE = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface")) / "hub"
-PACKAGES = ["faster-whisper", "edge-tts"]
+# Exact versions: the opt-in venv runs only what was reviewed (the ones measured here).
+PACKAGES = ["faster-whisper==1.2.1", "edge-tts==7.2.8"]
 MODEL_MB = {"tiny": 75, "base": 145, "small": 470, "medium": 1500, "large-v3": 3000}
 HERE = Path(__file__).resolve().parent
 

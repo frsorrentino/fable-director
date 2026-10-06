@@ -41,8 +41,12 @@ print(sys.executable)' 2>/dev/null) || continue
   return 1
 }
 
+# Bytecode cache outside the plugin: the installed plugin must stay byte-for-byte
+# the reviewed one, and the scripts that load fd-telemetry.py & co. would
+# otherwise write __pycache__/ next to them. Same speed, the cache just lives elsewhere.
 if _fd_py_resolve; then
   export FD_PYTHON PYTHONUTF8=1 PYTHONIOENCODING=utf-8
+  export PYTHONPYCACHEPREFIX="${PYTHONPYCACHEPREFIX:-${XDG_CACHE_HOME:-$HOME/.cache}/fable-director/pycache}"
 else
   unset FD_PYTHON
 fi

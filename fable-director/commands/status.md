@@ -1,6 +1,6 @@
 ---
 description: fable-director status as in-conversation text (quotas, live budget, burn-rate, external calls) — for clients with no statusline (smartphone/remote)
-allowed-tools: Bash
+allowed-tools: Bash(bash "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" "${CLAUDE_PLUGIN_ROOT}/scripts/fd-status.py":*)
 ---
 
 Run and report the output AS-IS (it is already formatted, freshness included — do not summarize, do not embellish, do not add commentary):

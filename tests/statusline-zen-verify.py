@@ -71,7 +71,6 @@ def payload(ctx_pct=12, ctx_size=1_000_000, five=10, seven=10, effort="max",
 def render(home, stdin, **env):
     e = dict(os.environ, HOME=str(home), **{k: str(v) for k, v in env.items()})
     e.pop("CLAUDE_CONFIG_DIR", None)
-    e.setdefault("CAVEMAN_STATUSLINE_SH", "/nonexistent/no-badge.sh")
     e.setdefault("FD_STATUSLINE_MODE", "expert")  # questi check descrivono la riga storica
     return subprocess.run(["bash", str(ROOT / "statusline-ctx.sh")],
                           input=stdin, capture_output=True, text=True,
@@ -117,20 +116,33 @@ check("Z9 effort assente → nessun suffisso", "·max" not in plain(noeff)
       and "·high" not in plain(noeff), noeff)
 
 # --- badge caveman ---
-badge = tmp / "badge.sh"
-badge.write_text("printf '\\033[38;5;172m[CAVEMAN]\\033[0m'")
-withb = render(home, payload(), CAVEMAN_STATUSLINE_SH=badge)
+# Il badge nasce dal file di stato di caveman (dati): il suo script non si
+# esegue mai, il plugin non lancia codice che sta fuori da se'.
+def with_caveman(h, mode="full"):
+    hooks = h / ".claude" / "plugins" / "marketplaces" / "caveman" / "src" / "hooks"
+    hooks.mkdir(parents=True, exist_ok=True)
+    ran = h / "caveman-script-ran"
+    (hooks / "caveman-statusline.sh").write_text(f"touch '{ran}'\n")
+    (h / ".claude" / ".caveman-active").write_text(mode)
+    return ran
+
+
+homec = tmp / "homec"
+homec.mkdir()
+ran = with_caveman(homec)
+withb = render(homec, payload())
 check("Z10 [CAVEMAN] adottato → 'caveman' in 172, quadre via",
       CAV + "caveman" in withb and "[CAVEMAN]" not in plain(withb), withb)
 check("Z10b badge in CODA a riga 1, non piu in testa",
       plain(withb).split("\n")[0].endswith("caveman")
       and not plain(withb).startswith("caveman"), plain(withb))
-
-alien = tmp / "alien.sh"
-alien.write_text("printf '\\033[35m<<WEIRD>>\\033[0m'")
-witha = render(home, payload(), CAVEMAN_STATUSLINE_SH=alien)
-check("Z11 badge sconosciuto → passthrough intatto",
-      "\x1b[35m<<WEIRD>>\x1b[0m" in witha, witha)
+check("Z11 script di caveman mai eseguito", not ran.exists(), str(ran))
+(homec / ".claude" / ".caveman-active").write_text("ultra")
+check("Z11b modo dal file → caveman:ultra",
+      "caveman:ultra" in plain(render(homec, payload())), "")
+(homec / ".claude" / ".caveman-active").write_text("off")
+check("Z11c modo off → nessun badge",
+      "caveman" not in plain(render(homec, payload())), "")
 
 # --- budget: quieto dim, allarme a parole (regressione) ---
 slug_src = str(Path(os.getcwd())).replace("\\", "/")
@@ -361,7 +373,8 @@ def visible(s):
 
 home5 = tmp / "home5"
 home5.mkdir()
-r1_full = visible(render(home5, payload(), CAVEMAN_STATUSLINE_SH=badge,
+with_caveman(home5)
+r1_full = visible(render(home5, payload(),
                          COLUMNS=200)).split("\n")[0]
 RESET = "1\u00a0Jan"  # resets_at del payload: oltre 24h → giorno + mese
 check("D1 largo → badge in coda, gauge e orari di reset tutti presenti",
@@ -372,21 +385,21 @@ check("D1b orario staccato e in 239, nessun glifo tra % e ora",
       and "↻" not in r1_full and "%→" not in r1_full, r1_full)
 
 # Un carattere meno del necessario: cade il badge, NON la gauge.
-d1 = visible(render(home5, payload(), CAVEMAN_STATUSLINE_SH=badge,
+d1 = visible(render(home5, payload(),
                     COLUMNS=len(r1_full) - 1)).split("\n")[0]
 check("D2 -1 char → cade il badge, la gauge resta",
       "caveman" not in d1 and "▓░░░░░░░" in d1 and len(d1) <= len(r1_full) - 1,
       d1)
 
 # Ancora un carattere meno: cade la gauge, la percentuale ctx resta.
-d2 = visible(render(home5, payload(), CAVEMAN_STATUSLINE_SH=badge,
+d2 = visible(render(home5, payload(),
                     COLUMNS=len(d1) - 1)).split("\n")[0]
 check("D3 ancora stretto → cade la gauge, ctx 12%/1M resta",
       "▓" not in d2 and "░" not in d2 and "ctx 12%/1M" in d2
       and RESET in d2, d2)
 
 # Ultimo gradino: cadono gli orari di reset, le percentuali di quota no.
-d3 = visible(render(home5, payload(), CAVEMAN_STATUSLINE_SH=badge,
+d3 = visible(render(home5, payload(),
                     COLUMNS=len(d2) - 1)).split("\n")[0]
 check("D4 minimo → cadono gli orari di reset, restano 5H/7D e ctx",
       RESET not in d3 and "5H 10%" in d3 and "7D 10%" in d3
@@ -394,7 +407,7 @@ check("D4 minimo → cadono gli orari di reset, restano 5H/7D e ctx",
 
 # D5: sotto il minimo il dato NON si taglia oltre — meglio andare a capo che
 # mentire su una quota. La riga resta identica a D4.
-d4 = visible(render(home5, payload(), CAVEMAN_STATUSLINE_SH=badge,
+d4 = visible(render(home5, payload(),
                     COLUMNS=20)).split("\n")[0]
 check("D5 sotto il minimo → il dato non si taglia oltre", d4 == d3, d4)
 

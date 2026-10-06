@@ -63,7 +63,7 @@ RESET_HHMM = time.strftime("%H:%M", time.localtime(RESET_AT))
 
 
 def run(args, stdin=None, extra=None):
-    env = dict(os.environ, HOME=str(home), USERPROFILE=str(home), CAVEMAN_STATUSLINE_SH="/nonexistent",
+    env = dict(os.environ, HOME=str(home), USERPROFILE=str(home),
                COLUMNS="140")
     env.pop("CLAUDE_CONFIG_DIR", None); env.pop("CLAUDE_CODE_SESSION_ID", None); env.pop("FD_STATUSLINE_MODE", None)
     env.update(extra or {})

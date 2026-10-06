@@ -43,6 +43,10 @@ from pathlib import Path
 
 PLUGIN = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PLUGIN))
+# observe.py runs this file without py.sh: keep the bytecode of anonymizer/ out of the plugin as py.sh does.
+if not sys.pycache_prefix:
+    sys.pycache_prefix = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"),
+                                      "fable-director", "pycache")
 
 from anonymizer import __version__, config as _config, corpus as _corpus, engine  # noqa: E402
 from anonymizer.columns import build_headers  # noqa: E402

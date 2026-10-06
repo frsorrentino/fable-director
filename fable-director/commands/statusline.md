@@ -1,6 +1,6 @@
 ---
 description: Rimuove (--remove, per sempre) o rimette la statusline fable-director in settings.json — l'installazione avviene da sola alla prima sessione, questo comando serve solo per toglierla o ripristinarla
-allowed-tools: Bash
+allowed-tools: Bash(bash "${CLAUDE_PLUGIN_ROOT}/scripts/statusline-install.sh":*)
 ---
 
 Esegui l'installer idempotente della statusline fable-director e riporta l'esito **verbatim**.

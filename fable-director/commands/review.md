@@ -1,6 +1,6 @@
 ---
 description: Data-driven improvement plan — the director reads telemetry and playbook and proposes course corrections anchored to objective alarms only
-allowed-tools: Bash, Read
+allowed-tools: Bash(bash "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" "${CLAUDE_PLUGIN_ROOT}/scripts/fd-telemetry.py" report:*), Read
 ---
 
 You are the director re-reading the workshop's own data. Produce an improvement plan for how this workspace uses delegation, anchored only to objective evidence, never to impressions.

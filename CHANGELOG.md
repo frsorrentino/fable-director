@@ -4,6 +4,12 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.56.x
 
+- **1.56.2 — the installed plugin stays the reviewed one.** Changes for the Anthropic plugin directory, with no change in behaviour.
+  - **No files written inside the plugin.** Python's bytecode cache goes to `~/.cache/fable-director/pycache` (`PYTHONPYCACHEPREFIX` in `py.sh`, `sys.pycache_prefix` in `anonymizer.py`). Same speed.
+  - **Commands pre-approve only their own script.** `allowed-tools` names the exact `"${CLAUDE_PLUGIN_ROOT}/…"` command each command runs. Any other shell command asks for permission as usual.
+  - **No other plugin's code runs.** The statusline reads caveman's mode file instead of running caveman's script: same badge, same rules. `CAVEMAN_STATUSLINE_SH` is gone.
+  - **Exact versions in the media venv**: `faster-whisper==1.2.1`, `edge-tts==7.2.8`.
+
 - **1.56.1 — `xhigh`/`max` advised down only when quota is high.** The advice suggests `high` only with the 5-hour quota or the week at 70% or more. Below that, or with no quota data, an effort chosen on purpose stays as it is, with no dot in the app.
 
 - **1.56.0 — model and effort advice for each session, for the claude-master app.**

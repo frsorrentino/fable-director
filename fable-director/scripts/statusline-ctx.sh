@@ -26,10 +26,26 @@ input=$(cat)
 FD_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/fable-director"
 [ -f "$FD_DIR/.statusline-debug" ] && printf '%s' "$input" > "$FD_DIR/statusline-last.json" 2>/dev/null
 
-# Badge caveman se installato nel profilo attivo (override: CAVEMAN_STATUSLINE_SH)
-CAVEMAN_SH="${CAVEMAN_STATUSLINE_SH:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/marketplaces/caveman/src/hooks/caveman-statusline.sh}"
+# Badge caveman se il plugin e' attivo nel profilo. Si legge il SUO file di stato
+# (dati), non si esegue il suo script: il plugin non lancia codice che sta fuori
+# da se'. Stesse regole di caveman-statusline.sh: file della sessione, poi il
+# flag globale; niente symlink; 64 byte, solo [a-z0-9-]; whitelist dei modi.
+CFG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 badge=""
-[ -f "$CAVEMAN_SH" ] && badge=$(printf '%s' "$input" | bash "$CAVEMAN_SH")
+cv_sid=$(printf '%s' "$input" | grep -o '"session_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed -e 's/.*:[[:space:]]*"//' -e 's/"$//')
+case "$cv_sid" in ''|*[!A-Za-z0-9_-]*) cv_sid="" ;; esac
+[ "${#cv_sid}" -gt 128 ] && cv_sid=""
+cv_flag="$CFG_DIR/.caveman-active"
+[ -n "$cv_sid" ] && [ -f "$CFG_DIR/.caveman-sessions/$cv_sid.mode" ] && cv_flag="$CFG_DIR/.caveman-sessions/$cv_sid.mode"
+# Solo se caveman e' installato (come prima: il suo script presente, non eseguito).
+if [ -f "$CFG_DIR/plugins/marketplaces/caveman/src/hooks/caveman-statusline.sh" ] && [ -f "$cv_flag" ] && [ ! -L "$cv_flag" ]; then
+  cv_mode=$(head -c 64 "$cv_flag" 2>/dev/null | tr -d '\n\r' | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-')
+  case "$cv_mode" in
+    full) badge=$(printf '\033[38;5;172m[CAVEMAN]\033[0m') ;;
+    lite|ultra|wenyan-lite|wenyan|wenyan-full|wenyan-ultra|commit|review|compress)
+      badge=$(printf '\033[38;5;172m[CAVEMAN:%s]\033[0m' "$(printf '%s' "$cv_mode" | tr '[:lower:]' '[:upper:]')") ;;
+  esac
+fi
 
 # Tutte le metriche in UNA passata python (statusline gira spesso: un solo processo).
 # Campi assenti → "-" → il segmento si omette. Il budget file è di fable-director
@@ -204,7 +220,7 @@ try:
             snapd["cwd"]=(d.get("workspace") or {}).get("current_dir") or d.get("cwd") or ""
             try:
                 import importlib.util as _iu
-                _sp=_iu.spec_from_file_location("fd_advice",os.path.join(os.environ.get("FD_SL_SCRIPTS") or ".","advice.py"))
+                _sp=_iu.spec_from_file_location("fd_advice",os.path.join(os.environ["FD_SL_SCRIPTS"],"advice.py"))
                 _am=_iu.module_from_spec(_sp); _sp.loader.exec_module(_am)
                 snapd["advice"]=_am.for_snapshot(snapd)
             except Exception: pass
