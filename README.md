@@ -186,8 +186,9 @@ every argument value becomes `<ARG>`, and the error text is scrubbed (home
 path, emails, URL queries, secrets). **Nothing leaves your computer** except
 one GitHub issue, anonymized, shown to you first and sent only when you say
 yes: `/fable-director:observe send` shows the draft and asks: send it from
-your GitHub (through `gh`, or a prefilled link you open), or not now.
-Anonymous sending is coming, not available yet. An observation marked `--security`
+your GitHub (through `gh`, or a prefilled link you open), send it anonymously
+(through the maintainer's service, see [privacy](docs/privacy.md)), or not now.
+An observation marked `--security`
 (a read or write outside the perimeter, a secret exposed, code run that was
 not asked for, data leaving the computer) never enters a public issue:
 `send --security` prepares a private report to the maintainers, see
