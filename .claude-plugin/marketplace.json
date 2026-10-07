@@ -1,6 +1,6 @@
 {
   "name": "fsorrentino",
-  "description": "Francesco Sorrentino's Claude Code plugins - fable-director (delegation efficiency with deterministic budget enforcement) and claude-master (many Claude Code sessions on one machine).",
+  "description": "Francesco Sorrentino's Claude Code plugins - fable-director (delegation efficiency with deterministic budget enforcement) and team-supervisor (many Claude Code sessions on one machine).",
   "owner": {
     "name": "Francesco Sorrentino",
     "email": "info@francescosorrentino.com"
@@ -12,13 +12,13 @@
       "description": "Keeps Claude Code from spending your quota on work the top model didn't need to do: declared pre-budgets with deterministic 2x/3x enforcement, cheap-executor routing, objective token telemetry. Small one-offs pay a 5-20% premium (measured) - built for sessions that delegate."
     },
     {
-      "name": "claude-master",
+      "name": "team-supervisor",
       "source": {
         "source": "git-subdir",
-        "url": "https://github.com/frsorrentino/claude-master.git",
-        "path": "claude-master",
-        "ref": "v0.4.29",
-        "sha": "6d6a929fd0a01f3d8666838abda9fbf49b31cfdb"
+        "url": "https://github.com/frsorrentino/team-supervisor.git",
+        "path": "team-supervisor",
+        "ref": "v0.7.0",
+        "sha": "24997c2bedc3da37a5303fb07df8843e25592b0c"
       },
       "description": "Run many Claude Code sessions on one machine: launch them in the right folder and account, in tmux, with a terminal window whose tab tells you which is which; list, close, restart, talk to them and restore them after a reboot. Configurable per machine, generic across terminals."
     }
