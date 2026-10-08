@@ -2,6 +2,14 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.57.x
+
+- **1.57.0 — the guards stop the action when they cannot run.** On Claude Code 2.1.295 or later.
+  - **Fail-closed guards.** The delegation gate (Agent/Task/Workflow without a budget) and the perimeter guard (`never_write`, `deny_git`) carry `onFailure: "block"`: if the hook cannot start, times out or exits with an unexpected code, Claude Code blocks the call instead of letting it through.
+  - **Measuring hooks unchanged.** Telemetry, statusline, PostToolUse, Stop and SessionStart hooks stay non-blocking: a fault there never stops your work.
+  - **Older Claude Code unaffected.** 2.1.294 and earlier ignore the key (tested): the guards run exactly as before.
+  - Unchanged: a bug inside a gate's own code still lets the call through, and with no Python 3 installed the gates stay off.
+
 ## 1.56.x
 
 - **1.56.2 — the installed plugin stays the reviewed one.** Changes for the Anthropic plugin directory, with no change in behaviour.
