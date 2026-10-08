@@ -12,15 +12,15 @@
       "description": "Keeps Claude Code from spending your quota on work the top model didn't need to do: declared pre-budgets with deterministic 2x/3x enforcement, cheap-executor routing, objective token telemetry. Small one-offs pay a 5-20% premium (measured) - built for sessions that delegate."
     },
     {
-      "name": "team-supervisor",
+      "name": "supervisor",
       "source": {
         "source": "git-subdir",
-        "url": "https://github.com/frsorrentino/team-supervisor.git",
-        "path": "team-supervisor",
-        "ref": "v0.7.2",
-        "sha": "27134f36b5629219988a4ff95971fee3b2c02fcf"
+        "url": "https://github.com/frsorrentino/supervisor.git",
+        "path": "supervisor",
+        "ref": "v0.8.0",
+        "sha": "94c8c55ca9088ca6a1051ccc86771fe19d5804bb"
       },
-      "description": "Run many Claude Code sessions on one machine: launch them in the right folder and account, in tmux, with a terminal window whose tab tells you which is which; list, close, restart, talk to them and restore them after a reboot. Configurable per machine, generic across terminals."
+      "description": "Supervisor for Claude Code. Run many Claude Code sessions on one machine: launch them in the right folder and account, in tmux, with a terminal window whose tab tells you which is which; list, close, restart, talk to them and restore them after a reboot. Configurable per machine, generic across terminals."
     }
   ]
 }
