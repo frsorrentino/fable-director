@@ -322,6 +322,37 @@ field on hook stdin.
   `fd-verifier` at `medium`, `effort_ignored` logged — a second cause the meter
   names besides old hosts ignoring the frontmatter.
 
+## Claude Code 2.1.291-2.1.301 — what the plugin follows (2026-10, 1.58.0)
+
+- **Request copies in transcripts (2.1.300)**: records `api-request`,
+  `api-request-blob`, `api-request-shape`. Blobs repeat the `tool_use` and
+  `tool_result` of the real turns, without timestamp or usage. Tool counts,
+  rework, churn (`fd-telemetry.py`, Stop hook) and the grinding streak
+  (`fail-streak.py`) skip every `api-request*` record; tokens never needed it.
+  Fixture `tests/transcript-contract/07-api-request-copies`.
+- **Cache writes at their price**: 1.25× for five minutes, 2× for one hour,
+  read per record from `usage.cache_creation`. Sampled Sept-Oct: 100% of the
+  main-thread writes are 1h, 0% of the subagent ones. Repriced, the August
+  audit's main thread goes from cache_read 71.8% / writes 18% to ≈ 65% / 26%;
+  on Fable 5.1 the 60% of writes above becomes ≈ 70% (cache_read ≈ 16%).
+  Sonnet 5.5 reads at 0.05× ($0.10 on $2, 2.1.296).
+- **Idle compaction (2.1.299)**: a 200k+ conversation idle ~54 min is
+  compacted before the 1h cache expires (`"idleCompaction": false` off,
+  `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS` threshold). Same `compact_boundary`
+  with trigger `auto` as any compaction: only the pause before it (≥ 50 min)
+  tells it apart. Counted as `idle_compactions`, never as a cache reset.
+- **Agent `effort` (2.1.292)**: a named level wins over frontmatter and
+  session; `lower`/`higher` step from the effort the agent would have. The
+  gate reads it, and warns (`effort_raised`) when a call lifts a pinned
+  executor above its pin.
+- **`CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL` (2.1.296)**: every workflow agent
+  on one model, `model:` in `agent()` ignored (the 2.1.301 binary logs
+  «Workflow agent model … ignored»). The lint stops calling those agents
+  inherited and warns when the variable names a top model.
+- **`agent.spawn` on workflow agents and resumes (2.1.299-2.1.300)**: the
+  `fd-executor` pin now reaches `agent()` in a Workflow; a resumed agent keeps
+  its model (the engine honours only a deny there, the mod passes it through).
+
 ## What Anthropic confirmed (2026-09-08)
 
 Anthropic's own note on cost, [*Reducing cost and improving performance with

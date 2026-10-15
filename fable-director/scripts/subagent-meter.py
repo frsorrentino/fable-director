@@ -142,14 +142,18 @@ def agent_usage(transcript):
                 mid = m.get("id") or rec.get("requestId") or str(len(turns))
                 row = turns.setdefault(mid, {"input_tokens": 0, "output_tokens": 0,
                                              "cache_read_input_tokens": 0,
-                                             "cache_creation_input_tokens": 0})
+                                             "cache_creation_input_tokens": 0,
+                                             "cache_creation_1h": 0})
+                split = u.get("cache_creation")
+                vals = dict(u, cache_creation_1h=(split.get("ephemeral_1h_input_tokens")
+                                                  if isinstance(split, dict) else 0))
                 for k in row:
-                    row[k] = max(row[k], u.get(k) or 0)
+                    row[k] = max(row[k], vals.get(k) or 0)
     except OSError:
         pass
     tot = {k: sum(r[k] for r in turns.values()) for k in
            ("input_tokens", "output_tokens", "cache_read_input_tokens",
-            "cache_creation_input_tokens")}
+            "cache_creation_input_tokens", "cache_creation_1h")}
     return model, len(turns), tot
 
 
@@ -188,7 +192,8 @@ def eq_of(model, tot):
         spec.loader.exec_module(mod)
         return mod.eq_tokens(tot["input_tokens"], tot["output_tokens"],
                              tot["cache_read_input_tokens"],
-                             tot["cache_creation_input_tokens"], model=model)
+                             tot["cache_creation_input_tokens"], model=model,
+                             cc_1h=tot.get("cache_creation_1h") or 0)
     except Exception:
         return None
 

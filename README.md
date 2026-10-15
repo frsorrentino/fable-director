@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.57.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.58.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need
 to do.** It makes your agent declare what a job should cost before it delegates,
@@ -20,6 +20,13 @@ not for you.
 | **1.42 — video and audio** at zero Claude tokens: contact sheets, local transcription, timed scripts, free tier for the long clips. [Read more ↓](#video-and-audio-at-zero-claude-tokens) | **1.44 — anonymizer**: pseudonymise what leaves the machine, byte-exact restore, Italian pack with check digits, exports by column. Phase A, a CLI, off by default; the hook into the external routes comes next. [Read more ↓](#anonymizer-placeholders-not-people) |
 
 ## Quickstart
+
+```bash
+claude plugin install fable-director --marketplace frsorrentino/fable-director
+```
+
+One command on Claude Code 2.1.292 or newer: it adds the marketplace if it is
+not there yet. On an older Claude Code, two commands:
 
 ```bash
 claude plugin marketplace add frsorrentino/fable-director

@@ -92,6 +92,10 @@ DB_PATH = BASE / "telemetry.db"
 BUDGETS = BASE / "budgets"
 USAGE_KEYS = ("input_tokens", "output_tokens",
               "cache_read_input_tokens", "cache_creation_input_tokens")
+# Parte di cache_creation_input_tokens scritta con durata di un'ora: chiave
+# accanto a USAGE_KEYS nei totali (non e' un campo di usage, la si ricava da
+# usage.cache_creation con cache_create_1h()).
+CC_1H_KEY = "cache_creation_1h"
 # Input-equivalenti: rapporti di listino standard per rendere confrontabili le
 # quattro componenti di usage (audit 2026-08 su 2.389 sessioni: cache_read =
 # ~72% del costo main in eq, output = ~10% — i soli output token misurano un
@@ -99,10 +103,17 @@ USAGE_KEYS = ("input_tokens", "output_tokens",
 # workspace fable-director). FASE DI TARATURA: l'eq viene misurato e riportato
 # ovunque, l'enforcement 2×/3× resta sui token dichiarati finché una taratura
 # su budget reali non fissa le soglie eq.
-EQ_MULT = {"input": 1.0, "output": 5.0, "cache_read": 0.1, "cache_create": 1.25}
+EQ_MULT = {"input": 1.0, "output": 5.0, "cache_read": 0.1, "cache_create": 1.25,
+           "cache_create_1h": 2.0}
+# Scritture in cache: 1,25× per la durata di cinque minuti, 2× per quella di
+# un'ora (listino). usage.cache_creation divide il totale per durata; un record
+# senza la divisione vale tutto 1,25×. Nelle sessioni di Claude Code le
+# scritture sono quasi tutte da un'ora (misurato 15/10/2026: 1.844.114 su
+# 1.844.114 in 745 turni della master): a 1,25× la componente era sottostimata
+# del 37,5%.
 # I moltiplicatori sopra sono il DEFAULT universale; le parti che cambiano
 # col listino di un modello (oggi: cache_read 0.025x su claude-fable-5-1,
-# 0.05x su claude-opus-5-5)
+# 0.05x su claude-opus-5-5 e claude-sonnet-5-5)
 # vivono in model-economics.json — shipped con il plugin, override utente in
 # ~/.claude/fable-director/model-economics.json. Un modello nuovo e' una
 # riga in 'models', mai un cambio di policy. Il modello va letto dal record
@@ -156,19 +167,34 @@ def eq_mult(model=None):
     return mult
 
 
-def eq_tokens(inp, out, cr, cc, model=None, cr_by_model=None):
+def cache_create_1h(usage):
+    """Token scritti in cache con durata di un'ora in un record di usage
+    (usage.cache_creation.ephemeral_1h_input_tokens); 0 se manca la divisione."""
+    split = usage.get("cache_creation") if isinstance(usage, dict) else None
+    if not isinstance(split, dict):
+        return 0
+    try:
+        return int(split.get("ephemeral_1h_input_tokens") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def eq_tokens(inp, out, cr, cc, model=None, cr_by_model=None, cc_1h=0):
     """Costo in input-equivalenti dalle quattro componenti pure di usage
     (inp = input_tokens puri, NON input+cache_create). `model` sceglie i
     moltiplicatori; `cr_by_model` ({id: cache_read}) sostituisce `cr` quando
-    la sessione ha letto cache su piu' modelli (ogni quota alla SUA tariffa)."""
+    la sessione ha letto cache su piu' modelli (ogni quota alla SUA tariffa).
+    `cc_1h` = la parte di `cc` scritta con durata di un'ora (2×); il resto
+    vale 1,25×."""
     m = eq_mult(model)
     if cr_by_model:
         cr_term = sum((v or 0) * eq_mult(k)["cache_read"]
                       for k, v in cr_by_model.items())
     else:
         cr_term = cr * m["cache_read"]
-    return int(inp * m["input"] + out * m["output"]
-               + cr_term + cc * m["cache_create"])
+    cc_1h = min(max(cc_1h or 0, 0), cc)
+    return int(inp * m["input"] + out * m["output"] + cr_term
+               + (cc - cc_1h) * m["cache_create"] + cc_1h * m["cache_create_1h"])
 SENTINEL_MIN_RECORDS = 20  # sotto: transcript troppo corto per giudicare lo schema
 # Riaperture da cui il rework smette di essere un fatto e diventa una diagnosi
 # (contesto incompleto): sotto questa soglia si riporta il numero e basta —
@@ -398,6 +424,13 @@ def find_usage(obj, in_subagent=False, model=None):
 
 
 CACHE_RESET_THRESHOLD = 10_000  # cache_read "alto" prima di un reset sospetto
+# Claude Code >= 2.1.299 compatta una conversazione da 200k+ token ferma da
+# ~54 minuti, prima che scada la cache da un'ora (`"idleCompaction": false` la
+# spegne, CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS sposta la soglia). Il record e'
+# un compact_boundary con trigger "auto", come una compattazione normale: la
+# distingue solo la pausa che la precede (misurate 54,3-55,0 min). Contata a
+# parte, e la ripresa che la segue non e' un cache reset.
+IDLE_COMPACT_GAP_S = 50 * 60
 WRITE_TOOLS = {"Edit", "Write", "NotebookEdit"}  # prima azione irreversibile
 
 # Attrito (proxy di rework, non di correttezza — makinggainz/claude-code-
@@ -439,10 +472,20 @@ def tool_errors_in(rec):
     return sum(1 for b in c if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("is_error"))
 
 
+# Claude Code >= 2.1.300 copia ogni richiesta API nella trascrizione: record
+# `api-request`, `api-request-blob` e `api-request-shape`. I blob ripetono
+# tool_use e tool_result dei turni veri (senza timestamp ne' usage): contati,
+# raddoppierebbero tool call, rework e churn.
+REQUEST_COPY_PREFIX = "api-request"
+
+
 def find_tool_uses(obj, in_subagent=False):
-    """(nome, input) dei tool_use nel main loop (sottoalberi toolUseResult
-    esclusi). L'input serve al conteggio rework: file_path dei write-tool."""
+    """(nome, input) dei tool_use nel main loop (sottoalberi toolUseResult e
+    copie delle richieste API esclusi). L'input serve al conteggio rework:
+    file_path dei write-tool."""
     if isinstance(obj, dict):
+        if str(obj.get("type") or "").startswith(REQUEST_COPY_PREFIX):
+            return
         if not in_subagent and obj.get("type") == "tool_use" and obj.get("name"):
             tin = obj.get("input")
             yield obj["name"], (tin if isinstance(tin, dict) else {})
@@ -514,6 +557,9 @@ def sum_transcript(path):
     n_records = n_usage_recs = 0
     cache_resets = 0
     had_high_read = False
+    idle_compactions = 0
+    last_activity = None    # ultimo turno vero (user o assistant) con timestamp
+    after_idle_compact = False  # il prossimo turno main e' la ripresa
     first_ts = last_ts = None
     turns = 0
     first_write_turn = None
@@ -555,6 +601,15 @@ def sum_transcript(path):
             if ts:
                 first_ts = first_ts or ts
                 last_ts = ts
+            rtype = rec.get("type")
+            if rtype == "system" and rec.get("subtype") == "compact_boundary":
+                if ts and last_activity and \
+                        (ts - last_activity).total_seconds() >= IDLE_COMPACT_GAP_S:
+                    idle_compactions += 1
+                    after_idle_compact = True
+            elif rtype in ("user", "assistant") and ts and not rec.get("isMeta") \
+                    and not rec.get("isCompactSummary") and not rec.get("isSidechain"):
+                last_activity = ts
             n_calls_rec = 0
             tool_errors += tool_errors_in(rec)
             ht = human_turn_text(rec)
@@ -594,6 +649,7 @@ def sum_transcript(path):
                 bucket = sub if in_sub else main
                 for k in USAGE_KEYS:
                     bucket[k] += usage.get(k) or 0
+                bucket[CC_1H_KEY] = bucket.get(CC_1H_KEY, 0) + cache_create_1h(usage)
                 _cr = usage.get("cache_read_input_tokens") or 0
                 if _cr:
                     cr_by_model[model or "unknown"] = \
@@ -604,10 +660,12 @@ def sum_transcript(path):
                     turns += 1
                     cr = usage.get("cache_read_input_tokens") or 0
                     if cr == 0 and had_high_read:
-                        cache_resets += 1
+                        if not after_idle_compact:  # quella ripresa e' gia' contata a parte
+                            cache_resets += 1
                         had_high_read = False
                     elif cr > CACHE_RESET_THRESHOLD:
                         had_high_read = True
+                    after_idle_compact = False
             if rec_had_usage:
                 n_usage_recs += 1
     stats = {
@@ -617,6 +675,7 @@ def sum_transcript(path):
         "tokens_before_first_write": tokens_before_first_write,
         "tool_counts": tool_counts,
         "max_tool_run": {"tool": max_run[0], "len": max_run[1]} if max_run[0] else None,
+        "idle_compactions": idle_compactions,
     }
     if batch_turn_ids:
         stats["tool_calls_per_turn"] = round(
@@ -675,6 +734,7 @@ def sum_workflow_agents(path):
                 for usage, _, model in find_usage(rec):
                     for k in USAGE_KEYS:
                         tot[k] += usage.get(k) or 0
+                    tot[CC_1H_KEY] = tot.get(CC_1H_KEY, 0) + cache_create_1h(usage)
                     _cr = usage.get("cache_read_input_tokens") or 0
                     if _cr:
                         tot.setdefault("cache_read_by_model", {})
@@ -684,11 +744,12 @@ def sum_workflow_agents(path):
 
 
 def derived_metrics(inp, out, cr, cc, main_out, sub_out, n_sub,
-                    cr_by_model=None):
+                    cr_by_model=None, cc_1h=0):
     """Metriche derivate; None dove il denominatore è zero. `cr_by_model`
-    applica a ogni quota di cache_read la tariffa del SUO modello."""
+    applica a ogni quota di cache_read la tariffa del SUO modello; `cc_1h` e'
+    la parte di `cc` scritta con durata di un'ora."""
     total_in = inp + cr + cc
-    eq = eq_tokens(inp, out, cr, cc, cr_by_model=cr_by_model)
+    eq = eq_tokens(inp, out, cr, cc, cr_by_model=cr_by_model, cc_1h=cc_1h)
     return {
         "cache_hit_ratio": cr / (cr + cc) if (cr + cc) else None,
         "cache_efficiency": cr / total_in if total_in else None,
@@ -1509,9 +1570,10 @@ def cmd_budget_close(args):
                 for key in ("cr_by_model", "wf_cr_by_model"):
                     for m, v in (st.get(key) or {}).items():
                         _crm[m] = _crm.get(m, 0) + int(v or 0)
+                _cc1h = int(st.get("cc1h") or 0) + int(st.get("wf_cc1h") or 0)
                 budget.setdefault("actual_eq_tokens",
                                   eq_tokens(max(_in - _cc, 0), _out, _cr, _cc,
-                                            cr_by_model=_crm or None))
+                                            cr_by_model=_crm or None, cc_1h=_cc1h))
                 if _crm:
                     budget.setdefault("cache_read_by_model", _crm)
                 # Rework del task (contato dallo Stop hook nello stesso scan):
@@ -1790,6 +1852,7 @@ def cmd_session_summary(args):
     wf_tot, n_wf = sum_workflow_agents(Path(transcript))
     for k in USAGE_KEYS:
         sub_tot[k] += wf_tot[k]
+    sub_tot[CC_1H_KEY] = sub_tot.get(CC_1H_KEY, 0) + wf_tot.get(CC_1H_KEY, 0)
     n_sub += n_wf
     # Sentinella di schema: molti record validi ma zero usage o zero timestamp
     # riconosciuti = formato transcript cambiato → la summary conterebbe zeri
@@ -1809,9 +1872,10 @@ def cmd_session_summary(args):
     out = main_tot["output_tokens"] + sub_tot["output_tokens"]
     cr = main_tot["cache_read_input_tokens"] + sub_tot["cache_read_input_tokens"]
     cc = main_tot["cache_creation_input_tokens"] + sub_tot["cache_creation_input_tokens"]
+    cc1h = main_tot.get(CC_1H_KEY, 0) + sub_tot.get(CC_1H_KEY, 0)
     payload = {
         "input_tokens": inp, "output_tokens": out,
-        "cache_read": cr, "cache_creation": cc,
+        "cache_read": cr, "cache_creation": cc, "cache_creation_1h": cc1h,
         "main_output": main_tot["output_tokens"],
         "subagent_output": sub_tot["output_tokens"],
         "cache_resets": cache_resets,
@@ -1834,7 +1898,7 @@ def cmd_session_summary(args):
     payload.update(stats)
     payload.update(derived_metrics(inp, out, cr, cc,
                                    main_tot["output_tokens"],
-                                   sub_tot["output_tokens"], n_sub))
+                                   sub_tot["output_tokens"], n_sub, cc_1h=cc1h))
     log_event("session_summary", payload, session_id=session_id, cwd=cwd)
 
 
@@ -1880,10 +1944,12 @@ def cmd_report(args):
         out = sum(s.get("output_tokens") or 0 for s in sessions)
         cr = sum(s.get("cache_read") or 0 for s in sessions)
         cc = sum(s.get("cache_creation") or 0 for s in sessions)
+        cc1h = sum(s.get("cache_creation_1h") or 0 for s in sessions)
         m_out = sum(s.get("main_output") or 0 for s in sessions)
         s_out = sum(s.get("subagent_output") or 0 for s in sessions)
         m = derived_metrics(inp, out, cr, cc, m_out, s_out,
-                            sum(s.get("n_subagent_files") or 0 for s in sessions))
+                            sum(s.get("n_subagent_files") or 0 for s in sessions),
+                            cc_1h=cc1h)
         print(f"Sessions: {len(sessions)} — input {fmt(inp)}, output {fmt(out)}, "
               f"cache_read {fmt(cr)}, cache_creation {fmt(cc)}")
         alarms = []
@@ -1924,6 +1990,11 @@ def cmd_report(args):
         if resets:
             alarms.append(f"cache-thrash: {resets} mid-session prefix resets "
                           f"(model switch/plugin edit/compact?) — diagnostic, never blocking")
+        idle_c = sum(s.get("idle_compactions") or 0 for s in sessions)
+        if idle_c:
+            print(f"idle compactions: {idle_c} (Claude Code summarized a 200k+ session "
+                  f"left idle ~54 min; not counted as cache resets — "
+                  f"`\"idleCompaction\": false` in settings.json turns it off)")
         # Yield: output token per commit prodotto. Solo sessioni con dato git
         # (git_yield → None su cwd non-repo). RESA, non target: sessioni di
         # planning/debug non committano legittimamente, non le condanna.

@@ -643,7 +643,16 @@ def resume_hygiene(data):
         return None
 
 
-def workflow_lint(data):
+WF_LONG_AGENTS = 10   # fan-out dichiarato (--agents) da cui un Workflow e' "lungo"
+
+
+def _is_top_model(m):
+    m = str(m or "").strip().lower()
+    return m.startswith(("claude-fable", "claude-opus", "claude-mythos")) \
+        or m.split("[")[0] in ("fable", "opus", "best", "mythos")
+
+
+def workflow_lint(data, budget=None):
     """Lint deterministico dello script al lancio: agent() senza model: su
     sessione top-tier, effort max diffuso, PDF letti dagli agenti, args
     come stringa JSON. Solo avviso con il costo misurato accanto."""
@@ -671,12 +680,27 @@ def workflow_lint(data):
                     if ".pdf" in text.lower() else [])
             model = str(session_snapshot(data).get("model") or "")
             top = model.startswith(("claude-fable", "claude-opus", "claude-mythos"))
-            if n_calls and n_calls > n_model and (top or not model):
+            # Claude Code 2.1.296: con CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL ogni agente
+            # del Workflow gira su quel modello e il `model:` di agent() e' ignorato
+            # (verificato nel binario 2.1.301: «Workflow agent model … ignored»).
+            forced = os.environ.get("CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL", "").strip()
+            if n_calls and forced:
+                if _is_top_model(forced):
+                    bits.append(f"CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL={forced}: every workflow agent "
+                                f"runs on {forced} and `model:` in agent() is ignored — the reading, "
+                                f"fetching and extracting stages pay top-model rates too; point it "
+                                f"at sonnet or unset it")
+            elif n_calls and n_calls > n_model and (top or not model):
                 inh = f"the session model ({model})" if model else "the session model"
+                n_ag = int((budget or {}).get("agents") or 0)
+                tip = (f"; for a fan-out of {n_ag} agents, `CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL=sonnet` "
+                       f"in the environment (Claude Code 2.1.296+) puts every workflow agent on "
+                       f"one model — it overrides `model:` in agent(), judgment stages included"
+                       if n_ag >= WF_LONG_AGENTS else "")
                 bits.append(f"{n_calls} agent() calls, {n_calls - n_model} without `model:` inherit "
                             f"{inh}: stages that read, fetch or extract (axis 3-5) belong on "
                             f"`model: 'sonnet'` ({sonnet_usd_note(model)}); keep the top "
-                            f"model for the judgment stages")
+                            f"model for the judgment stages{tip}")
             if n_max >= 2:
                 bits.append(f"effort max/xhigh on {n_max} agent() calls: measured 2026-09-03, judges "
                             f"at max produced 33-68k output tokens each — 40-60% of their cost at "
@@ -697,7 +721,9 @@ def workflow_lint(data):
 
 def lean_thread(data):
     """Lancio o resume da un thread con contesto grande: ogni ripresa dopo il
-    muro (>1h) ri-cachea tutto il contesto. Avviso con il costo in agenti."""
+    muro (>1h) ri-cachea tutto il contesto, oppure (Claude Code >= 2.1.299, sopra
+    200k) lo trova gia' riassunto dalla compattazione a sessione ferma. Avviso
+    con il costo in agenti."""
     try:
         if data.get("tool_name") != "Workflow":
             return None
@@ -706,12 +732,18 @@ def lean_thread(data):
         if ctx < WF_LEAN_CTX_TOKENS:
             return None
         cal = wf_calibration()
-        recache = ctx * 1.25
+        # Le scritture in cache del thread principale durano un'ora: 2× l'input
+        # (EQ_MULT["cache_create_1h"] in fd-telemetry.py), non 1,25×.
+        recache = ctx * 2.0
         n_ag = recache / (float(cal["agent_eq"]) or 330_000.0)
         return (f"FD ⚠ heavy launcher — this session's context is {fmt_eq(ctx)} tokens: every "
                 f"resume after the wall (>1h idle) re-caches it, ~{fmt_eq(recache)} eq ≈ {n_ag:.0f} "
-                f"Workflow agents each time (measured 2026-09-03: 3 resumes ≈ 2.2M eq, a whole "
-                f"wave of judges). Long workflows belong to a fresh session with a 2k distillate "
+                f"Workflow agents each time (measured 2026-09-03: 3 resumes ≈ 1.8M tokens "
+                f"re-cached, a whole wave of judges). Since Claude Code 2.1.299 a context over "
+                f"200k left idle ~54 min is compacted instead: a cheaper resume, but the summary "
+                f"drops the detail the judgment stages need (`\"idleCompaction\": false` in "
+                f"settings.json keeps it whole, CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS moves the "
+                f"threshold). Long workflows belong to a fresh session with a 2k distillate "
                 f"(`budget-open --route bg-session`, or the nuova-sessione skill); close this one "
                 f"at a verified boundary. Delegation allowed.")
     except Exception:
@@ -851,6 +883,9 @@ def agent_pinned_effort(subagent_type):
     return None
 
 
+EFFORT_ORDER = ("low", "medium", "high", "xhigh", "max")
+
+
 def effort_coherence(data, budget):
     """Coerenza effort dichiarato (budget --effort) vs pinnato (frontmatter
     agent fd-*). Mismatch → warn + evento telemetria `effort_mismatch`,
@@ -859,8 +894,6 @@ def effort_coherence(data, budget):
     di warn o None. Best-effort: qualunque errore → None."""
     try:
         declared = (budget or {}).get("effort")
-        if not declared:
-            return None
         ti = data.get("tool_input") or {}
         pinned = agent_pinned_effort(ti.get("subagent_type"))
         # Un agent SENZA effort pinnato eredita quello della sessione: il
@@ -874,10 +907,38 @@ def effort_coherence(data, budget):
         session_eff = session_eff or os.environ.get("CLAUDE_EFFORT") or None
         effective = pinned or session_eff
         origin = "frontmatter" if pinned else "session"
+        # Claude Code 2.1.292: l'Agent tool accetta `effort`. Un livello col
+        # nome vince su frontmatter e sessione; "lower"/"higher" sono un passo
+        # dall'effort che l'agente avrebbe avuto (di solito il pin o la sessione).
+        asked = str(ti.get("effort") or "").strip().lower() or None
+        if asked in EFFORT_ORDER:
+            effective, origin = asked, "call"
+        elif asked in ("lower", "higher") and effective in EFFORT_ORDER:
+            i = EFFORT_ORDER.index(effective) + (1 if asked == "higher" else -1)
+            effective = EFFORT_ORDER[min(max(i, 0), len(EFFORT_ORDER) - 1)]
+            origin = "call"
+        lines = []
+        # Una chiamata che alza un esecutore pinnato (fd-executor: low) lo fa
+        # ragionare e costare di piu' di quanto il pin garantisce: avviso
+        # sempre, budget con o senza --effort.
+        if origin == "call" and pinned in EFFORT_ORDER \
+                and EFFORT_ORDER.index(effective) > EFFORT_ORDER.index(pinned):
+            try:
+                log_gate_event(data, "effort_raised",
+                               {"pinned": pinned, "requested": asked,
+                                "effective": effective,
+                                "subagent_type": ti.get("subagent_type"),
+                                "task": (budget or {}).get("task")})
+            except Exception:
+                pass
+            lines.append(f"FD ⚠ effort raised — the call runs {ti.get('subagent_type')} at "
+                         f"'{effective}' (asked: '{asked}'), above the '{pinned}' pinned in its "
+                         f"frontmatter: more reasoning and cost than the pin guarantees. Delegation "
+                         f"allowed — drop `effort` from the call unless the user asked for it.")
         # (1.39) Nessun effort effettivo noto → nessun mismatch: 9 dei 16
         # eventi misurati erano "low≠None", rumore del gate, non un segnale.
-        if not effective or effective == declared:
-            return None
+        if not declared or not effective or effective == declared:
+            return "\n".join(lines) or None
         try:
             payload = {"declared": declared, "pinned": pinned,
                        "effective": effective, "origin": origin,
@@ -887,13 +948,15 @@ def effort_coherence(data, budget):
             log_gate_event(data, "effort_mismatch", payload)
         except Exception:
             pass
-        where = (f"has effort pinned to '{pinned}' (frontmatter)" if pinned
+        where = (f"runs at '{effective}' as the call asks (`effort`)" if origin == "call"
+                 else f"has effort pinned to '{pinned}' (frontmatter)" if pinned
                  else f"inherits the session effort '{effective}' "
                       f"(no pinned tier)")
-        return (f"FD ⚠ effort mismatch — the budget declares '{declared}' but "
-                f"{ti.get('subagent_type') or 'the target'} {where}. "
-                f"Delegation allowed — double-check the route or reopen the "
-                f"budget with the right effort.")
+        lines.append(f"FD ⚠ effort mismatch — the budget declares '{declared}' but "
+                     f"{ti.get('subagent_type') or 'the target'} {where}. "
+                     f"Delegation allowed — double-check the route or reopen the "
+                     f"budget with the right effort.")
+        return "\n".join(lines)
     except Exception:
         return None
 
@@ -1175,7 +1238,7 @@ def main():
                                  == "reliable" else contract_lint(data)),
                                 fit_warn,
                                 resume_hygiene(data),
-                                workflow_lint(data),
+                                workflow_lint(data, budget),
                                 lean_thread(data),
                                 external_failover(data, budget),
                                 xf_advisory(budget)) if m]

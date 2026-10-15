@@ -33,6 +33,10 @@ from pathlib import Path
 
 REMIND_EVERY = 3        # la dottrina dice "mai una 4ª tentativo identico": si avvisa ALLA 3ª
 TAIL_BYTES = 500_000    # basta e avanza per uno streak; il transcript intero puo' essere enorme
+# Claude Code >= 2.1.300 copia ogni richiesta API nella trascrizione (`api-request`,
+# `api-request-blob`, `api-request-shape`): i blob ripetono tool_use e tool_result
+# dei turni veri, e un errore piu' la sua copia farebbero due fallimenti di fila.
+REQUEST_COPY_PREFIX = "api-request"
 
 # NON sono fallimenti del modello: sono decisioni dell'utente. Contarle gonfierebbe
 # lo streak e farebbe scattare un rimprovero per una cosa che ha fatto lui.
@@ -80,6 +84,8 @@ def bash_outcomes(transcript_path):
             d = json.loads(line)
         except json.JSONDecodeError:
             continue
+        if str(d.get("type") or "").startswith(REQUEST_COPY_PREFIX):
+            continue              # copia di una richiesta, non un esito
         content = (d.get("message") or {}).get("content")
         if not isinstance(content, list):
             continue

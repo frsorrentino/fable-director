@@ -50,7 +50,13 @@ export const register: Register = on => {
     return next(e)
   })
 
+  // Also raised for a workflow script's agent() (rewritable from Claude Code
+  // 2.1.300) and when a finished agent is resumed (2.1.299, `resume` set). A
+  // resumed agent keeps the model it already runs on: the pin applied when it
+  // first started, and a switch mid-agent would re-write its whole context into
+  // the cache at the new model's price. The engine honours only a deny there.
   on('agent.spawn', ($, e, next) => {
+    if ((e as { resume?: unknown }).resume !== undefined) return next(e)
     const model = PINNED[e.subagentType]
     return model && e.model !== model ? next({ ...e, model }) : next(e)
   })

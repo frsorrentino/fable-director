@@ -16,6 +16,8 @@ inchioda le regole:
   F10 tool_name != Bash         -> esce subito, nessun evento
   F11 transcript assente/rotto  -> silenzio, exit 0
   F12 non blocca MAI            -> exit 0 anche quando avvisa
+  F13 copie `api-request-blob` (CC >= 2.1.300) -> 2 fallimenti veri restano 2
+  F14 3 fallimenti veri con le copie -> uno streak di 3, non di 5
 """
 import json
 import shutil
@@ -57,6 +59,25 @@ def mktranscript(path, seq):
     Path(path).write_text("\n".join(lines) + "\n")
 
 
+def with_request_copies(path):
+    """Come le trascrizioni dalla 2.1.300: la richiesta API successiva copia il
+    tool_use e il tool_result appena scritti in record `api-request-blob`
+    (senza timestamp ne' usage). L'ultimo esito non ha ancora la sua copia:
+    l'hook gira prima della richiesta dopo."""
+    recs = [json.loads(x) for x in Path(path).read_text().splitlines() if x.strip()]
+    out = []
+    for i, rec in enumerate(recs):
+        out.append(rec)
+        if i % 2 and i < len(recs) - 1:
+            for role, src in (("assistant", recs[i - 1]), ("user", rec)):
+                out.append({"type": "api-request-blob", "sessionId": "sid-test",
+                            "hash": f"h{i}{role[0]}",
+                            "message": {"role": role, "content": src["message"]["content"]}})
+            out.append({"type": "api-request", "sessionId": "sid-test", "id": f"r{i}",
+                        "timestamp": "2026-10-15T21:00:00.000Z", "params": {"model": "m"}})
+    Path(path).write_text("\n".join(json.dumps(r) for r in out) + "\n")
+
+
 def run(home, transcript, tool="Bash", cmd="rg --json 'x' /repo | head"):
     payload = {"tool_name": tool, "transcript_path": str(transcript),
                "session_id": "sid-test", "cwd": "/proj/x",
@@ -86,10 +107,12 @@ def grind_state(home, sid="sid-test"):
     return json.loads(f.read_text()).get("streak")
 
 
-def case(tag, seq, tool="Bash", cmd="rg --json 'x' /repo | head"):
+def case(tag, seq, tool="Bash", cmd="rg --json 'x' /repo | head", copies=False):
     home = Path(tempfile.mkdtemp(prefix=f"fd-fs-{tag}-"))
     t = home / "t.jsonl"
     mktranscript(t, seq)
+    if copies:
+        with_request_copies(t)
     r = run(home, t, tool=tool, cmd=cmd)
     return home, r, events(home)
 
@@ -147,6 +170,15 @@ try:
     check("G3 un successo scrive streak 0 (azzera il segmento)", grind_state(h) == 0, grind_state(h))
     h, r, ev = case("g4", [E, E, E], tool="Read"); tmp.append(h)
     check("G4 tool != Bash non tocca lo stato (nessun file)", grind_state(h) is None)
+
+    h, r, ev = case("f13", [E, E], copies=True); tmp.append(h)
+    check("F13 copie api-request-blob: 2 fallimenti veri restano 2, silenzio",
+          r.stdout.strip() == "" and ev == [] and grind_state(h) == 2,
+          (r.stdout[:80], ev, grind_state(h)))
+    h, r, ev = case("f14", [E, E, E], copies=True); tmp.append(h)
+    check("F14 copie api-request-blob: 3 fallimenti veri = streak 3",
+          "3 comandi Bash falliti" in r.stdout and ev and ev[0]["streak"] == 3,
+          (r.stdout[:80], ev))
 
     home = Path(tempfile.mkdtemp(prefix="fd-fs-f11-")); tmp.append(home)
     r = run(home, home / "non-esiste.jsonl")

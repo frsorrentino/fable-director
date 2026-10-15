@@ -271,10 +271,14 @@ def main():
                         per_file[(kind, f.name)][k] += v
                         if in_scope:
                             scoped[k] += v
+                    # Scritture in cache da un'ora (2× invece di 1,25×).
+                    cc1h = fdt.cache_create_1h(usage) if fdt else 0
+                    per_model[model]["cache_creation_1h"] += cc1h
                     if fdt and rts is not None:
                         eq = fdt.eq_tokens(usage.get("input_tokens") or 0, usage.get("output_tokens") or 0,
                                            usage.get("cache_read_input_tokens") or 0,
-                                           usage.get("cache_creation_input_tokens") or 0, model=model)
+                                           usage.get("cache_creation_input_tokens") or 0, model=model,
+                                           cc_1h=cc1h)
                         if kind == "main":
                             turn_idx += 1
                             main_turns.append([rts, eq, depth_band(turn_idx), period])
@@ -299,7 +303,8 @@ def main():
             # eq è la somma delle righe, mai una tariffa unica sul totale.
             eq = fdt.eq_tokens(u["input_tokens"], u["output_tokens"],
                                u["cache_read_input_tokens"],
-                               u["cache_creation_input_tokens"], model=model)
+                               u["cache_creation_input_tokens"], model=model,
+                               cc_1h=u["cache_creation_1h"])
             tot_eq += eq
             line += f" {fmt(eq):>12} {fdt.eq_mult(model)['cache_read']:>5.3f}"
         print(line)

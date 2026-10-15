@@ -18,6 +18,11 @@ Runs the REAL scripts against a throwaway HOME:
   E5 budget-close: actual_eq_tokens dallo state (setdefault, esplicito vince)
   E6 state di versione precedente senza cr/cc: nessun crash, eq riparte da 0
   E7 session-summary: payload con eq_tokens e output_cost_share
+  E8 scritture in cache da un'ora a 2×, da cinque minuti o non divise a 1,25×
+  E9 stop hook: state accumula cc1h (main + agenti workflow), eq del budget a 2×
+  E10 session-summary: cache_creation_1h nel payload, eq a 2× su quella quota
+  E11 budget-close: eq dallo state con cc1h
+  E12 subagent-meter: eq dell'agente con la quota da un'ora
 
 Usage: python3 tests/eq-accounting-verify.py   (exit 0 = all green)
 """
@@ -63,6 +68,22 @@ def usage_line(out=0, inp=0, cr=0, cc=0, ts="2030-01-01T10:00:00Z"):
         "output_tokens": out, "input_tokens": inp,
         "cache_read_input_tokens": cr,
         "cache_creation_input_tokens": cc}}}) + "\n"
+
+
+def split_line(out=0, inp=0, cr=0, cc=0, cc1h=0, ts="2030-01-01T10:00:00Z",
+               model=None, mid=None):
+    """Usage come lo scrive Claude Code dalla 2.1.2xx: il totale delle scritture
+    in cache e, in usage.cache_creation, la quota per durata."""
+    msg = {"usage": {"output_tokens": out, "input_tokens": inp,
+                     "cache_read_input_tokens": cr,
+                     "cache_creation_input_tokens": cc,
+                     "cache_creation": {"ephemeral_1h_input_tokens": cc1h,
+                                        "ephemeral_5m_input_tokens": cc - cc1h}}}
+    if model:
+        msg["model"] = model
+    if mid:
+        msg["id"] = mid
+    return json.dumps({"timestamp": ts, "type": "assistant", "message": msg}) + "\n"
 
 
 def make_session(tmp, main_out, main_cr, main_cc, wf_out=0, wf_cr=0):
@@ -198,6 +219,97 @@ check("E7 session-summary: eq_tokens + output_cost_share",
       and 0 < (payload.get("output_cost_share") or 0) <= 1,
       f"eq={payload.get('eq_tokens')} share={payload.get('output_cost_share')} "
       f"rc={r7.returncode} err={r7.stderr[:160]}")
+
+# E8 — durata delle scritture in cache (listino: un'ora 2×, cinque minuti 1,25×)
+eq8 = mod.eq_tokens(0, 0, 0, 1000, cc_1h=600)
+check("E8 eq_tokens: quota da un'ora a 2×, resto a 1,25×",
+      eq8 == int(400 * 1.25 + 600 * 2.0), f"got {eq8}")
+check("E8b cc_1h oltre cc tagliato a cc; senza split tutto a 1,25×",
+      mod.eq_tokens(0, 0, 0, 100, cc_1h=500) == 200
+      and mod.eq_tokens(0, 0, 0, 100) == 125,
+      f"{mod.eq_tokens(0, 0, 0, 100, cc_1h=500)} / {mod.eq_tokens(0, 0, 0, 100)}")
+check("E8c cache_create_1h legge usage.cache_creation, 0 senza split",
+      mod.cache_create_1h({"cache_creation": {"ephemeral_1h_input_tokens": 70,
+                                              "ephemeral_5m_input_tokens": 30}}) == 70
+      and mod.cache_create_1h({"cache_creation_input_tokens": 100}) == 0
+      and mod.cache_create_1h({"cache_creation": "x"}) == 0)
+
+# E9 — stop hook: cc1h nello state (main + agenti workflow) ed eq del budget
+home9 = Path(tempfile.mkdtemp(prefix="fd-eq-home9-"))
+proj9 = tempfile.mkdtemp(prefix="fd-eq-proj9-")
+run(SCRIPTS / "fd-telemetry.py",
+    ["budget-open", "--task", "eq-1h", "--expected-output", "100",
+     "--cwd", proj9], home9)
+tr9 = Path(tempfile.mkdtemp()) / "sess.jsonl"
+tr9.write_text(split_line(out=400, inp=100, cr=90000, cc=7000, cc1h=7000))
+adir = tr9.with_suffix("") / "subagents" / "workflows" / "wf_a"
+adir.mkdir(parents=True)
+(adir / "agent-a1.jsonl").write_text(
+    split_line(out=50, inp=50, cr=10000, cc=1000, cc1h=400,
+               ts="2030-01-01T10:01:00Z"))
+run(SCRIPTS / "stop-budget-check.py", [], home9, stdin=stop_payload(tr9, proj9))
+b9file = slug_budget(home9, mod, proj9)
+b9 = json.loads(b9file.read_text())
+st9 = json.loads(b9file.with_name(b9file.stem + ".state.json").read_text())
+exp9 = int(150 * 1.0 + 450 * 5.0 + 100000 * 0.1 + 600 * 1.25 + 7400 * 2.0)
+check("E9 state accumula cc1h main+wf",
+      st9.get("cc1h") == 7000 and st9.get("wf_cc1h") == 400,
+      f"cc1h={st9.get('cc1h')} wf_cc1h={st9.get('wf_cc1h')}")
+check("E9b eq del budget: scritture da un'ora a 2×",
+      b9.get("actual_eq_tokens") == exp9,
+      f"got {b9.get('actual_eq_tokens')} want {exp9} status={b9.get('status')}")
+
+# E10 — session-summary
+home10 = Path(tempfile.mkdtemp(prefix="fd-eq-home10-"))
+proj10 = tempfile.mkdtemp(prefix="fd-eq-proj10-")
+tr10 = Path(tempfile.mkdtemp()) / "sess.jsonl"
+tr10.write_text(split_line(out=100, inp=100, cr=10000, cc=500, cc1h=500))
+r10 = run(SCRIPTS / "fd-telemetry.py", ["session-summary"], home10,
+          stdin=json.dumps({"cwd": proj10, "transcript_path": str(tr10),
+                            "session_id": "eq-1h-sess"}))
+p10 = {}
+db10 = home10 / ".claude" / "fable-director" / "telemetry.db"
+if db10.is_file():
+    con = sqlite3.connect(db10)
+    row = con.execute("SELECT payload FROM events WHERE event='session_summary'"
+                      " ORDER BY ts DESC LIMIT 1").fetchone()
+    con.close()
+    p10 = json.loads(row[0]) if row else {}
+exp10 = int(100 * 1.0 + 100 * 5.0 + 10000 * 0.1 + 500 * 2.0)
+check("E10 session-summary: cache_creation_1h ed eq a 2×",
+      p10.get("cache_creation_1h") == 500 and p10.get("eq_tokens") == exp10,
+      f"cc1h={p10.get('cache_creation_1h')} eq={p10.get('eq_tokens')} want {exp10} "
+      f"err={r10.stderr[:160]}")
+
+# E11 — budget-close: eq dallo state con cc1h (nessun flag: lo scrive la close)
+home11 = Path(tempfile.mkdtemp(prefix="fd-eq-home11-"))
+proj11 = tempfile.mkdtemp(prefix="fd-eq-proj11-")
+run(SCRIPTS / "fd-telemetry.py",
+    ["budget-open", "--task", "eq-1h-close", "--expected-output", "100000",
+     "--cwd", proj11], home11)
+tr11 = Path(tempfile.mkdtemp()) / "sess.jsonl"
+tr11.write_text(split_line(out=10, inp=100, cr=1000, cc=1000, cc1h=1000))
+run(SCRIPTS / "stop-budget-check.py", [], home11, stdin=stop_payload(tr11, proj11))
+run(SCRIPTS / "fd-telemetry.py", ["budget-close", "--outcome", "ok",
+                                  "--cwd", proj11], home11)
+b11 = json.loads(slug_budget(home11, mod, proj11).read_text())
+exp11 = int(100 * 1.0 + 10 * 5.0 + 1000 * 0.1 + 1000 * 2.0)
+check("E11 budget-close: eq dallo state con la quota da un'ora",
+      b11.get("actual_eq_tokens") == exp11,
+      f"got {b11.get('actual_eq_tokens')} want {exp11}")
+
+# E12 — subagent-meter: eq dell'agente (Sonnet 5.5: cache_read 0,05×)
+spec = importlib.util.spec_from_file_location("sam", SCRIPTS / "subagent-meter.py")
+sam = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(sam)
+tr12 = Path(tempfile.mkdtemp()) / "agent.jsonl"
+tr12.write_text(split_line(out=10, inp=10, cr=1000, cc=100, cc1h=100,
+                           model="claude-sonnet-5-5", mid="m1"))
+model12, _, tot12 = sam.agent_usage(tr12)
+eq12 = sam.eq_of(model12, tot12)
+exp12 = int(10 * 1.0 + 10 * 5.0 + 1000 * 0.05 + 100 * 2.0)
+check("E12 subagent-meter: eq con la quota da un'ora e la tariffa del modello",
+      eq12 == exp12, f"got {eq12} want {exp12} tot={tot12}")
 
 print(f"\n{len(passed)} passed, {len(failed)} failed")
 sys.exit(1 if failed else 0)

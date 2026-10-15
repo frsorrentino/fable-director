@@ -19,6 +19,8 @@ budget live). Qui si inchiodano le regole:
   R7  hindsight rende le riaperture nella riga BUST
   R8  report: sezione Rework + context-pack candidates per tipo
   R9  rotazione transcript -> contatori rework azzerati col resto
+  R10 copie `api-request-blob` (CC >= 2.1.300) escluse: due Edit paralleli e la
+      loro copia non fanno riaperture, ne' tool call o tocchi in piu'
 """
 import importlib.util
 import json
@@ -293,6 +295,37 @@ try:
     check("R9 rotazione: rework riparte dal file nuovo",
           list(sub["rw"]["touch"]) == ["/x/nuovo.py"]
           and sub["rw"]["bouts"]["/x/nuovo.py"] == 1, sub["rw"])
+
+    # ---- R10: le copie delle richieste API non sono lavoro ----
+    # Un messaggio con due Edit paralleli (a, b), poi la richiesta dopo li
+    # copia in un api-request-blob: senza filtro a,b,a,b = 2 riaperture.
+    par = {"type": "assistant", "timestamp": iso(NOW - timedelta(seconds=80)),
+           "message": {"role": "assistant", "content": [
+               {"type": "tool_use", "name": "Edit", "id": "e1",
+                "input": {"file_path": "/x/a.py"}},
+               {"type": "tool_use", "name": "Edit", "id": "e2",
+                "input": {"file_path": "/x/b.py"}}]}}
+    blob = {"type": "api-request-blob", "sessionId": "s", "hash": "h1",
+            "message": {"role": "assistant", "content": par["message"]["content"]}}
+    req = {"type": "api-request", "sessionId": "s", "id": "r1",
+           "timestamp": iso(NOW - timedelta(seconds=70)), "params": {"model": "m"}}
+    t = tmp / "r10.jsonl"
+    t.write_text("".join(json.dumps(r) + "\n" for r in
+                         [usage_rec(50), par, req, blob]))
+    *_, stats = fdt.sum_transcript(t)
+    check("R10 blob escluso: nessuna riapertura",
+          stats.get("rework", {}).get("reopens") == 0
+          and stats["rework"]["write_touches"] == 2, stats.get("rework"))
+    check("R10 blob escluso: tool call e conteggi per tool non raddoppiano",
+          stats["friction"]["tool_calls"] == 2
+          and stats["tool_counts"] == {"Edit": 2}, (stats["friction"], stats["tool_counts"]))
+    check("R10 find_tool_uses non scende nei blob",
+          list(fdt.find_tool_uses(blob)) == [], list(fdt.find_tool_uses(blob)))
+    sub = {"off": 0, "out": 0, "inp": 0, "last_ts": None,
+           "rw": {"last": None, "touch": {}, "bouts": {}}}
+    sbc.scan_jsonl(t, sub, None)
+    check("R10 Stop hook: tocchi senza la copia",
+          sub["rw"]["touch"] == {"/x/a.py": 1, "/x/b.py": 1}, sub["rw"])
 finally:
     shutil.rmtree(tmp, ignore_errors=True)
 

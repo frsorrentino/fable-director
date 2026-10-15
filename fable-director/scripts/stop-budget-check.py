@@ -141,7 +141,7 @@ def scan_jsonl(path, sub, since):
     except OSError:
         return
     if size < int(sub.get("off", 0)):  # transcript ruotato/troncato
-        for k in ("off", "out", "inp", "cr", "cc", "n_rec", "n_usage", "n_ts"):
+        for k in ("off", "out", "inp", "cr", "cc", "cc1h", "n_rec", "n_usage", "n_ts"):
             if k in sub:
                 sub[k] = 0
         sub["last_ts"] = None
@@ -206,6 +206,12 @@ def scan_jsonl(path, sub, since):
                 (usage.get("cache_read_input_tokens") or 0)
             sub["cc"] = (sub.get("cc") or 0) + \
                 (usage.get("cache_creation_input_tokens") or 0)
+            # Parte di cc scritta con durata di un'ora (2× invece di 1,25×):
+            # usage.cache_creation la divide per durata, quando c'e'.
+            split = usage.get("cache_creation")
+            if isinstance(split, dict):
+                sub["cc1h"] = (sub.get("cc1h") or 0) + \
+                    int(split.get("ephemeral_1h_input_tokens") or 0)
             # cache_read PER MODELLO: ogni quota alla sua tariffa in eq
             # (Fable 5.1 0,025× contro 0,1×). Chiave = id modello del record.
             _cr = usage.get("cache_read_input_tokens") or 0
@@ -350,6 +356,7 @@ def scan_workflow_agents(transcript, since, state):
     state["wf_inp"] = sum(s.get("inp") or 0 for s in wf.values())
     state["wf_cr"] = sum(s.get("cr") or 0 for s in wf.values())
     state["wf_cc"] = sum(s.get("cc") or 0 for s in wf.values())
+    state["wf_cc1h"] = sum(s.get("cc1h") or 0 for s in wf.values())
     wf_crm = {}
     for s in wf.values():
         for m, v in (s.get("cr_by_model") or {}).items():
@@ -626,9 +633,10 @@ def _main():
     if mod and hasattr(mod, "eq_tokens"):
         cr = (state.get("cr") or 0) + (state.get("wf_cr") or 0)
         cc = (state.get("cc") or 0) + (state.get("wf_cc") or 0)
+        cc1h = (state.get("cc1h") or 0) + (state.get("wf_cc1h") or 0)
         crm = _merge_cr_by_model(state)
         actual_eq = mod.eq_tokens(max(actual_in - cc, 0), actual_out, cr, cc,
-                                  cr_by_model=crm or None)
+                                  cr_by_model=crm or None, cc_1h=cc1h)
 
     # Sentinella di schema: molti record validi ma zero usage o zero timestamp
     # riconosciuti = formato transcript probabilmente cambiato. I conteggi

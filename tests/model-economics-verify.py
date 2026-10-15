@@ -17,6 +17,8 @@ per record (message.model), mai cachato a inizio sessione.
   M6 stop hook: state accumula cr_by_model su transcript a due modelli,
      eq nel budget = somma per tariffa, budget-close scrive cache_read_by_model
   M7 session-cost-report: colonna eq per modello e totale = somma righe
+  M1c shipped: claude-sonnet-5-5 0.05 (listino Claude Code 2.1.296), sonnet-5 0.1
+  M8 session-cost-report: scritture in cache da un'ora a 2× nella riga del modello
 
 Usage: python3 tests/model-economics-verify.py   (exit 0 = all green)
 """
@@ -83,6 +85,13 @@ check("M1b shipped: opus-5-5 0.05 ([1m] e datato inclusi), opus-5 0.1, output 5�
       and fdt.eq_mult("claude-opus-5-5")["output"] == 5.0
       and fdt.eq_mult("claude-opus-5-5")["cache_create"] == 1.25,
       f"{fdt.eq_mult('claude-opus-5-5')} / {fdt.eq_mult('claude-opus-5')}")
+
+check("M1c shipped: sonnet-5-5 0.05 ([1m] e datato inclusi), sonnet-5 0.1",
+      fdt.eq_mult("claude-sonnet-5-5")["cache_read"] == 0.05
+      and fdt.eq_mult("claude-sonnet-5-5[1m]")["cache_read"] == 0.05
+      and fdt.eq_mult("claude-sonnet-5-5-20261001")["cache_read"] == 0.05
+      and fdt.eq_mult("claude-sonnet-5")["cache_read"] == 0.1,
+      f"{fdt.eq_mult('claude-sonnet-5-5')} / {fdt.eq_mult('claude-sonnet-5')}")
 
 # M2 — prefisso più lungo
 check("M2 prefisso: variante datata ricade su fable 0.025, fable-5 resta 0.1",
@@ -192,6 +201,25 @@ if ok7:
            and t_eq == f_eq + s_eq and "0.025" in fable_row[0])
 check("M7 session-cost-report: eq per riga alla tariffa del modello, totale = somma",
       ok7, out[:600] + (r.stderr or ""))
+
+# M8 — session-cost-report: la quota da un'ora delle scritture vale 2×
+proj8 = tempfile.mkdtemp(prefix="fd-econ-proj8-")
+pdir8 = home / ".claude" / "projects" / ("-" + proj8.strip("/").replace("/", "-").replace(".", "-"))
+pdir8.mkdir(parents=True, exist_ok=True)
+(pdir8 / "s8.jsonl").write_text(json.dumps({
+    "timestamp": "2030-01-01T10:00:00Z", "type": "assistant", "message": {
+        "model": "claude-sonnet-5-5", "usage": {
+            "output_tokens": 10, "input_tokens": 5,
+            "cache_read_input_tokens": 100000,
+            "cache_creation_input_tokens": 1000,
+            "cache_creation": {"ephemeral_1h_input_tokens": 800,
+                               "ephemeral_5m_input_tokens": 200}}}}) + "\n")
+r8 = run(SCR, [], home, cwd=proj8)
+row8 = [l for l in r8.stdout.splitlines() if l.startswith("claude-sonnet-5-5")]
+eq8 = int(row8[0].split()[5].replace(".", "")) if row8 else None
+want8 = int(5 + 50 + 100000 * 0.05 + 200 * 1.25 + 800 * 2.0)
+check("M8 session-cost-report: quota da un'ora a 2×, Sonnet 5.5 a 0,05×",
+      eq8 == want8, f"got {eq8} want {want8}\n{r8.stdout[:500]}{r8.stderr or ''}")
 
 print(f"\n{len(passed)} passed, {len(failed)} failed")
 sys.exit(1 if failed else 0)

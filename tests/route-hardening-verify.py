@@ -117,6 +117,32 @@ r4 = gate({"hook_event_name": "PreToolUse", "tool_name": "Agent",
 check("H7 effort coerente → nessun avviso",
       "effort mismatch" not in r4.stdout, r4.stdout)
 
+# H8-H11: `effort` dell'Agent tool (Claude Code 2.1.292) — vince sul frontmatter
+# e sulla sessione; "lower"/"higher" sono un passo dall'effort che avrebbe.
+r5 = gate({"hook_event_name": "PreToolUse", "tool_name": "Agent",
+           "cwd": str(work), "session_id": "s1", "effort": {"level": "xhigh"},
+           "tool_input": {"subagent_type": "general-purpose", "effort": "low"}})
+check("H8 effort della chiamata = dichiarato, sessione a xhigh → nessun falso mismatch",
+      "effort mismatch" not in r5.stdout and "effort raised" not in r5.stdout, r5.stdout)
+r6 = gate({"hook_event_name": "PreToolUse", "tool_name": "Agent",
+           "cwd": str(work), "session_id": "s1",
+           "tool_input": {"subagent_type": "fable-director:fd-executor", "effort": "max"}})
+check("H9 chiamata che porta fd-executor a max → avviso 'effort raised' sopra il pin low",
+      "effort raised" in r6.stdout and "'low'" in r6.stdout and "'max'" in r6.stdout
+      and "\"deny\"" not in r6.stdout, r6.stdout)
+check("H9b evento effort_raised in telemetria",
+      any('"requested": "max"' in e for e in events("effort_raised")), str(events("effort_raised")))
+r7 = gate({"hook_event_name": "PreToolUse", "tool_name": "Agent",
+           "cwd": str(work), "session_id": "s1",
+           "tool_input": {"subagent_type": "fable-director:fd-executor", "effort": "higher"}})
+check("H10 'higher' su fd-executor (pin low) → un passo: medium, avviso",
+      "effort raised" in r7.stdout and "'medium'" in r7.stdout, r7.stdout)
+r8 = gate({"hook_event_name": "PreToolUse", "tool_name": "Agent",
+           "cwd": str(work), "session_id": "s1",
+           "tool_input": {"subagent_type": "fable-director:fd-executor", "effort": "lower"}})
+check("H11 'lower' su fd-executor (pin low) → resta low, silenzio",
+      "effort raised" not in r8.stdout and "effort mismatch" not in r8.stdout, r8.stdout)
+
 print()
 print("external-exec: free tier chiuso ≠ rate limit")
 

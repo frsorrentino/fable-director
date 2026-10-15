@@ -84,11 +84,11 @@ def set_session(ctx=600_000, model="claude-fable-5-1"):
                                                 "ctx_size": 1000000, "ts": int(time.time())}))
 
 
-def gate(tool_input, event="PreToolUse", **more):
+def gate(tool_input, event="PreToolUse", env_extra=None, **more):
     data = {"hook_event_name": event, "tool_name": "Workflow", "cwd": str(proj), "session_id": SID,
             "transcript_path": str(TRANSCRIPT), "tool_input": tool_input}
     data.update(more)
-    r = run([sys.executable, GATE], json.dumps(data))
+    r = run([sys.executable, GATE], json.dumps(data), extra=env_extra)
     out = json.loads(r.stdout) if r.stdout.strip() else {}
     return out, r
 
@@ -166,8 +166,27 @@ check("W4c lint su claude-opus-5-5: eredita l'id della sessione, misura USD dich
       and "vs claude-fable-5-1" in msg5 and "not measured on claude-opus-5-5" in msg5,
       r5.stdout + r5.stderr)
 set_session()
-check("W5 heavy launcher: contesto 600k → avviso con 750k eq di ri-cache",
-      "heavy launcher" in msg and "600k tokens" in msg and "750k eq" in msg, msg)
+check("W5 heavy launcher: contesto 600k → avviso con 1.2M eq di ri-cache (scritture da un'ora a 2×)",
+      "heavy launcher" in msg and "600k tokens" in msg and "1.2M eq" in msg, msg)
+check("W5b heavy launcher: nomina la compattazione a sessione ferma e come spegnerla",
+      "idle ~54 min is compacted" in msg and '"idleCompaction": false' in msg
+      and "CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS" in msg, msg)
+
+# W12 CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL (Claude Code 2.1.296): con la variabile
+# ogni agente del Workflow gira su quel modello e il `model:` di agent() e' ignorato.
+check("W12 workflow lungo (16 agenti) con agent() senza model: → suggerita la variabile",
+      "CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL=sonnet" in msg, msg)
+out12, r12 = gate({"scriptPath": str(SCRIPT), "args": {"data": "2026-09-03"}},
+                  env_extra={"CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL": "sonnet"})
+msg12 = out12.get("systemMessage", "")
+check("W12b variabile su sonnet: nessun avviso 'without `model:`' (non ereditano la sessione)",
+      "without `model:`" not in msg12 and deny_reason(out12) is None, msg12 + r12.stderr)
+out13, r13 = gate({"scriptPath": str(SCRIPT), "args": {"data": "2026-09-03"}},
+                  env_extra={"CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL": "claude-opus-5-5"})
+msg13 = out13.get("systemMessage", "")
+check("W12c variabile su un modello di punta: avviso che ogni agente gira li' e model: e' ignorato",
+      "every workflow agent runs on claude-opus-5-5" in msg13
+      and "`model:` in agent() is ignored" in msg13, msg13 + r13.stderr)
 
 # W6 PostToolUse record
 out, r = gate({"scriptPath": str(SCRIPT), "args": {"data": "2026-09-03"}}, event="PostToolUse",
