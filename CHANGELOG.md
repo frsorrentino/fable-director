@@ -2,6 +2,16 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.58.x
+
+- **1.58.0 — counts and prices follow the new Claude Code.** Changes from Claude Code 2.1.291-2.1.301.
+  - **Tool counts no longer double.** From 2.1.300 transcripts copy every API request (`api-request`, `api-request-blob`, `api-request-shape`): rework, churn, tool counts and the grinding warning skip those copies, so two real Bash failures stay two.
+  - **Cache writes at their real price.** One-hour writes count 2× input, five-minute writes 1.25×, read record by record: the main thread writes for one hour, subagents for five minutes. Session, budget, agent and report figures in eq no longer understate the main thread. Sonnet 5.5 cache reads count 0.05×, its new price.
+  - **Idle compaction counted apart.** Claude Code compacts a 200k+ conversation left idle about 54 minutes: telemetry counts it as `idle_compactions`, not as a cache reset, and the kernel and the heavy-launcher warning say how to turn it off (`"idleCompaction": false`).
+  - **The gate reads the new settings.** The Agent tool's `effort`: no false mismatch, and a warning when a call lifts `fd-executor` above its pinned effort. `CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL`: no false "inherits the session model", and suggested for long fan-outs.
+  - **`fd-executor` stays on sonnet inside workflows too**, now tested; a resumed agent keeps the model it runs on.
+  - **One-command install** on Claude Code 2.1.292 or newer: `claude plugin install fable-director --marketplace frsorrentino/fable-director`.
+
 ## 1.57.x
 
 - **1.57.0 — the guards stop the action when they cannot run.** On Claude Code 2.1.295 or later.
