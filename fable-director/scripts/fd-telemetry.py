@@ -424,6 +424,14 @@ def find_usage(obj, in_subagent=False, model=None):
 
 
 CACHE_RESET_THRESHOLD = 10_000  # cache_read "alto" prima di un reset sospetto
+# Il prefisso globale del system prompt (~26k) resta in cache anche quando la
+# conversazione scade: una ripresa a cache fredda legge ~26k, non 0. Reset =
+# anche il turno che riscrive quasi tutto il contesto del turno prima e ne
+# rilegge meno della meta' (misurato: master 15/10, 25.893 letti e 196.460
+# riscritti su 221.928; 1 turno su 973 della sessione). Un tool output grosso
+# riscrive tanto ma rilegge tutto il contesto: non e' un reset.
+CACHE_RESET_REWRITE = 0.8
+CACHE_RESET_REREAD = 0.5
 # Claude Code >= 2.1.299 compatta una conversazione da 200k+ token ferma da
 # ~54 minuti, prima che scada la cache da un'ora (`"idleCompaction": false` la
 # spegne, CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS sposta la soglia). Il record e'
@@ -557,6 +565,8 @@ def sum_transcript(path):
     n_records = n_usage_recs = 0
     cache_resets = 0
     had_high_read = False
+    prev_ctx = 0            # contesto del turno main precedente (read+write+input)
+    last_main_mid = None    # message.id dell'ultimo turno main valutato
     idle_compactions = 0
     last_activity = None    # ultimo turno vero (user o assistant) con timestamp
     after_idle_compact = False  # il prossimo turno main e' la ripresa
@@ -603,6 +613,7 @@ def sum_transcript(path):
                 last_ts = ts
             rtype = rec.get("type")
             if rtype == "system" and rec.get("subtype") == "compact_boundary":
+                prev_ctx = 0  # dopo la compattazione il contesto e' un altro
                 if ts and last_activity and \
                         (ts - last_activity).total_seconds() >= IDLE_COMPACT_GAP_S:
                     idle_compactions += 1
@@ -658,13 +669,26 @@ def sum_transcript(path):
                     n_sub += 1
                 else:
                     turns += 1
+                    # Un messaggio spezzato su piu' righe ripete lo stesso
+                    # usage: il reset si valuta una volta per message.id.
+                    mid = (rec.get("message") or {}).get("id")
+                    if mid and mid == last_main_mid:
+                        continue
+                    last_main_mid = mid
                     cr = usage.get("cache_read_input_tokens") or 0
-                    if cr == 0 and had_high_read:
+                    cc = usage.get("cache_creation_input_tokens") or 0
+                    rewrote = (prev_ctx > CACHE_RESET_THRESHOLD
+                               and cc >= CACHE_RESET_REWRITE * prev_ctx
+                               and cr < CACHE_RESET_REREAD * prev_ctx)
+                    if had_high_read and (cr == 0 or rewrote):
                         if not after_idle_compact:  # quella ripresa e' gia' contata a parte
                             cache_resets += 1
-                        had_high_read = False
+                        had_high_read = cr > CACHE_RESET_THRESHOLD
                     elif cr > CACHE_RESET_THRESHOLD:
                         had_high_read = True
+                    ctx = cr + cc + (usage.get("input_tokens") or 0)
+                    if ctx:
+                        prev_ctx = ctx
                     after_idle_compact = False
             if rec_had_usage:
                 n_usage_recs += 1
@@ -1854,6 +1878,13 @@ def cmd_session_summary(args):
         sub_tot[k] += wf_tot[k]
     sub_tot[CC_1H_KEY] = sub_tot.get(CC_1H_KEY, 0) + wf_tot.get(CC_1H_KEY, 0)
     n_sub += n_wf
+    # Ogni quota di cache_read alla tariffa del SUO modello, agenti Workflow
+    # compresi: senza, l'eq della sessione applicava a tutto la tariffa base.
+    crm = dict(stats.get("cache_read_by_model") or {})
+    for k, v in (wf_tot.get("cache_read_by_model") or {}).items():
+        crm[k] = crm.get(k, 0) + v
+    if crm:
+        stats["cache_read_by_model"] = crm
     # Sentinella di schema: molti record validi ma zero usage o zero timestamp
     # riconosciuti = formato transcript cambiato → la summary conterebbe zeri
     # in silenzio. Logga l'anomalia (rumore nel report) e avvisa su stderr.
@@ -1898,7 +1929,8 @@ def cmd_session_summary(args):
     payload.update(stats)
     payload.update(derived_metrics(inp, out, cr, cc,
                                    main_tot["output_tokens"],
-                                   sub_tot["output_tokens"], n_sub, cc_1h=cc1h))
+                                   sub_tot["output_tokens"], n_sub,
+                                   cr_by_model=crm or None, cc_1h=cc1h))
     log_event("session_summary", payload, session_id=session_id, cwd=cwd)
 
 

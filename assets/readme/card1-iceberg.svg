@@ -33,13 +33,13 @@
   <polygon points="770,244 1090,244 1010,560 850,500" fill="url(#bergdeep)" opacity="0.92"/>
 
   <!-- etichette -->
-  <text x="690" y="185" fill="#ffffff" font-size="30" font-weight="700" text-anchor="end">10%</text>
+  <text x="690" y="185" fill="#ffffff" font-size="30" font-weight="700" text-anchor="end">9%</text>
   <text x="690" y="215" fill="#cfc2f2" font-size="20" text-anchor="end">the answers you read</text>
 
-  <text x="700" y="308" fill="#ffffff" font-size="34" font-weight="700" text-anchor="end">18%</text>
+  <text x="700" y="308" fill="#ffffff" font-size="34" font-weight="700" text-anchor="end">26%</text>
   <text x="700" y="336" fill="#9db7f5" font-size="21" text-anchor="end">new context, cached just below</text>
 
-  <text x="700" y="408" fill="#ffffff" font-size="64" font-weight="800" text-anchor="end">72%</text>
+  <text x="700" y="408" fill="#ffffff" font-size="64" font-weight="800" text-anchor="end">65%</text>
   <text x="700" y="444" fill="#9db7f5" font-size="22" text-anchor="end">your context, re-sent</text>
   <text x="700" y="470" fill="#9db7f5" font-size="22" text-anchor="end">on every single turn</text>
 

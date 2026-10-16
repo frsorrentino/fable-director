@@ -21,6 +21,7 @@ Runs the REAL scripts against a throwaway HOME:
   E8 scritture in cache da un'ora a 2×, da cinque minuti o non divise a 1,25×
   E9 stop hook: state accumula cc1h (main + agenti workflow), eq del budget a 2×
   E10 session-summary: cache_creation_1h nel payload, eq a 2× su quella quota
+  E13 session-summary: eq con la tariffa cache_read di ogni modello (Workflow compresi)
   E11 budget-close: eq dallo state con cc1h
   E12 subagent-meter: eq dell'agente con la quota da un'ora
 
@@ -310,6 +311,38 @@ eq12 = sam.eq_of(model12, tot12)
 exp12 = int(10 * 1.0 + 10 * 5.0 + 1000 * 0.05 + 100 * 2.0)
 check("E12 subagent-meter: eq con la quota da un'ora e la tariffa del modello",
       eq12 == exp12, f"got {eq12} want {exp12} tot={tot12}")
+
+# E13 — session-summary: cache_read di ogni modello alla SUA tariffa, agenti
+# Workflow compresi (prima l'eq usava la tariffa base per tutto)
+home13 = Path(tempfile.mkdtemp(prefix="fd-eq-home13-"))
+proj13 = tempfile.mkdtemp(prefix="fd-eq-proj13-")
+tr13 = Path(tempfile.mkdtemp()) / "sess.jsonl"
+tr13.write_text(split_line(out=100, inp=100, cr=200000, cc=500, cc1h=500,
+                           model="claude-fable-5-1", mid="m1"))
+adir13 = tr13.with_suffix("") / "subagents" / "workflows" / "wf_a"
+adir13.mkdir(parents=True)
+(adir13 / "agent-a1.jsonl").write_text(
+    split_line(out=10, inp=10, cr=50000, model="claude-sonnet-5-5", mid="w1",
+               ts="2030-01-01T10:01:00Z"))
+r13 = run(SCRIPTS / "fd-telemetry.py", ["session-summary"], home13,
+          stdin=json.dumps({"cwd": proj13, "transcript_path": str(tr13),
+                            "session_id": "eq-bymodel-sess"}))
+p13 = {}
+db13 = home13 / ".claude" / "fable-director" / "telemetry.db"
+if db13.is_file():
+    con = sqlite3.connect(db13)
+    row = con.execute("SELECT payload FROM events WHERE event='session_summary'"
+                      " ORDER BY ts DESC LIMIT 1").fetchone()
+    con.close()
+    p13 = json.loads(row[0]) if row else {}
+crm13 = {"claude-fable-5-1": 200000, "claude-sonnet-5-5": 50000}
+exp13 = mod.eq_tokens(110, 110, 250000, 500, cr_by_model=crm13, cc_1h=500)
+base13 = mod.eq_tokens(110, 110, 250000, 500, cc_1h=500)
+check("E13 session-summary: eq con cache_read_by_model (main + Workflow)",
+      p13.get("eq_tokens") == exp13 and exp13 != base13
+      and p13.get("cache_read_by_model") == crm13,
+      f"eq={p13.get('eq_tokens')} want {exp13} (base {base13}) "
+      f"crm={p13.get('cache_read_by_model')} err={r13.stderr[:160]}")
 
 print(f"\n{len(passed)} passed, {len(failed)} failed")
 sys.exit(1 if failed else 0)

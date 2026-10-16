@@ -1,6 +1,13 @@
 # Fable-director — team onboarding (auto-updating install)
 
-## Standard route (from 1.17.0 — two commands, zero maintenance)
+## Standard route (one command, zero maintenance)
+
+```bash
+claude plugin install fable-director --marketplace frsorrentino/fable-director
+```
+
+One command on Claude Code 2.1.292 or newer: it adds the marketplace if it is
+not there yet. On an older Claude Code, two commands:
 
 ```bash
 claude plugin marketplace add frsorrentino/fable-director
@@ -55,8 +62,10 @@ leaves them alone by design (they are the development route). Migrate once:
 
 ```bash
 claude plugin uninstall fable-director
-claude plugin marketplace add frsorrentino/fable-director
-claude plugin install fable-director@fsorrentino --scope user
+claude plugin install fable-director --marketplace frsorrentino/fable-director
 ```
+
+On Claude Code older than 2.1.292, replace the second line with the two commands
+of the standard route.
 
 Auto-update then self-enables at the first session, as above.

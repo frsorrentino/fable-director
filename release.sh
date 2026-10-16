@@ -157,6 +157,15 @@ def prune(root, keep_ver):
     return removed, failed
 
 
+_base_ignore = shutil.ignore_patterns('__pycache__', '*.pyc', '*.bak*')
+def ignore(d, names):
+    # .claude-plugin/types: tipi del mod generati in locale, fuori da git e
+    # dallo zip; copiati in cache resterebbero quelli vecchi di quel giorno.
+    skip = set(_base_ignore(d, names))
+    if os.path.basename(d) == '.claude-plugin' and 'types' in names:
+        skip.add('types')
+    return skip
+
 for base in [os.path.expanduser("~/.claude"), os.path.expanduser("~/.claude-pixel")]:
     ipj = f"{base}/plugins/installed_plugins.json"
     if not os.path.exists(ipj):
@@ -174,7 +183,7 @@ for base in [os.path.expanduser("~/.claude"), os.path.expanduser("~/.claude-pixe
     mkt = key.split("@", 1)[1]
     cache = f"{base}/plugins/cache/{mkt}/fable-director/{VER}"
     if os.path.exists(cache): shutil.rmtree(cache)
-    shutil.copytree(SRC, cache, ignore=shutil.ignore_patterns('__pycache__','*.pyc','*.bak*'))
+    shutil.copytree(SRC, cache, ignore=ignore)
     shutil.copy2(ipj, ipj + f".bak-pre-{VER}")
     e = d["plugins"][key][0]
     e.update(installPath=cache, version=VER, gitCommitSha=SHA, lastUpdated=NOW)

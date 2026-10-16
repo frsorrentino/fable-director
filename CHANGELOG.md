@@ -4,6 +4,13 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.58.x
 
+- **1.58.1 — cold resumes counted, measured numbers updated.**
+  - **Cache resets seen again.** The global system-prompt cache (~26k) stays warm when a conversation's cache expires, so a cold resume never read 0 and was missed. A turn that rewrites nearly all of the previous context and re-reads less than half of it now counts as a reset; a big tool output does not.
+  - **Session eq at each model's read price.** The session summary prices every share of cache reads at its own model's rate, workflow agents included.
+  - **Measured figures repriced** with main-thread writes at their 1-hour price: a main-thread turn costs ~6.3× a subagent turn (was 5.7×); the README card now reads 65% re-sent, 26% new context cached, 9% answers.
+  - **Release no longer copies stale mod types** into the plugin cache.
+  - **ONBOARDING shows the one-command install** first, the two commands as fallback.
+
 - **1.58.0 — counts and prices follow the new Claude Code.** Changes from Claude Code 2.1.291-2.1.301.
   - **Tool counts no longer double.** From 2.1.300 transcripts copy every API request (`api-request`, `api-request-blob`, `api-request-shape`): rework, churn, tool counts and the grinding warning skip those copies, so two real Bash failures stay two.
   - **Cache writes at their real price.** One-hour writes count 2× input, five-minute writes 1.25×, read record by record: the main thread writes for one hour, subagents for five minutes. Session, budget, agent and report figures in eq no longer understate the main thread. Sonnet 5.5 cache reads count 0.05×, its new price.

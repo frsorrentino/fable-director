@@ -12,6 +12,10 @@ parte e la ripresa che segue non finisce fra i `cache_resets`.
   I2 compattazione normale (pausa di 2 min): idle 0, il reset dopo resta un reset
   I3 ripresa dopo piu' di un'ora senza compattazione: un cache reset, idle 0
   I4 session-summary: idle_compactions nel payload
+  I5 ripresa a cache fredda con il prefisso globale ancora in cache (caso reale
+     master 15/10: 25.893 letti, 196.460 riscritti): un reset
+  I6 tool output grosso (riscrive tanto ma rilegge tutto il contesto): nessun reset
+  I7 come I5 con il messaggio della ripresa spezzato su tre righe: sempre un reset
 
 Usage: python3 tests/idle-compaction-verify.py   (exit 0 = all green)
 """
@@ -91,6 +95,34 @@ _, _, _, resets3, *_, stats3 = fdt.sum_transcript(t3)
 check("I3 ripresa a cache fredda senza compattazione: un reset, idle 0",
       stats3.get("idle_compactions") == 0 and resets3 == 1,
       f"idle={stats3.get('idle_compactions')} resets={resets3}")
+
+# I5 — caso reale: master 15/10 alle 10:04, cache globale del system prompt
+# ancora calda (~26k letti), tutto il resto riscritto
+t5 = write([prompt("2030-01-01T06:30:00Z"), turn("2030-01-01T06:32:55Z", "m1", 215740, 2679),
+            prompt("2030-01-01T06:35:00Z"), turn("2030-01-01T06:35:23Z", "m2", 218419, 1567),
+            prompt("2030-01-01T06:43:00Z"), turn("2030-01-01T06:43:19Z", "m3", 219986, 1940),
+            prompt("2030-01-01T08:04:00Z"), turn("2030-01-01T08:04:30Z", "m4", 25893, 196460),
+            prompt("2030-01-01T08:58:00Z"), turn("2030-01-01T08:58:03Z", "m5", 222353, 5433)])
+_, _, _, resets5, *_ = fdt.sum_transcript(t5)
+check("I5 ripresa a cache fredda con prefisso globale caldo: un reset",
+      resets5 == 1, f"resets={resets5}")
+
+# I6 — un tool output da 150k: riscrittura grande, ma il contesto e' riletto
+t6 = write(head + [prompt("2030-01-01T10:06:00Z"), turn("2030-01-01T10:06:10Z", "m3", 300500, 150000),
+                   prompt("2030-01-01T10:07:00Z"), turn("2030-01-01T10:07:10Z", "m4", 450500, 800)])
+_, _, _, resets6, *_ = fdt.sum_transcript(t6)
+check("I6 tool output grosso con contesto riletto: nessun reset",
+      resets6 == 0, f"resets={resets6}")
+
+# I7 — Claude Code scrive un messaggio su piu' righe con lo stesso id e usage
+t7 = write([prompt("2030-01-01T06:30:00Z"), turn("2030-01-01T06:32:55Z", "m1", 215740, 2679),
+            prompt("2030-01-01T06:43:00Z"), turn("2030-01-01T06:43:19Z", "m3", 219986, 1940),
+            prompt("2030-01-01T08:04:00Z")]
+           + [turn("2030-01-01T08:04:30Z", "m4", 25893, 196460)] * 3
+           + [prompt("2030-01-01T08:58:00Z"), turn("2030-01-01T08:58:03Z", "m5", 222353, 5433)])
+_, _, _, resets7, *_ = fdt.sum_transcript(t7)
+check("I7 ripresa spezzata su tre righe: un reset solo",
+      resets7 == 1, f"resets={resets7}")
 
 # I4 — il payload della session-summary porta il conteggio
 home = Path(tempfile.mkdtemp(prefix="fd-idle-home-"))
