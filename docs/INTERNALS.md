@@ -337,7 +337,8 @@ field on hook stdin.
   on Fable 5.1 the 60% of writes above becomes ≈ 70% (cache_read ≈ 16%).
   Sonnet 5.5 reads at 0.05× ($0.10 on $2, 2.1.296).
 - **Idle compaction (2.1.299)**: a 200k+ conversation idle ~54 min is
-  compacted before the 1h cache expires (`"idleCompaction": false` off,
+  compacted before the 1h cache expires (`"idleCompaction": false` off, or from 2.1.302 the "Idle compaction" row in
+  /config;
   `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS` threshold). Same `compact_boundary`
   with trigger `auto` as any compaction: only the pause before it (≥ 50 min)
   tells it apart. Counted as `idle_compactions`, never as a cache reset.

@@ -2,7 +2,8 @@
 """Verifica deterministica — compattazione a sessione ferma (Claude Code >= 2.1.299).
 
 Una conversazione da 200k+ token lasciata ferma ~54 minuti viene compattata
-prima che la cache da un'ora scada (`"idleCompaction": false` la spegne). Nella
+prima che la cache da un'ora scada (`"idleCompaction": false` la spegne,
+dalla 2.1.302 anche la riga "Idle compaction" di /config). Nella
 trascrizione e' un `compact_boundary` con trigger "auto", come una compattazione
 normale: la distingue solo la pausa che la precede. La telemetria la conta a
 parte e la ripresa che segue non finisce fra i `cache_resets`.

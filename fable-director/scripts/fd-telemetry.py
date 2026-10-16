@@ -434,7 +434,7 @@ CACHE_RESET_REWRITE = 0.8
 CACHE_RESET_REREAD = 0.5
 # Claude Code >= 2.1.299 compatta una conversazione da 200k+ token ferma da
 # ~54 minuti, prima che scada la cache da un'ora (`"idleCompaction": false` la
-# spegne, CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS sposta la soglia). Il record e'
+# spegne, dalla 2.1.302 anche la riga "Idle compaction" di /config; CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS sposta la soglia). Il record e'
 # un compact_boundary con trigger "auto", come una compattazione normale: la
 # distingue solo la pausa che la precede (misurate 54,3-55,0 min). Contata a
 # parte, e la ripresa che la segue non e' un cache reset.
@@ -2026,7 +2026,8 @@ def cmd_report(args):
         if idle_c:
             print(f"idle compactions: {idle_c} (Claude Code summarized a 200k+ session "
                   f"left idle ~54 min; not counted as cache resets — "
-                  f"`\"idleCompaction\": false` in settings.json turns it off)")
+                  f"`\"idleCompaction\": false` in settings.json or, from 2.1.302, "
+                  f"the \"Idle compaction\" row in /config turns it off)")
         # Yield: output token per commit prodotto. Solo sessioni con dato git
         # (git_yield → None su cwd non-repo). RESA, non target: sessioni di
         # planning/debug non committano legittimamente, non le condanna.

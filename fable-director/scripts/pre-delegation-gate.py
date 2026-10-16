@@ -742,7 +742,7 @@ def lean_thread(data):
                 f"re-cached, a whole wave of judges). Since Claude Code 2.1.299 a context over "
                 f"200k left idle ~54 min is compacted instead: a cheaper resume, but the summary "
                 f"drops the detail the judgment stages need (`\"idleCompaction\": false` in "
-                f"settings.json keeps it whole, CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS moves the "
+                f"settings.json, or from 2.1.302 the \"Idle compaction\" row in /config, keeps it whole, CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS moves the "
                 f"threshold). Long workflows belong to a fresh session with a 2k distillate "
                 f"(`budget-open --route bg-session`, or the nuova-sessione skill); close this one "
                 f"at a verified boundary. Delegation allowed.")

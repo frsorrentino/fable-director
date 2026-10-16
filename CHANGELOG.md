@@ -4,6 +4,10 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.58.x
 
+- **1.58.2 — forks in `claude -p` stay under the budget gate.** Checked on Claude Code 2.1.302, which turns forks on by default in `claude -p`, the Agent SDK, the desktop app and VS Code.
+  - **Forks gated and counted in headless runs.** A `subagent_type: "fork"` Agent call in `claude -p` with no open budget is denied (`no_budget`, logged with `subagent_type: fork`); with a budget it runs and counts in [DLG]. No code change was needed; a new test keeps it that way.
+  - **Idle compaction has a /config switch.** Kernel, skill, gate warning and report now name the "Idle compaction" row in /config (Claude Code 2.1.302) next to `"idleCompaction": false`.
+
 - **1.58.1 — cold resumes counted, measured numbers updated.**
   - **Cache resets seen again.** The global system-prompt cache (~26k) stays warm when a conversation's cache expires, so a cold resume never read 0 and was missed. A turn that rewrites nearly all of the previous context and re-reads less than half of it now counts as a reset; a big tool output does not.
   - **Session eq at each model's read price.** The session summary prices every share of cache reads at its own model's rate, workflow agents included.
