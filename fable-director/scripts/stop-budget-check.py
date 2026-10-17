@@ -199,7 +199,7 @@ def scan_jsonl(path, sub, since):
             sub["inp"] += (usage.get("input_tokens") or 0) + \
                           (usage.get("cache_creation_input_tokens") or 0)
             # Componenti pure per il costo in eq (misura, non enforcement:
-            # cache_read = ~72% del costo reale ma resta fuori da inp/out —
+            # cache_read = ~59% del costo reale ma resta fuori da inp/out —
             # vedi EQ_MULT in fd-telemetry.py). Stato di versioni precedenti
             # senza le chiavi: si parte da 0 dall'offset corrente.
             sub["cr"] = (sub.get("cr") or 0) + \

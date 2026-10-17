@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.58.2-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.58.3-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need
 to do.** It makes your agent declare what a job should cost before it delegates,
@@ -75,7 +75,7 @@ post-mortem is written. A small quick task skips all of this.
 
 ## How much does it save?
 
-![Most of your AI bill is invisible: measured on 2,389 real sessions, only 9% is the answers you read — 26% is new context being cached, and 65% is your context re-sent on every single turn. fable-director measures all of it.](assets/readme/card1-iceberg.png)
+![Most of your AI bill is invisible: measured on 1,282 real sessions in September-October 2026, only 13% is the answers you read — 28% is new context being cached, and 59% is your context re-sent on every single turn. fable-director measures all of it.](assets/readme/card1-iceberg.png)
 
 **The honest one-sentence answer:** it doesn't save tokens on every task — it
 makes spend predictable, verified and disciplined; on read-heavy loads the

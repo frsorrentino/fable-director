@@ -23,7 +23,7 @@
 
   <!-- titolo -->
   <text x="70" y="105" fill="#ffffff" font-size="52" font-weight="800">Most of your AI bill is invisible.</text>
-  <text x="70" y="152" fill="#b9a7e8" font-size="26">We measured 2,389 real AI coding sessions.</text>
+  <text x="70" y="152" fill="#b9a7e8" font-size="26">We measured 1,282 real AI coding sessions, Sep-Oct 2026.</text>
 
   <!-- iceberg sopra -->
   <polygon points="810,240 890,120 990,190 1050,240" fill="url(#bergtop)"/>
@@ -33,13 +33,13 @@
   <polygon points="770,244 1090,244 1010,560 850,500" fill="url(#bergdeep)" opacity="0.92"/>
 
   <!-- etichette -->
-  <text x="690" y="185" fill="#ffffff" font-size="30" font-weight="700" text-anchor="end">9%</text>
+  <text x="690" y="185" fill="#ffffff" font-size="30" font-weight="700" text-anchor="end">13%</text>
   <text x="690" y="215" fill="#cfc2f2" font-size="20" text-anchor="end">the answers you read</text>
 
-  <text x="700" y="308" fill="#ffffff" font-size="34" font-weight="700" text-anchor="end">26%</text>
+  <text x="700" y="308" fill="#ffffff" font-size="34" font-weight="700" text-anchor="end">28%</text>
   <text x="700" y="336" fill="#9db7f5" font-size="21" text-anchor="end">new context, cached just below</text>
 
-  <text x="700" y="408" fill="#ffffff" font-size="64" font-weight="800" text-anchor="end">65%</text>
+  <text x="700" y="408" fill="#ffffff" font-size="64" font-weight="800" text-anchor="end">59%</text>
   <text x="700" y="444" fill="#9db7f5" font-size="22" text-anchor="end">your context, re-sent</text>
   <text x="700" y="470" fill="#9db7f5" font-size="22" text-anchor="end">on every single turn</text>
 

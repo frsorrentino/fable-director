@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Verifica deterministica — contabilità in input-equivalenti (fase taratura).
 
-Contesto (audit 2026-08 su 2.389 sessioni reali, context-audit/DISTILLATO.md
-del workspace fable-director): cache_read = ~72% del costo main in eq, output
-= ~10% — l'enforcement su soli output token vede un decimo della spesa. Da qui
+Contesto (settembre-ottobre 2026, 1.282 sessioni reali, tariffe per modello,
+context-audit/cost-structure.py del workspace fable-director): cache_read =
+~59% del costo main in eq, output = ~13% — l'enforcement su soli output token
+vede un ottavo della spesa. Da qui
 la fase di taratura: l'eq viene MISURATO e riportato ovunque (state, budget,
 telemetria), ma le soglie 2×/3× restano sui token dichiarati.
 

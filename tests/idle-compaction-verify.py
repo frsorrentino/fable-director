@@ -17,6 +17,7 @@ parte e la ripresa che segue non finisce fra i `cache_resets`.
      master 15/10: 25.893 letti, 196.460 riscritti): un reset
   I6 tool output grosso (riscrive tanto ma rilegge tutto il contesto): nessun reset
   I7 come I5 con il messaggio della ripresa spezzato su tre righe: sempre un reset
+  I8 turno a usage zero (errore API) a cache calda: nessun reset
 
 Usage: python3 tests/idle-compaction-verify.py   (exit 0 = all green)
 """
@@ -124,6 +125,19 @@ t7 = write([prompt("2030-01-01T06:30:00Z"), turn("2030-01-01T06:32:55Z", "m1", 2
 _, _, _, resets7, *_ = fdt.sum_transcript(t7)
 check("I7 ripresa spezzata su tre righe: un reset solo",
       resets7 == 1, f"resets={resets7}")
+
+# I8 — turno sintetico a usage zero (errore API) fra due turni a cache calda
+t8 = write(head + [prompt("2030-01-01T10:06:00Z"),
+                   {"type": "assistant", "timestamp": "2030-01-01T10:06:01Z", "message": {
+                       "id": "m3", "role": "assistant", "model": "<synthetic>",
+                       "content": [{"type": "text", "text": "API Error"}],
+                       "usage": {"input_tokens": 0, "output_tokens": 0,
+                                 "cache_read_input_tokens": 0,
+                                 "cache_creation_input_tokens": 0}}},
+                   prompt("2030-01-01T10:07:00Z"), turn("2030-01-01T10:07:10Z", "m4", 300500)])
+_, _, _, resets8, *_ = fdt.sum_transcript(t8)
+check("I8 turno a usage zero fra due turni a cache calda: nessun reset",
+      resets8 == 0, f"resets={resets8}")
 
 # I4 — il payload della session-summary porta il conteggio
 home = Path(tempfile.mkdtemp(prefix="fd-idle-home-"))

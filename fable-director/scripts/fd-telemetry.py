@@ -97,10 +97,10 @@ USAGE_KEYS = ("input_tokens", "output_tokens",
 # usage.cache_creation con cache_create_1h()).
 CC_1H_KEY = "cache_creation_1h"
 # Input-equivalenti: rapporti di listino standard per rendere confrontabili le
-# quattro componenti di usage (audit 2026-08 su 2.389 sessioni: cache_read =
-# ~72% del costo main in eq, output = ~10% — i soli output token misurano un
-# decimo della spesa reale; numeri e script in context-audit/DISTILLATO.md del
-# workspace fable-director). FASE DI TARATURA: l'eq viene misurato e riportato
+# quattro componenti di usage (settembre-ottobre 2026, 1.282 sessioni, tariffe
+# per modello: cache_read = ~59% del costo main in eq, output = ~13% — i soli
+# output token misurano un ottavo della spesa reale; script
+# context-audit/cost-structure.py del workspace fable-director). FASE DI TARATURA: l'eq viene misurato e riportato
 # ovunque, l'enforcement 2×/3× resta sui token dichiarati finché una taratura
 # su budget reali non fissa le soglie eq.
 EQ_MULT = {"input": 1.0, "output": 5.0, "cache_read": 0.1, "cache_create": 1.25,
@@ -677,6 +677,12 @@ def sum_transcript(path):
                     last_main_mid = mid
                     cr = usage.get("cache_read_input_tokens") or 0
                     cc = usage.get("cache_creation_input_tokens") or 0
+                    # Turno a usage zero (messaggio sintetico, errore API,
+                    # interruzione): nessuna chiamata ha letto la cache, quindi
+                    # non e' un reset e non sposta lo stato.
+                    if not (cr or cc or usage.get("input_tokens")
+                            or usage.get("output_tokens")):
+                        continue
                     rewrote = (prev_ctx > CACHE_RESET_THRESHOLD
                                and cc >= CACHE_RESET_REWRITE * prev_ctx
                                and cr < CACHE_RESET_REREAD * prev_ctx)

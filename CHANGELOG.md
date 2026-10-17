@@ -4,6 +4,11 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.58.x
 
+- **1.58.3 — measured figures from September-October, with the period written.**
+  - **Kernel and README figures recomputed** on 1,282 sessions from September-October 2026, each model at its own cache prices: a main-thread turn costs ~2.2× a subagent turn (October 1.5×; August read 6.3×); cost per turn grows from 15k to 38k eq with session length; resumes after more than an hour idle cause 90% of cache resets. The README card now reads 59% re-sent, 28% new context cached, 13% answers.
+  - **A zero-usage turn is no longer a cache reset.** A synthetic message or an API error between two warm turns read 0 from the cache and was counted as a reset.
+  - **Old 72% figure gone from code comments.**
+
 - **1.58.2 — forks in `claude -p` stay under the budget gate.** Checked on Claude Code 2.1.302, which turns forks on by default in `claude -p`, the Agent SDK, the desktop app and VS Code.
   - **Forks gated and counted in headless runs.** A `subagent_type: "fork"` Agent call in `claude -p` with no open budget is denied (`no_budget`, logged with `subagent_type: fork`); with a budget it runs and counts in [DLG]. No code change was needed; a new test keeps it that way.
   - **Idle compaction has a /config switch.** Kernel, skill, gate warning and report now name the "Idle compaction" row in /config (Claude Code 2.1.302) next to `"idleCompaction": false`.
