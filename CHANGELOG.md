@@ -4,6 +4,12 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.58.x
 
+- **1.58.4 — what Claude Code 2.1.302-2.1.305 changes for delegation.**
+  - **Skill list sent again, counted.** From Claude Code 2.1.304 the skill list comes back after every compaction, and a resume sends it too: a fixed cost per event (measured: 175 skills, about 30k characters). The session summary records how many full lists were sent after the first and their size; `report` prints them.
+  - **Forks and resumes, written down.** The delegation skill now says what the gate sees: a fork in `claude -p` is denied without a budget and counted (unchanged since 1.58.2); a fork started with `/subtask` is counted but cannot be refused; resuming a finished subagent with `SendMessage` is neither gated nor counted.
+  - **Workflow resume fix noted.** Before Claude Code 2.1.305 a resume re-ran `pipeline()` and `parallel()` agents that had already completed; resume costs measured on older versions read high.
+  - **claude-observe copy synced:** the anonymous option also lists the new names of team-supervisor's tools (`supervisor`, `supervisor-app`).
+
 - **1.58.3 — measured figures from September-October, with the period written.**
   - **Kernel and README figures recomputed** on 1,282 sessions from September-October 2026, each model at its own cache prices: a main-thread turn costs ~2.2× a subagent turn (October 1.5×; August read 6.3×); cost per turn grows from 15k to 38k eq with session length; resumes after more than an hour idle cause 90% of cache resets. The README card now reads 59% re-sent, 28% new context cached, 13% answers.
   - **A zero-usage turn is no longer a cache reset.** A synthetic message or an API error between two warm turns read 0 from the cache and was counted as a reset.
