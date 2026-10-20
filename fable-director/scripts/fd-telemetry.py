@@ -439,6 +439,11 @@ CACHE_RESET_REREAD = 0.5
 # distingue solo la pausa che la precede (misurate 54,3-55,0 min). Contata a
 # parte, e la ripresa che la segue non e' un cache reset.
 IDLE_COMPACT_GAP_S = 50 * 60
+# Claude Code >= 2.1.304 manda di nuovo l'elenco delle skill dopo ogni
+# compattazione (e una ripresa lo rimanda): un costo fisso per evento,
+# misurato il 20/10 sull'account personale a ~30k caratteri (175 skill).
+# Conta solo gli elenchi interi oltre il primo, non le aggiunte di una skill.
+SKILL_LIST_FULL_MIN = 20
 WRITE_TOOLS = {"Edit", "Write", "NotebookEdit"}  # prima azione irreversibile
 
 # Attrito (proxy di rework, non di correttezza — makinggainz/claude-code-
@@ -570,6 +575,9 @@ def sum_transcript(path):
     idle_compactions = 0
     last_activity = None    # ultimo turno vero (user o assistant) con timestamp
     after_idle_compact = False  # il prossimo turno main e' la ripresa
+    skill_lists = 0             # elenchi interi di skill visti
+    skill_resent = {"n": 0, "chars": 0, "after_compact": 0}
+    since_compact = False       # nessun turno main dalla compattazione
     first_ts = last_ts = None
     turns = 0
     first_write_turn = None
@@ -612,8 +620,19 @@ def sum_transcript(path):
                 first_ts = first_ts or ts
                 last_ts = ts
             rtype = rec.get("type")
+            att = rec.get("attachment")
+            if rtype == "attachment" and isinstance(att, dict) \
+                    and att.get("type") == "skill_listing" and not rec.get("isSidechain") \
+                    and (att.get("skillCount") or 0) >= SKILL_LIST_FULL_MIN:
+                skill_lists += 1
+                if skill_lists > 1:
+                    skill_resent["n"] += 1
+                    skill_resent["chars"] += len(str(att.get("content") or ""))
+                    if since_compact:
+                        skill_resent["after_compact"] += 1
             if rtype == "system" and rec.get("subtype") == "compact_boundary":
                 prev_ctx = 0  # dopo la compattazione il contesto e' un altro
+                since_compact = True
                 if ts and last_activity and \
                         (ts - last_activity).total_seconds() >= IDLE_COMPACT_GAP_S:
                     idle_compactions += 1
@@ -669,6 +688,7 @@ def sum_transcript(path):
                     n_sub += 1
                 else:
                     turns += 1
+                    since_compact = False
                     # Un messaggio spezzato su piu' righe ripete lo stesso
                     # usage: il reset si valuta una volta per message.id.
                     mid = (rec.get("message") or {}).get("id")
@@ -707,6 +727,8 @@ def sum_transcript(path):
         "max_tool_run": {"tool": max_run[0], "len": max_run[1]} if max_run[0] else None,
         "idle_compactions": idle_compactions,
     }
+    if skill_resent["n"]:
+        stats["skill_list_resent"] = skill_resent
     if batch_turn_ids:
         stats["tool_calls_per_turn"] = round(
             batch_calls / len(batch_turn_ids), 2)
@@ -2034,6 +2056,14 @@ def cmd_report(args):
                   f"left idle ~54 min; not counted as cache resets — "
                   f"`\"idleCompaction\": false` in settings.json or, from 2.1.302, "
                   f"the \"Idle compaction\" row in /config turns it off)")
+        sl = [s.get("skill_list_resent") or {} for s in sessions]
+        sl_n = sum(x.get("n") or 0 for x in sl)
+        if sl_n:
+            sl_c = sum(x.get("after_compact") or 0 for x in sl)
+            sl_ch = sum(x.get("chars") or 0 for x in sl)
+            print(f"skill list sent again: {sl_n} time(s), {sl_c} after a compaction "
+                  f"(~{fmt(sl_ch // sl_n)} characters each; Claude Code >= 2.1.304 sends "
+                  f"it after every compaction — fewer skills, cheaper compactions)")
         # Yield: output token per commit prodotto. Solo sessioni con dato git
         # (git_yield → None su cwd non-repo). RESA, non target: sessioni di
         # planning/debug non committano legittimamente, non le condanna.

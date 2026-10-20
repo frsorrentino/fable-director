@@ -33,3 +33,14 @@ test('a resumed agent keeps the model it already runs on', async ($, on) => {
   expect((await $.agent.spawn(spawn('fable-director:fd-executor', 'opus', res))).model).toBe('opus')
   expect((await $.agent.spawn(spawn('fable-director:fd-executor', undefined, res))).model).toBe('inherit')
 })
+
+// Claude Code 2.1.302: forks are on by default in `claude -p` too. A fork
+// inherits the parent's model whatever is asked: nothing to pin, and the
+// budget gate on PreToolUse Agent counts and refuses it like any delegation
+// (tests/fork-headless-verify.py).
+test('a fork goes through untouched', async ($, on) => {
+  on('agent.spawn', (_$, e) => ({ model: e.model ?? 'inherit' }))
+  expect((await $.agent.spawn(spawn('fork', undefined, { fork: true }))).model).toBe('inherit')
+  // The module leaves an asked model alone; the engine ignores it on a fork.
+  expect((await $.agent.spawn(spawn('fork', 'opus', { fork: true }))).model).toBe('opus')
+})
