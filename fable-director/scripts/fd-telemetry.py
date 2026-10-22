@@ -429,6 +429,39 @@ def find_usage(obj, in_subagent=False, model=None):
             yield from find_usage(v, in_subagent, model)
 
 
+def top_usage_mid(rec):
+    """(message.id, usage di primo livello) di un record assistant, altrimenti
+    (None, None). Solo quell'usage si deduplica: gli aggregati annidati sotto
+    toolUseResult valgono una volta per record."""
+    msg = rec.get("message") if isinstance(rec.get("message"), dict) else {}
+    if rec.get("type") != "assistant":
+        return None, None
+    return msg.get("id") or rec.get("requestId"), msg.get("usage")
+
+
+def usage_increment(seen, mid, usage):
+    """Parte di `usage` non ancora contata per il suo message.id. Claude Code
+    scrive un messaggio su piu' righe jsonl (una per blocco: thinking, text,
+    tool_use) e ripete l'usage su ognuna: uguale nel main, crescente negli
+    agenti in streaming. Sommare per riga contava circa il doppio (22/10/2026,
+    60 transcript main: eq x2,00; 200 file agente: x1,93). Per message.id vale
+    il massimo per chiave, come in agent_usage_meta di subagent-meter; senza
+    mid conta la riga. `seen` = {mid: massimi gia' contati}, aggiornato qui."""
+    vals = {k: usage.get(k) or 0 for k in USAGE_KEYS}
+    vals[CC_1H_KEY] = cache_create_1h(usage)
+    if not mid:
+        return vals
+    prev = seen.get(mid)
+    if prev is None:
+        seen[mid] = dict(vals)
+        return vals
+    inc = {}
+    for k, v in vals.items():
+        inc[k] = max(v - prev[k], 0)
+        prev[k] = max(prev[k], v)
+    return inc
+
+
 # output_tokens che l'API manda in message_start, prima del delta finale.
 # Claude Code < 2.1.307 scriveva le risposte in streaming di un SUBAGENTE con
 # quell'usage (segnaposto) e stop_reason vuoto (changelog 2.1.307): input,
@@ -645,7 +678,7 @@ def sum_transcript(path):
     cache_resets = 0
     had_high_read = False
     prev_ctx = 0            # contesto del turno main precedente (read+write+input)
-    last_main_mid = None    # message.id dell'ultimo turno main valutato
+    seen_usage = {}         # message.id -> usage gia' contato (usage_increment)
     idle_compactions = 0
     last_activity = None    # ultimo turno vero (user o assistant) con timestamp
     after_idle_compact = False  # il prossimo turno main e' la ripresa
@@ -751,27 +784,29 @@ def sum_transcript(path):
                     lvl = str(rec["effort"])
                     effort_mix[lvl] = effort_mix.get(lvl, 0) + 1
             rec_had_usage = False
+            top_mid, top_usage = top_usage_mid(rec)
             for usage, in_sub, model in find_usage(rec):
-                rec_had_usage = True
+                mid = top_mid if usage is top_usage else None
+                repeat = bool(mid) and mid in seen_usage
+                rec_had_usage = rec_had_usage or not repeat
+                inc = usage_increment(seen_usage, mid, usage)
                 bucket = sub if in_sub else main
                 for k in USAGE_KEYS:
-                    bucket[k] += usage.get(k) or 0
-                bucket[CC_1H_KEY] = bucket.get(CC_1H_KEY, 0) + cache_create_1h(usage)
-                _cr = usage.get("cache_read_input_tokens") or 0
+                    bucket[k] += inc[k]
+                bucket[CC_1H_KEY] = bucket.get(CC_1H_KEY, 0) + inc[CC_1H_KEY]
+                _cr = inc["cache_read_input_tokens"]
                 if _cr:
                     cr_by_model[model or "unknown"] = \
                         cr_by_model.get(model or "unknown", 0) + _cr
                 if in_sub:
                     n_sub += 1
                 else:
-                    turns += 1
                     since_compact = False
-                    # Un messaggio spezzato su piu' righe ripete lo stesso
-                    # usage: il reset si valuta una volta per message.id.
-                    mid = (rec.get("message") or {}).get("id")
-                    if mid and mid == last_main_mid:
+                    # Le righe successive di un messaggio ripetono il suo
+                    # usage: turno e reset si valutano una volta per message.id.
+                    if repeat:
                         continue
-                    last_main_mid = mid
+                    turns += 1
                     cr = usage.get("cache_read_input_tokens") or 0
                     cc = usage.get("cache_creation_input_tokens") or 0
                     # Turno a usage zero (messaggio sintetico, errore API,
@@ -855,6 +890,7 @@ def sum_workflow_agents(path):
             continue
         n_files += 1
         acc = {"turns": {}, "version": None}
+        seen = {}
         with fh:
             for line in fh:
                 line = line.strip()
@@ -865,11 +901,14 @@ def sum_workflow_agents(path):
                 except json.JSONDecodeError:
                     continue
                 turn_track(rec, acc)
+                top_mid, top_usage = top_usage_mid(rec)
                 for usage, _, model in find_usage(rec):
+                    inc = usage_increment(
+                        seen, top_mid if usage is top_usage else None, usage)
                     for k in USAGE_KEYS:
-                        tot[k] += usage.get(k) or 0
-                    tot[CC_1H_KEY] = tot.get(CC_1H_KEY, 0) + cache_create_1h(usage)
-                    _cr = usage.get("cache_read_input_tokens") or 0
+                        tot[k] += inc[k]
+                    tot[CC_1H_KEY] = tot.get(CC_1H_KEY, 0) + inc[CC_1H_KEY]
+                    _cr = inc["cache_read_input_tokens"]
                     if _cr:
                         tot.setdefault("cache_read_by_model", {})
                         tot["cache_read_by_model"][model or "unknown"] = \
@@ -2032,6 +2071,10 @@ def cmd_session_summary(args):
         # distinguere le esperienze per account.
         "account": Path(os.environ.get("CLAUDE_CONFIG_DIR")
                         or Path.home() / ".claude").name,
+        # Dal 22/10/2026 un messaggio su piu' righe conta una volta
+        # (usage_increment): token e n_usage_records degli eventi senza
+        # questa chiave valgono circa il doppio del vero.
+        "usage_dedup": 1,
     }
     if n_wf:
         payload["wf_agents"] = n_wf

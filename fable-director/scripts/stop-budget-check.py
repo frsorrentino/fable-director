@@ -126,6 +126,35 @@ def find_usage(obj, model=None):
             yield from find_usage(v, model)
 
 
+MIDS_KEEP = 64
+
+
+def usage_inc(sub, mid, usage):
+    """Parte di `usage` non ancora contata per il suo message.id: le righe di
+    un messaggio ripetono l'usage (uguale nel main, crescente negli agenti in
+    streaming) e sommarle raddoppiava il consuntivo (22/10/2026: eq x2,00 nel
+    main, x1,93 negli agenti). Stessa regola di usage_increment in
+    fd-telemetry.py; la memoria tiene gli ultimi MIDS_KEEP messaggi perche'
+    vive nello state persistito fra due Stop."""
+    split = usage.get("cache_creation")
+    vals = {k: int(usage.get(k) or 0) for k in USAGE_KEYS}
+    vals["cc1h"] = int(split.get("ephemeral_1h_input_tokens") or 0) \
+        if isinstance(split, dict) else 0
+    if not mid:
+        return vals
+    mids = sub.setdefault("mids", {})
+    prev = mids.get(mid)
+    if prev is None:
+        mids[mid] = dict(vals)
+        while len(mids) > MIDS_KEEP:
+            mids.pop(next(iter(mids)))
+        return vals
+    inc = {k: max(v - int(prev.get(k) or 0), 0) for k, v in vals.items()}
+    for k, v in vals.items():
+        prev[k] = max(int(prev.get(k) or 0), v)
+    return inc
+
+
 def scan_jsonl(path, sub, since):
     """Scan INCREMENTALE di un JSONL: aggiorna `sub` in place (off in BYTE,
     totali cumulativi out/inp, last_ts per l'inferenza posizionale; i
@@ -194,27 +223,26 @@ def scan_jsonl(path, sub, since):
             if mod:
                 for name, tin in mod.find_tool_uses(rec):
                     mod.rework_update(rw, name, tin)
+        msg = rec.get("message") if isinstance(rec.get("message"), dict) else {}
+        top_mid = (msg.get("id") or rec.get("requestId")) \
+            if rec.get("type") == "assistant" else None
         for usage, model in usages:
-            sub["out"] += usage.get("output_tokens") or 0
-            sub["inp"] += (usage.get("input_tokens") or 0) + \
-                          (usage.get("cache_creation_input_tokens") or 0)
+            u = usage_inc(sub, top_mid if usage is msg.get("usage") else None, usage)
+            sub["out"] += u["output_tokens"]
+            sub["inp"] += u["input_tokens"] + u["cache_creation_input_tokens"]
             # Componenti pure per il costo in eq (misura, non enforcement:
             # cache_read = ~59% del costo reale ma resta fuori da inp/out —
             # vedi EQ_MULT in fd-telemetry.py). Stato di versioni precedenti
             # senza le chiavi: si parte da 0 dall'offset corrente.
-            sub["cr"] = (sub.get("cr") or 0) + \
-                (usage.get("cache_read_input_tokens") or 0)
-            sub["cc"] = (sub.get("cc") or 0) + \
-                (usage.get("cache_creation_input_tokens") or 0)
+            sub["cr"] = (sub.get("cr") or 0) + u["cache_read_input_tokens"]
+            sub["cc"] = (sub.get("cc") or 0) + u["cache_creation_input_tokens"]
             # Parte di cc scritta con durata di un'ora (2× invece di 1,25×):
             # usage.cache_creation la divide per durata, quando c'e'.
-            split = usage.get("cache_creation")
-            if isinstance(split, dict):
-                sub["cc1h"] = (sub.get("cc1h") or 0) + \
-                    int(split.get("ephemeral_1h_input_tokens") or 0)
+            if isinstance(usage.get("cache_creation"), dict):
+                sub["cc1h"] = (sub.get("cc1h") or 0) + u["cc1h"]
             # cache_read PER MODELLO: ogni quota alla sua tariffa in eq
             # (Fable 5.1 0,025× contro 0,1×). Chiave = id modello del record.
-            _cr = usage.get("cache_read_input_tokens") or 0
+            _cr = u["cache_read_input_tokens"]
             if _cr:
                 crm = sub.setdefault("cr_by_model", {})
                 key = model or "unknown"
