@@ -66,7 +66,18 @@
         "attempts_max": {"description": "Retries of this unit only, never of the batch; past it the task goes to the person.", "type": "integer", "minimum": 1, "maximum": 3},
         "data_class": {"description": "As fable-director's --data-class: restricted never leaves the machine.", "enum": ["public", "internal", "restricted"]},
         "requested_by": {"type": "string", "minLength": 1},
-        "constraints": {"description": "Constraints the registry attached from earlier tasks of the same project or topic (the learning edge).", "type": "array", "items": {"type": "string", "minLength": 1}}
+        "constraints": {"description": "Constraints the registry attached from earlier tasks of the same project or topic (the learning edge).", "type": "array", "items": {"type": "string", "minLength": 1}},
+        "outcome": {
+          "description": "The expected outcome, in the words of the ok and measurable (22/10/2026: a task closed done after an intermediate step). Optional: without it the task behaves as before. The check must touch it: for each kind the registry knows the markers check.cmd must contain (release: gh release, git tag, tags/, releases/, version, ls-remote, api.github.com; push: origin/, ls-remote, @{u}, merge-base, rev-list; merge: merge-base, is-ancestor, origin/; install: dumpsys, lastUpdateTime, pm list, pm path, versionCode, task confirmed; deploy: curl, http://, https://, firebase, wget, ssh); custom has no markers and needs proof. task add and task done refuse a check that does not touch it.",
+          "type": "object",
+          "required": ["expected", "kind"],
+          "additionalProperties": false,
+          "properties": {
+            "expected": {"type": "string", "minLength": 1, "maxLength": 300},
+            "kind": {"enum": ["release", "install", "push", "deploy", "merge", "custom"]},
+            "proof": {"description": "How the check shows the outcome, for the reader (for the app: dumpsys package with lastUpdateTime after the build, or the person's confirmation via task confirm); required with kind custom.", "type": ["string", "null"]}
+          }
+        }
       }
     },
     "result": {
