@@ -21,6 +21,7 @@
       "properties": {
         "id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,80}$"},
         "title": {"type": "string", "minLength": 1, "maxLength": 200},
+        "short": {"description": "The short title, one line in the app (22/10/2026, contract 1.79): at most 28 characters, no cut mark. Optional: without it the registry derives one from the title, whole words up to 28.", "type": "string", "minLength": 1, "maxLength": 28},
         "type": {"description": "Task category slug; it becomes fable-director's budget-open --type, which links the node to the reliability of its type.", "type": "string", "pattern": "^[a-z0-9-]{1,60}$"},
         "plan": {"description": "The approved plan this task belongs to (its id), or null for a task outside any plan. Approving the plan approves push, release and publication of its tasks, except those with hold true.", "type": ["string", "null"]},
         "where": {
