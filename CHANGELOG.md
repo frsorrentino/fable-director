@@ -2,6 +2,16 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.59.x
+
+- **1.59.0 — token totals count each message once.**
+  - **Totals no longer double.** Claude Code writes each block of an assistant message (thinking, text, tool use) on its own transcript line and repeats the usage on every line. Session totals, workflow agent totals and the Stop hook's live budget added it up line by line: on 60 recent sessions, session eq read 2.09× the true value. Usage now counts once per message (`message.id`, else `requestId`), taking the highest value per key. Eq per turn moves 5.6% (26,943 to 25,445), so per-turn figures stay comparable while totals halve.
+  - **Budget warnings read true.** The Stop hook warned at 2× and blocked at 3× on doubled spend, so it fired early. It now keeps the last 64 message ids, so a message split across two stops counts once.
+  - **New events marked.** `session_summary` carries `usage_dedup: 1`; events without it read about 2× on token totals.
+  - **Subagent placeholders flagged.** Before Claude Code 2.1.307, every streamed subagent response was recorded with `output_tokens` 1. The meter and the session summary record `cc_version` and mark those turns (`usage_placeholder`, `wf_placeholder_turns`) without correcting them; workflow calibration skips flagged agents; `report` prints a warning; `scripts/usage-placeholder-audit.py` counts the affected turns per version.
+  - **Delegation skill** lists what Claude Code 2.1.307 changes: placeholders, parallel forks, the `safety_event` OpenTelemetry event.
+  - **Task contract:** optional `outcome` (expected, kind, proof), same copy as supervisor 0.8.40.
+
 ## 1.58.x
 
 - **1.58.4 — what Claude Code 2.1.302-2.1.305 changes for delegation.**
