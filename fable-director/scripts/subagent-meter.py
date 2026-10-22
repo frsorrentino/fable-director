@@ -123,10 +123,22 @@ def parse_status(text):
     return key, blocker
 
 
-def agent_usage(transcript):
+# output_tokens che l'API manda in message_start, prima del delta finale:
+# Claude Code < 2.1.307 scriveva le risposte in streaming di un subagente con
+# quell'usage (segnaposto) e stop_reason vuoto (changelog 2.1.307). Le
+# componenti di input restano vere, manca l'output: la parte a 5× dell'eq.
+PLACEHOLDER_OUT_MAX = 1
+
+
+def agent_usage_meta(transcript):
     """Usage dell'agente dal suo transcript, dedup per message.id (i record
-    multi-riga ripetono lo stesso usage). Ritorna (model, turns, tot)."""
-    turns, model = {}, None
+    multi-riga ripetono lo stesso usage). Ritorna (model, turns, tot, meta):
+    meta = {"placeholder_turns": N, "version": "2.1.306"} — un turno e'
+    segnaposto quando nessun suo record porta uno stop_reason e l'output
+    massimo visto resta <= PLACEHOLDER_OUT_MAX; version = campo `version`
+    dei record (la versione di Claude Code che ha scritto il file)."""
+    turns, model, version = {}, None, None
+    stop_seen = set()
     try:
         with open(transcript, errors="replace") as fh:
             for line in fh:
@@ -138,6 +150,8 @@ def agent_usage(transcript):
                 u = m.get("usage")
                 if rec.get("type") != "assistant" or not isinstance(u, dict):
                     continue
+                if isinstance(rec.get("version"), str):
+                    version = rec["version"]
                 model = m.get("model") or model
                 mid = m.get("id") or rec.get("requestId") or str(len(turns))
                 row = turns.setdefault(mid, {"input_tokens": 0, "output_tokens": 0,
@@ -149,12 +163,21 @@ def agent_usage(transcript):
                                                   if isinstance(split, dict) else 0))
                 for k in row:
                     row[k] = max(row[k], vals.get(k) or 0)
+                if m.get("stop_reason"):
+                    stop_seen.add(mid)
     except OSError:
         pass
     tot = {k: sum(r[k] for r in turns.values()) for k in
            ("input_tokens", "output_tokens", "cache_read_input_tokens",
             "cache_creation_input_tokens", "cache_creation_1h")}
-    return model, len(turns), tot
+    placeholder = sum(1 for mid, r in turns.items()
+                      if r["output_tokens"] <= PLACEHOLDER_OUT_MAX and mid not in stop_seen)
+    return model, len(turns), tot, {"placeholder_turns": placeholder, "version": version}
+
+
+def agent_usage(transcript):
+    """(model, turns, tot) di agent_usage_meta — firma storica."""
+    return agent_usage_meta(transcript)[:3]
 
 
 def five_hour_pct():
@@ -422,7 +445,10 @@ def on_stop(data, path):
     if not text and transcript:
         text = last_assistant_text(transcript)
     status, blocker = parse_status(text or "")
-    model, turns, tot = agent_usage(transcript) if transcript else (None, 0, None)
+    if transcript:
+        model, turns, tot, meta = agent_usage_meta(transcript)
+    else:
+        model, turns, tot, meta = None, 0, None, {}
     eq = eq_of(model, tot) if tot else None
     failed = status in ("blocked", "needs_context", "abstain")
     fail_class = None
@@ -467,6 +493,17 @@ def on_stop(data, path):
     if tot:
         payload["output_tokens"] = tot["output_tokens"]
         payload["fresh_input"] = tot["input_tokens"] + tot["cache_creation_input_tokens"]
+    # Versione di Claude Code che ha scritto il transcript e turni con usage
+    # segnaposto (< 2.1.307): usage_placeholder solo se TUTTI i turni lo sono
+    # — allora l'eq e' monco dell'output e la taratura lo salta; un file misto
+    # porta solo il conteggio.
+    if meta.get("version"):
+        payload["cc_version"] = meta["version"]
+    ph = int(meta.get("placeholder_turns") or 0)
+    if ph:
+        payload["placeholder_turns"] = ph
+        if ph == turns:
+            payload["usage_placeholder"] = True
     # (1.40) run del Workflow e quota 5h al momento dello stop: con l'eq
     # danno la taratura eq↔finestra che il gate usa prima del lancio.
     rid = run_id_of(transcript)

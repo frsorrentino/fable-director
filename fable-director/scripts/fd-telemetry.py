@@ -264,6 +264,12 @@ def workflow_calibration(days=90):
         if d.get("agent_type") != "workflow-subagent":
             continue
         eq = d.get("eq")
+        # Esito con usage segnaposto (Claude Code < 2.1.307): eq monco
+        # dell'output, tarerebbe l'agente al ribasso e il gate lascerebbe
+        # passare fan-out che non entrano nella finestra. Resta solo il
+        # campione di quota (eq 0), fuori dalla mediana.
+        if d.get("usage_placeholder"):
+            eq = 0
         eq = float(eq) if isinstance(eq, (int, float)) and eq > 0 else 0.0
         if eq:
             eqs.append(eq)
@@ -423,6 +429,74 @@ def find_usage(obj, in_subagent=False, model=None):
             yield from find_usage(v, in_subagent, model)
 
 
+# output_tokens che l'API manda in message_start, prima del delta finale.
+# Claude Code < 2.1.307 scriveva le risposte in streaming di un SUBAGENTE con
+# quell'usage (segnaposto) e stop_reason vuoto (changelog 2.1.307): input,
+# cache_read e cache_creation veri, output a 1 per turno. Le misure lette dai
+# file agent-*.jsonl su quelle versioni sottostimano l'output (la parte a 5×
+# dell'eq): qui si contano e si marcano, mai si correggono a mano.
+PLACEHOLDER_OUT_MAX = 1
+
+
+def turn_track(rec, acc):
+    """Accumula in `acc` ({"turns": {mid: {"out", "stop"}}, "version"}) i
+    record assistant con usage: output massimo visto per message.id, se un
+    record ha portato stop_reason, versione di Claude Code del file."""
+    if rec.get("type") != "assistant":
+        return
+    m = rec.get("message") or {}
+    u = m.get("usage")
+    if not isinstance(u, dict):
+        return
+    mid = m.get("id") or rec.get("requestId") or f"#{len(acc['turns'])}"
+    t = acc["turns"].setdefault(mid, {"out": 0, "stop": False})
+    try:
+        out = int(u.get("output_tokens") or 0)
+    except (TypeError, ValueError):
+        out = 0
+    t["out"] = max(t["out"], out)
+    t["stop"] = t["stop"] or bool(m.get("stop_reason"))
+    if isinstance(rec.get("version"), str):
+        acc["version"] = rec["version"]
+
+
+def turn_summary(acc):
+    """{"turns", "placeholder_turns", "version", "output_tokens"} da un acc
+    di turn_track: segnaposto = output <= PLACEHOLDER_OUT_MAX e nessuno
+    stop_reason in tutto il turno."""
+    turns = acc["turns"]
+    ph = sum(1 for t in turns.values()
+             if t["out"] <= PLACEHOLDER_OUT_MAX and not t["stop"])
+    return {"turns": len(turns), "placeholder_turns": ph,
+            "version": acc.get("version"),
+            "output_tokens": sum(t["out"] for t in turns.values())}
+
+
+def placeholder_scan(path, skip_sidechain=False):
+    """turn_summary di un file transcript (agente o main), zero token
+    modello; skip_sidechain esclude i record isSidechain (subagenti annidati
+    nel main delle versioni vecchie) quando si misura il main come controllo."""
+    acc = {"turns": {}, "version": None}
+    try:
+        with open(path, errors="replace") as fh:
+            for line in fh:
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if skip_sidechain and rec.get("isSidechain"):
+                    continue
+                turn_track(rec, acc)
+    except OSError:
+        pass
+    return turn_summary(acc)
+
+
+def version_key(v):
+    """Chiave di ordinamento per una versione 'a.b.c' (parti non numeriche = 0)."""
+    return tuple(int(p) if p.isdigit() else 0 for p in str(v or "").split("."))
+
+
 CACHE_RESET_THRESHOLD = 10_000  # cache_read "alto" prima di un reset sospetto
 # Il prefisso globale del system prompt (~26k) resta in cache anche quando la
 # conversazione scade: una ripresa a cache fredda legge ~26k, non 0. Reset =
@@ -579,6 +653,7 @@ def sum_transcript(path):
     skill_resent = {"n": 0, "chars": 0, "after_compact": 0}
     since_compact = False       # nessun turno main dalla compattazione
     first_ts = last_ts = None
+    cc_version = None           # versione di Claude Code dei record (ultima vista)
     turns = 0
     first_write_turn = None
     tokens_before_first_write = None
@@ -619,6 +694,8 @@ def sum_transcript(path):
             if ts:
                 first_ts = first_ts or ts
                 last_ts = ts
+            if isinstance(rec.get("version"), str):
+                cc_version = rec["version"]
             rtype = rec.get("type")
             att = rec.get("attachment")
             if rtype == "attachment" and isinstance(att, dict) \
@@ -727,6 +804,8 @@ def sum_transcript(path):
         "max_tool_run": {"tool": max_run[0], "len": max_run[1]} if max_run[0] else None,
         "idle_compactions": idle_compactions,
     }
+    if cc_version:
+        stats["cc_version"] = cc_version
     if skill_resent["n"]:
         stats["skill_list_resent"] = skill_resent
     if batch_turn_ids:
@@ -762,6 +841,7 @@ def sum_workflow_agents(path):
     (misurato: 9,2M input freschi invisibili in una sessione).
     Ritorna (totali usage, n file agente)."""
     tot = dict.fromkeys(USAGE_KEYS, 0)
+    tot["turns"] = tot["placeholder_turns"] = 0  # turni assistant e segnaposto (< 2.1.307)
     n_files = 0
     sdir = Path(path).with_suffix("")  # <sessiondir> = transcript senza .jsonl
     try:
@@ -774,6 +854,7 @@ def sum_workflow_agents(path):
         except OSError:
             continue
         n_files += 1
+        acc = {"turns": {}, "version": None}
         with fh:
             for line in fh:
                 line = line.strip()
@@ -783,6 +864,7 @@ def sum_workflow_agents(path):
                     rec = json.loads(line)
                 except json.JSONDecodeError:
                     continue
+                turn_track(rec, acc)
                 for usage, _, model in find_usage(rec):
                     for k in USAGE_KEYS:
                         tot[k] += usage.get(k) or 0
@@ -792,6 +874,11 @@ def sum_workflow_agents(path):
                         tot.setdefault("cache_read_by_model", {})
                         tot["cache_read_by_model"][model or "unknown"] = \
                             tot["cache_read_by_model"].get(model or "unknown", 0) + _cr
+        ts = turn_summary(acc)
+        tot["turns"] += ts["turns"]
+        tot["placeholder_turns"] += ts["placeholder_turns"]
+        if ts["version"]:
+            tot["cc_version"] = ts["version"]
     return tot, n_files
 
 
@@ -1951,6 +2038,12 @@ def cmd_session_summary(args):
         payload["wf_output"] = wf_tot["output_tokens"]
         payload["wf_input_fresh"] = (wf_tot["input_tokens"]
                                      + wf_tot["cache_creation_input_tokens"])
+        # Turni degli agenti Workflow con usage segnaposto (< 2.1.307): li'
+        # wf_output e l'eq della sessione leggono basso.
+        if wf_tot.get("placeholder_turns"):
+            payload["wf_placeholder_turns"] = wf_tot["placeholder_turns"]
+        if not stats.get("cc_version") and wf_tot.get("cc_version"):
+            stats["cc_version"] = wf_tot["cc_version"]
     yld = git_yield(cwd, first_ts)
     if yld is not None:
         payload["commits"] = yld["commits"]
@@ -2554,6 +2647,28 @@ def cmd_report(args):
               f"five-hour window ≈ {fmt(int(cal['window_eq']))} eq [{cal['window_src']}]")
     except Exception:
         pass
+
+    # Usage segnaposto (Claude Code < 2.1.307): agenti e sessioni in cui
+    # l'output dei subagenti e' stato registrato a 1 token per turno. Le
+    # versioni viste dicono quali sessioni del periodo sono pulite.
+    ph_agents = [o for o in outcomes if o.get("usage_placeholder")]
+    ph_sessions = [s for s in sessions if s.get("wf_placeholder_turns")]
+    if ph_agents or ph_sessions:
+        vers = {}
+        for p in sessions + outcomes:
+            v = p.get("cc_version")
+            if v:
+                vers[v] = vers.get(v, 0) + 1
+        vs = ", ".join(f"{k}×{n}" for k, n in sorted(vers.items(),
+                                                     key=lambda x: version_key(x[0])))
+        print(f"\n⚠ Subagent usage placeholder: {len(ph_agents)} agents, "
+              f"{len(ph_sessions)} sessions with Workflow agents — Claude Code before "
+              f"2.1.307 recorded streamed subagent responses with placeholder "
+              f"output_tokens (1 per turn) and an empty stop_reason. Subagent output, "
+              f"delegation_overhead, coordination_cost and agent eq read low there; "
+              f"flagged agents stay out of the window calibration. Claude Code versions "
+              f"seen: {vs or '?'}. Re-measure on 2.1.307 or later "
+              f"(scripts/usage-placeholder-audit.py counts the damage per version).")
 
     mismatches = [p for e, p in events if e == "effort_mismatch"]
     if mismatches:
