@@ -77,6 +77,7 @@ Renders are event-driven **plus** a 5-second timer (`refreshInterval`, written b
 |---|---|
 | `/fable-director:status` | The same state as a box-drawn bulletin (for smartphone/remote clients): quota bars, burn-rate sparkline from the quota history, honest freshness labels. `--detail` adds delegations and the last task receipt |
 | `/fable-director:review` | Data-driven improvement plan from telemetry + playbook |
+| `/fable-director:calibration` | Estimate calibration per task type: median actual/expected output tokens of the closed budgets (last 90 days, factor from 5 tasks). The same factor `budget-open` prints as a suggestion (`FD ✎`) and never applies. `--days N`, `--min-n N`, `--type slug` |
 | `/fable-director:help` | This legend |
 
 ## Clickable segments (opt-in)

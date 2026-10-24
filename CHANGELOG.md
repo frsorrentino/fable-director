@@ -2,6 +2,13 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.60.x
+
+- **1.60.0 — calibrated estimates: the measured factor per task type, suggested and never applied.** Idea 2 of the competitor research of 23/10/2026 (Roo Code: one reported cost estimate 2.7× off the real figure).
+  - **`budget-open` suggests, the declared figure governs.** With 5 or more closed budgets of the same `--type` in the last 90 days, `budget-open` prints `FD ✎ <type>: on N closed tasks the output ran F× the estimate — suggested --expected-output X instead of Y, not applied`. `expected_output_tokens` stays what you declared, and the 2×/3× check runs on it. Within 0.9-1.1× the line says the estimates hold. The suggestion is kept in the budget, in the `task_close` event and in the receipt (`calibration`), so adoption can be measured later.
+  - **New command `calibration`** (`fd-telemetry.py calibration [--days N] [--min-n N] [--type slug]`, also `/fable-director:calibration`): one row per type with n, median actual/expected output, p25-p75 spread, factor and a reading; below the minimum the median is shown as indicative only. Abandoned closes and closes with no measured consumption are excluded. Zero model tokens.
+  - Nothing is corrected silently: no flag multiplies an estimate by the factor, and no open budget changes because of it.
+
 ## 1.59.x
 
 - **1.59.0 — token totals count each message once.**

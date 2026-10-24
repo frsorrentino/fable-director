@@ -59,6 +59,14 @@ Sottocomandi:
                aggrega gli eventi: cache metrics, overhead delega, spreco per categoria,
                hit-rate verifiche, densità per tipo task (soglia override: N≥10).
                Le metriche sono ALLARMI, non target.
+  calibration [--days N] [--min-n N] [--type SLUG]
+               tabella per --type: mediana consuntivo/preventivo (output token)
+               sui task_close della finestra (default 90 giorni), fattore solo
+               da --min-n campioni (default 5); abandoned e chiusure senza
+               consuntivo esclusi. budget-open stampa lo stesso fattore come
+               SUGGERIMENTO (riga FD ✎) e lo registra nel budget: la stima
+               dichiarata resta quella che governa il 2×/3×, mai corretta in
+               silenzio.
   repeats [scan|accept ID|dismiss ID|pending] [--days N]
                istruzioni ripetute in 3+ sessioni (repeat-finder.py): proposte
                di vincoli, mai registrate senza il si' dell'utente; eventi
@@ -74,6 +82,7 @@ import json
 import os
 import re
 import sqlite3
+import statistics
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1099,6 +1108,97 @@ def reliability_line(rel, task_type):
     return f"FD ⚖ {task_type}: {facts} → {effect}."
 
 
+# Stime calibrate (idea 2 della ricerca concorrenti del 23/10/2026: Roo
+# riporta una stima di costo sbagliata di 2,7 volte): per --type la mediana
+# del rapporto consuntivo/preventivo in output token sui task chiusi della
+# finestra. A budget-open e' un SUGGERIMENTO (riga FD ✎) registrato nel
+# budget; `calibration` stampa la tabella. La stima dichiarata resta quella
+# che governa il 2×/3×: mai corretta in silenzio.
+CAL_WINDOW_DAYS = 90
+CAL_MIN_N = 5
+# Dentro questa banda la stima «tiene»: nessuna cifra suggerita.
+CAL_HOLD_BAND = (0.9, 1.1)
+
+
+def calibration_factors(days=CAL_WINDOW_DAYS, min_n=CAL_MIN_N, only_type=None):
+    """{type: {n, median, p25, p75, factor}} dai task_close della finestra.
+    Esclusi: outcome abandoned (lavoro parziale), expected <= 0, consuntivo
+    assente o 0 (lo Stop hook non ha misurato). factor = mediana a una cifra
+    decimale, solo con n >= min_n, altrimenti None. {} senza DB."""
+    if not DB_PATH.is_file():
+        return {}
+    since = (datetime.now(timezone.utc)
+             - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, timeout=1.0)
+        rows = con.execute("SELECT payload FROM events WHERE event='task_close' "
+                           "AND ts>=?", (since,)).fetchall()
+        con.close()
+    except sqlite3.Error:
+        return {}
+    ratios = {}
+    for (pl,) in rows:
+        try:
+            t = json.loads(pl)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        ttype = t.get("type")
+        if not isinstance(ttype, str) or not ttype or (only_type and ttype != only_type):
+            continue
+        if t.get("outcome") == "abandoned":
+            continue
+        try:
+            exp = float(t.get("expected_output_tokens") or 0)
+            act = t.get("actual_output_tokens")
+            act = None if act is None else float(act)
+        except (TypeError, ValueError):
+            continue
+        if exp <= 0 or not act or act <= 0:
+            continue
+        ratios.setdefault(ttype, []).append(act / exp)
+    out = {}
+    for ttype, rs in ratios.items():
+        rs.sort()
+        n = len(rs)
+        med = statistics.median(rs)
+        out[ttype] = {"n": n, "median": round(med, 2),
+                      "p25": round(rs[n // 4], 2), "p75": round(rs[(3 * n) // 4], 2),
+                      "factor": round(med, 1) if n >= min_n else None}
+    return out
+
+
+def calibration_for(task_type, exp_out):
+    """Il fattore del tipo applicato alla stima dichiarata, per budget-open:
+    {factor, n, median, days, suggested_output_tokens} o None sotto il minimo.
+    suggested_output_tokens = None quando la stima tiene (CAL_HOLD_BAND)."""
+    if not task_type:
+        return None
+    c = calibration_factors(only_type=task_type).get(task_type)
+    if not c or c["factor"] is None:
+        return None
+    lo, hi = CAL_HOLD_BAND
+    sug = None
+    if not (lo <= c["factor"] <= hi):
+        sug = int(round(exp_out * c["factor"] / 100.0)) * 100
+    return {"factor": c["factor"], "n": c["n"], "median": c["median"],
+            "days": CAL_WINDOW_DAYS, "suggested_output_tokens": sug}
+
+
+def calibration_line(cal, task_type, exp_out):
+    """La riga FD ✎ di budget-open: i fatti, la cifra suggerita, e che la
+    stima dichiarata NON cambia."""
+    if not cal:
+        return None
+    head = (f"FD ✎ {task_type}: on {cal['n']} closed tasks the output ran "
+            f"{cal['factor']:.1f}× the estimate (median, last {cal['days']} days)")
+    sug = cal.get("suggested_output_tokens")
+    if sug is None:
+        return head + " — your estimates for this type hold."
+    return (head + f" — suggested --expected-output {fmt(sug)} instead of "
+            f"{fmt(exp_out)}, not applied: the declared figure stays and governs "
+            f"the 2×/3× check; declare the corrected one next time if you agree.")
+
+
 def verifier_ran(budget):
     """Un fd-verifier concluso nella sessione del budget, dopo l'apertura."""
     sid, since = budget.get("owner_sid"), budget.get("declared_at")
@@ -1305,6 +1405,12 @@ def cmd_budget_open(args):
     rel = type_reliability(opts["--type"])
     if rel:
         budget["reliability"] = {k: rel[k] for k in ("tier", "n", "failed", "strained")}
+    # Stime calibrate: il fattore del tipo entra nel budget come SUGGERIMENTO;
+    # expected_output_tokens resta la cifra dichiarata. Nel task_close si
+    # potra' misurare se il suggerimento viene poi adottato.
+    cal = calibration_for(opts["--type"], exp_out)
+    if cal:
+        budget["calibration"] = cal
     bfile = BUDGETS / f"{cwd_slug(cwd)}.json"
     write_json_atomic(bfile, budget)
     log_event("task_open", budget, cwd=cwd)
@@ -1339,6 +1445,9 @@ def cmd_budget_open(args):
     rline = reliability_line(rel, budget.get("type"))
     if rline:
         print(rline)
+    cline = calibration_line(budget.get("calibration"), budget.get("type"), exp_out)
+    if cline:
+        print(cline)
     # Stima in USD (opt-in, mai inventata): solo se l'utente ha dichiarato il
     # listino in pricing.json ({"input_usd_per_mtok": N}). La stima eq è in
     # input-equivalenti di listino, quindi USD = eq × prezzo input. Utile per
@@ -1663,6 +1772,11 @@ def receipt_lines(budget, cwd, sid):
                                   f"effort {budget['effort']}" if budget.get("effort") else None) if x)
     if what:
         detail.append(f"what: {what}")
+    cal = budget.get("calibration") or {}
+    if cal.get("suggested_output_tokens"):
+        detail.append(f"estimate: declared {fmt(budget.get('expected_output_tokens') or 0)}, "
+                      f"calibration suggested {fmt(cal['suggested_output_tokens'])} "
+                      f"(×{cal.get('factor')} on {cal.get('n')} tasks of this type)")
     if st and st.get("by_type"):
         who = ", ".join(f"{t} ×{n}" for t, n in sorted(st["by_type"].items(), key=lambda x: -x[1]))
         detail.append(f"executors: {who}")
@@ -1792,7 +1906,7 @@ def cmd_budget_close(args):
             "actual_input_tokens", "outcome", "verify", "data_class",
             "paths", "amendments", "declared_at", "closed_at", "owner_sid",
             "reopens", "rework_worst", "reliability", "verifier_ran",
-            "no_verifier")}
+            "no_verifier", "calibration")}
         receipt["cwd"] = cwd
         try:
             receipt["plugin_version"] = json.loads(
@@ -3029,6 +3143,48 @@ def cmd_effort(args):
         print("deliverables: no task budget closed for this client.")
 
 
+def cmd_calibration(args):
+    """`calibration [--days N] [--min-n N] [--type SLUG]` — la tabella per
+    tipo: n, mediana, spread, fattore (solo da --min-n campioni), lettura.
+    Zero token di modello; la stessa fonte del suggerimento di budget-open."""
+    opts = parse_opts(args, {"--days": str(CAL_WINDOW_DAYS),
+                             "--min-n": str(CAL_MIN_N), "--type": None})
+    try:
+        days, min_n = int(opts["--days"]), int(opts["--min-n"])
+    except (TypeError, ValueError):
+        sys.exit("--days/--min-n must be integers")
+    if days <= 0 or min_n <= 0:
+        sys.exit("--days/--min-n must be > 0")
+    cal = calibration_factors(days=days, min_n=min_n, only_type=opts["--type"])
+    if not cal:
+        what = f" of type {opts['--type']}" if opts["--type"] else ""
+        print(f"no closed task{what} with an estimate and a measured consumption "
+              f"in the last {days} days.")
+        return
+    print(f"# Estimate calibration — closed task budgets of the last {days} days, "
+          f"output tokens: median actual/expected per --type. A factor needs "
+          f"{min_n} tasks (abandoned and unmeasured closes excluded); budget-open "
+          f"shows it as a suggestion and never applies it.\n")
+    w = max(12, max(len(t) for t in cal))
+    print(f"{'type':<{w}} {'n':>4} {'median':>7} {'p25-p75':>13} {'factor':>7}  reading")
+    lo, hi = CAL_HOLD_BAND
+    for t, c in sorted(cal.items(), key=lambda x: (-x[1]["n"], x[0])):
+        spread = f"{c['p25']:.1f}×-{c['p75']:.1f}×"
+        factor = c["factor"]
+        if factor is None:
+            fac = "—"
+            reading = f"{c['n']} of {min_n} tasks: indicative only (below {min_n})"
+        else:
+            fac = f"×{factor:.1f}"
+            if lo <= factor <= hi:
+                reading = "estimates hold"
+            elif factor > hi:
+                reading = f"estimates run short: declare ~{factor:.1f}× more"
+            else:
+                reading = f"estimates run long: ~{factor:.1f}× of the declared figure is used"
+        print(f"{t:<{w}} {c['n']:>4} {c['median']:>6.1f}× {spread:>13} {fac:>7}  {reading}")
+
+
 def cmd_repeats(args):
     """Delega a repeat-finder.py (stesso interprete): un solo posto per la logica."""
     import subprocess
@@ -3046,7 +3202,7 @@ def main():
                 "log": cmd_log, "session-summary": cmd_session_summary,
                 "report": cmd_report, "effort": cmd_effort,
                 "cache-get": cmd_cache_get, "cache-put": cmd_cache_put,
-                "repeats": cmd_repeats}
+                "repeats": cmd_repeats, "calibration": cmd_calibration}
     if cmd not in dispatch:
         sys.exit(f"sottocomando sconosciuto: {cmd}\n{__doc__}")
     dispatch[cmd](args)
