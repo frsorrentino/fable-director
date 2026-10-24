@@ -319,7 +319,14 @@ field on hook stdin.
   10.5k), same correctness (3/3 both), 5.5× the USD ($0.110 vs $0.020 per
   item). `fd-executor` stays on sonnet. `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`
   (2.1.257) can override every agent's model from the environment: that is
-  the user's lever, not the plugin's default.
+  the user's lever, not the plugin's default. Session start names it when it
+  bites (1.60.0, `session-kernel.sh`): a ⚠ line when the force variable is on
+  (with `CLAUDE_CODE_SUBAGENT_MODEL` set, every subagent and workflow stage
+  runs on it; alone, on the session model), one plain line when
+  `CLAUDE_CODE_SUBAGENT_MODEL` alone is set (a default since 2.1.251, below
+  the per-call model and the agent file, so the pins hold), nothing
+  otherwise. Source: the sub-agents page of the Claude Code docs, read
+  2026-10-24.
 - **Forced tool choice returns 400 on 5.1** (`tool_choice` any/tool). The
   plugin never sets it: batch schemas travel in the contract's Interfaces
   block and, for workflows, in `agent({schema})`, which the host handles.
