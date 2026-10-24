@@ -77,6 +77,19 @@ ceiling before anyone counts them; inside a long turn a one-line reminder
 says what is spent and what room is left. A small quick task skips all of
 this.
 
+Closing the budget leaves a receipt you can hand on as it is: estimate,
+actual tokens, verification result and duration, in a Markdown file whose
+path `budget-close` prints.
+
+Why the checks live in hooks, outside the model: Ramp Labs ran coding agents
+with their budget written into the prompt, and [in over 14,000 agent messages
+across several model families the budget was never
+referenced](https://labs.ramp.com/research/coding-agents-ignore-spend/). Their
+conclusion is the design of this plugin: spend control belongs outside the
+process doing the spending. Here the gate, the Stop hook and the meter are
+scripts the harness runs; the model is told the figures, it is never trusted
+to keep them.
+
 ## How much does it save?
 
 ![Most of your AI bill is invisible: measured on 1,282 real sessions in September-October 2026, only 13% is the answers you read — 28% is new context being cached, and 59% is your context re-sent on every single turn. fable-director measures all of it.](assets/readme/card1-iceberg.png)

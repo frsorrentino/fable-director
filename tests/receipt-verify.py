@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Verifica deterministica — ricevuta leggibile a budget-close (1.39.0, C1.3 + E9).
+"""Verifica deterministica — ricevuta leggibile a budget-close (1.39.0, C1.3 + E9;
+ricevuta completa e percorso stampato dalla 1.60.0).
 
   R1 ratio_words: rapporti in parole, mai sigle
   R2 budget-close stampa la riga di chiusura in parole con deleghe, riaperture,
@@ -8,6 +9,12 @@
      costo eq, verification, data class, perimetro
   R4 pezzi assenti omessi (nessuna delega, nessun verify): niente inventato
   R5 fd-status --receipts elenca le ricevute del cwd (prima riga del .md)
+  R6 budget-close stampa il percorso della ricevuta .md
+  R7 la ricevuta porta preventivo e consumo in token
+  R8 la ricevuta porta l'esito della verifica accanto al comando
+  R9 la ricevuta porta apertura, chiusura e durata
+  R10 consumo non misurato e verify assente: detti nella ricevuta, non omessi
+  R11 verify fallito o scaduto, verificatore eseguito o saltato: in ricevuta
 
 Usage: python3 tests/receipt-verify.py   (exit 0 = all green)
 """
@@ -17,6 +24,7 @@ import os
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -124,6 +132,65 @@ check("R5 fd-status --receipts elenca la ricevuta del cwd",
 r = run([str(SCRIPTS / "fd-status.py"), "--receipts", "all"], home, cwd=proj)
 check("R5b --receipts all: entrambe", "fix rapido" in r.stdout and "batch descrizioni" in r.stdout,
       r.stdout)
+
+# R6-R9 — ricevuta completa: preventivo, consumo, esito della verifica e
+# durata nel .md, e budget-close ne stampa il percorso
+proj3 = tempfile.mkdtemp(prefix="fd-rcpt-proj3-")
+r = run([FDT, "budget-open", "--task", "ricevuta completa", "--expected-output", "100",
+         "--expected-input", "20000", "--verify", "python3 tests/check.py",
+         "--cwd", proj3], home)
+assert r.returncode == 0, r.stderr
+bfile3 = home / ".claude" / "fable-director" / "budgets" / f"{fdt.cwd_slug(proj3)}.json"
+b = json.loads(bfile3.read_text())
+b["declared_at"] = (datetime.now(timezone.utc) - timedelta(minutes=125, seconds=20)
+                    ).strftime("%Y-%m-%dT%H:%M:%SZ")
+b.update(actual_output_tokens=160, actual_input_tokens=30000, verify_rc=0)
+bfile3.write_text(json.dumps(b))
+r = run([FDT, "budget-close", "--outcome", "ok", "--cwd", proj3], home)
+out = r.stdout
+printed = [ln.split("receipt: ", 1)[1].strip() for ln in out.splitlines()
+           if ln.strip().startswith("receipt: ")]
+rpath = Path(printed[-1]) if printed else None
+md = rpath.read_text(encoding="utf-8") if rpath and rpath.is_file() else ""
+check("R6 budget-close stampa il percorso della ricevuta .md",
+      rpath is not None and rpath.parent == rdir and rpath.suffix == ".md"
+      and md.startswith("# Closed fine: ricevuta completa"),
+      out + r.stderr)
+check("R7 ricevuta: preventivo e consumo in token",
+      "- estimate: 100 output tokens, 20.000 input tokens\n" in md
+      and "- actual: 160 output tokens, 30.000 input tokens\n" in md,
+      md or out)
+check("R8 ricevuta: esito della verifica accanto al comando",
+      "- verification: python3 tests/check.py — passed\n" in md
+      and "  verification: python3 tests/check.py — passed\n" in out,
+      md or out)
+check("R9 ricevuta: apertura, chiusura e durata",
+      f"- opened: {b['declared_at']}\n" in md and "- closed: " in md
+      and "- duration: 2 h 5 min\n" in md,
+      md or out)
+
+# R10 — il budget di R4 (chiuso subito, niente Stop hook, niente verify):
+# la ricevuta dice cosa manca invece di tacerlo
+mds2 = sorted(rdir.glob(f"{fdt.cwd_slug(proj2)}-*.md"))
+md2 = mds2[-1].read_text(encoding="utf-8") if mds2 else ""
+check("R10 consumo non misurato e verify assente: detti, non omessi",
+      "- estimate: 50 output tokens\n" in md2 and "- actual: not measured\n" in md2
+      and "- verification: none declared\n" in md2 and "- duration: 0 min\n" in md2,
+      md2)
+
+# R11 — esito negativo del verify e verificatore del tipo fragile
+_, d_fail = fdt.receipt_lines({"task": "t", "outcome": "ok", "expected_output_tokens": 50,
+                               "verify": "pytest -q", "verify_rc": 1,
+                               "no_verifier": "solo docs toccati"}, proj2, None)
+_, d_time = fdt.receipt_lines({"task": "t", "outcome": "ok", "expected_output_tokens": 50,
+                               "verify": "pytest -q", "verify_rc": "timeout",
+                               "verifier_ran": True}, proj2, None)
+check("R11 verify fallito o scaduto e verificatore: in ricevuta",
+      "verification: pytest -q — FAILED (exit 1)" in d_fail
+      and "verifier: skipped — solo docs toccati" in d_fail
+      and "verification: pytest -q — timed out" in d_time
+      and f"verifier: {fdt.VERIFIER_AGENT} ran during the task" in d_time,
+      d_fail + d_time)
 
 print(f"\n{len(passed)} passed, {len(failed)} failed")
 sys.exit(1 if failed else 0)

@@ -21,6 +21,10 @@ Full release history. The README shows only the latest few entries.
     - **A default is not an override.** Since Claude Code 2.1.251, `CLAUDE_CODE_SUBAGENT_MODEL` alone is a default: the model a call passes and the one in the agent file win over it, so both pins hold. Session start says so in one plain line, without ⚠. No line when neither variable is set; `inherit` counts as unset.
     - **`opusplan` as an alternative to measure.** The delegation skill names Claude Code's `opusplan` alias (`opus` in plan mode, `sonnet` in execution): the same split by mode instead of by task. Measure it under its own task type against the same work routed by the axes before relying on it; no figure until measured. Under `opusplan`, `fd-verifier` (`model: inherit`) runs on `sonnet` outside plan mode.
     - Suite: `tests/startup-checks-verify.py` (17 checks).
+  - **A closing receipt you can hand on.**
+    - **`budget-close` prints the receipt's path.** The readable `.md` receipt (since 1.39) now always carries the estimate and the actual tokens, the verification command with its result (passed, FAILED with the exit code, timed out, not run), whether `fd-verifier` ran or was skipped and why, the opening and closing times and the duration. A value that was never measured says so (`actual: not measured`, `verification: none declared`) instead of disappearing. If the file cannot be written, the line says why.
+    - **README: why the gate sits outside the model.** A paragraph cites Ramp Labs' research: in over 14,000 agent messages across several model families, a budget written into the prompt was never referenced.
+    - Suite: `tests/receipt-verify.py` R6-R11.
 
 ## 1.59.x
 
