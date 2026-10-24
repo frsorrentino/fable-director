@@ -105,8 +105,10 @@ wording, production writes without a backup.
   (`CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS` was ignored for it), and the
   summary of an 88 MB transcript takes ~3 s — in 30 days of local data 4 of 9
   sessions above 20 MB had no summary row. Every closed task leaves a local receipt (estimate vs actual,
-  verification contract, perimeter, amendments) under
-  `~/.claude/fable-director/receipts/`.
+  the calibration factor `budget-open` suggested for the type, verification contract, perimeter, amendments) under
+  `~/.claude/fable-director/receipts/`. The factor per type (median actual/expected output of the
+  closed budgets, 5 tasks minimum, 90 days) is printed by `fd-telemetry.py calibration`; `budget-open`
+  shows it as a suggestion and never applies it to the declared figure.
 
 ## Enforced, advisory, and what leaves your machine
 
