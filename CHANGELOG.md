@@ -2,6 +2,16 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.60.x
+
+- **1.60.0 — parallel delegations reserve their budget; the remaining budget is said inside long turns.**
+  - **Reservation before launch.** The Stop hook counts at turn end, so N agents launched in one message all spent before any check could fire (the Codex CLI rollout-budget incident; flynn/budget's reserve-then-settle). The delegation gate now commits each allowed call's share of the estimate into the budget file before the agent starts: estimate ÷ `--agents` per agent, a Workflow's whole declared fan-out at launch (minus the agents already in its journal on a resume), the ~20k out / ~17k in per-agent anchor when `--agents` is missing, never above the estimate. Committed = settled actual + max(new actual, open reservations) + this call. Past 2× one warning per round (`FD ⚠ reservation`); past 3× the call is **denied** (rule `reservation`, logged as `gate_deny`) until the in-flight delegations settle. Concurrent gates update the file under a lock; tested with 4 processes firing at once.
+  - **Finished delegations release their share.** A headless night session is a single turn, so the Stop hook never settles inside it: ten sequential agents at 5k real each would have kept 200k reserved and the gate would have denied the next one. At each gate call, entries older than 120 s beyond the agents still in flight (delegation meter) are released; younger entries always stay, because the gates of one message fire before `SubagentStart` marks their agents in flight. Their real usage reaches the count when the scan measures it.
+  - **Tests.** `priority-verify`, `route-hardening-verify` and `workflow-guard-verify` ran many unrelated scenarios against one small budget with no Stop in between, which the reservation rightly reads as one over-committed turn (three agents on a 1,000-token estimate). Each scenario there is a turn of its own, so their gate helper now clears the reservation first, as the Stop hook would between turns; the rule itself is covered by `budget-reserve-verify`.
+  - **Settlement at turn end.** The Stop hook pays the reservations with the usage it measures (oldest first), keeps only the entries of agents still in flight per the delegation meter, moves the mark to the real total and re-arms the 2× warning. Event `reservation_settle` carries reserved vs measured per round: the calibration figure for the next idea, corrected estimates.
+  - **Budget reminder inside long turns.** A new PostToolUse hook on `Bash`/`Write`/`Edit` (`scripts/budget-reminder.py`), at most once every 10 minutes (`FD_REMIND_GAP_S`, `remind_gap_s` in cost-checkpoint.json; 0 disables), refreshes the count with the Stop hook's incremental scan and injects one line: spent so far and ratio, delegations in flight and their reservation, room left before the 2× checkpoint. Silent while nothing is spent. The remaining budget is no longer known only at the 2× warning and the 3× block.
+  - Kernel, delegation skill, INTERNALS and README updated; new test `tests/budget-reserve-verify.py`.
+
 ## 1.59.x
 
 - **1.59.0 — token totals count each message once.**

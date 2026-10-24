@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.59.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.60.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need
 to do.** It makes your agent declare what a job should cost before it delegates,
@@ -71,7 +71,11 @@ What a governed job looks like: you ask for the 240 reviews to be classified;
 the agent declares a price (`budget-open`, ~60k tokens, one canary first),
 delegates the batch to a cheap pinned executor, checks the canary before the
 rest, and the Stop hook warns at 2× and blocks the turn at 3× until a
-post-mortem is written. A small quick task skips all of this.
+post-mortem is written. Each delegation commits its share of the estimate
+before it starts, so ten agents launched in one message cannot overshoot the
+ceiling before anyone counts them; inside a long turn a one-line reminder
+says what is spent and what room is left. A small quick task skips all of
+this.
 
 ## How much does it save?
 

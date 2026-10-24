@@ -17,7 +17,9 @@ pre-gate (solo Stop hook), mai peggio.
 Casi budget file:
 - status=open, dichiarato <24h  → allow (silenzio, zero token) — salvo
   quota guard: NUOVO Workflow con finestra 5h oltre soglia → deny
-  (il resume passa sempre; vedi quota_guard).
+  (il resume passa sempre; vedi quota_guard) — e salvo la riserva (1.60):
+  la quota di ogni delega viene impegnata nel budget prima che parta;
+  impegnato ≥3× la stima → deny `reservation` (vedi budget-reserve.py).
 - status=open ma >24h           → deny: budget abbandonato, riaprine uno.
   (Stesso orizzonte dello Stop hook: un task di ieri non autorizza oggi.)
 - status=flagged                → deny: post-mortem + budget-close dovuti
@@ -750,6 +752,60 @@ def lean_thread(data):
         return None
 
 
+_RSV_MOD = None
+
+
+def _reserve_mod():
+    """budget-reserve.py caricato una volta per processo; None su errore
+    (la riserva degrada in silenzio, il gate resta quello di prima)."""
+    global _RSV_MOD
+    if _RSV_MOD is None:
+        try:
+            spec = importlib.util.spec_from_file_location(
+                "budget_reserve", Path(__file__).with_name("budget-reserve.py"))
+            m = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(m)
+            _RSV_MOD = m
+        except Exception:
+            _RSV_MOD = False
+    return _RSV_MOD or None
+
+
+def reservation(data, budget, bfile):
+    """(1.60) Riserva: impegna la quota di questa delega nel budget aperto
+    PRIMA che parta — N agenti nello stesso messaggio spendono tutti prima che
+    lo Stop hook possa contarli, e con i soli contatori a consuntivo un
+    fan-out concorrente sfora il tetto senza che nessun controllo scatti.
+    Impegnato = consuntivo saldato + max(consumo nuovo, riserva aperta) +
+    questa delega: ≥3× la stima → deny (regola `reservation`, lo stesso tetto
+    del blocco 3× dello Stop hook); ≥2× → avviso una volta per giro. Lo Stop
+    hook salda a fine turno (budget-reserve.settle). Ritorna (deny_reason,
+    warn_line). Fail-open: qualunque errore → (None, None)."""
+    try:
+        mod = _reserve_mod()
+        if not mod:
+            return None, None
+        tool = data.get("tool_name")
+        ti = data.get("tool_input") or {}
+        n_done, script = 0, ""
+        if tool == "Workflow":
+            run_id = ti.get("resumeFromRunId")
+            if run_id:
+                n_done = _journal_done(data, run_id)
+            script = script_text(ti)
+        n = mod.fanout(budget, tool, n_done, script)
+        entry_id = data.get("tool_use_id") or f"{int(time.time() * 1000)}-{os.getpid()}"
+        view = mod.reserve(bfile, entry_id, tool, n,
+                           n_inflight=mod.inflight_count(data.get("session_id")))
+        if not view:
+            return None, None
+        if view.get("decision") == "deny":
+            return mod.deny_text(view), None
+        return None, (mod.warn_text(view) if view.get("warn") else None)
+    except Exception:
+        return None, None
+
+
 def log_gate_deny(data, kind, budget=None):
     global _LAST_RULE
     _LAST_RULE = kind
@@ -763,7 +819,7 @@ def log_gate_deny(data, kind, budget=None):
     try:
         ti = data.get("tool_input") or {}
         payload = {
-            "kind": kind,  # no_budget | stale_budget | flagged | quota_guard | verify_*
+            "kind": kind,  # no_budget | stale_budget | flagged | quota_guard | verify_* | reservation
             "tool": data.get("tool_name"),
             "subagent_type": ti.get("subagent_type"),
             "model": ti.get("model") or "inherit",
@@ -1219,6 +1275,14 @@ def main():
                 log_gate_deny(data, vdeny[0], budget)
                 deny(vdeny[1])
                 return
+            # Riserva (1.60): la quota di questa delega entra nel budget qui,
+            # prima del registro e del checkpoint (una delega negata non e'
+            # una delega; una approvata dopo l'ask non ripassa dall'hook).
+            rsv_deny, rsv_warn = reservation(data, budget, bfile)
+            if rsv_deny:
+                log_gate_deny(data, "reservation", budget)
+                deny(rsv_deny)
+                return
             # Registro PRIMA del checkpoint: se l'ask viene approvato l'hook non
             # gira di nuovo — senza questo, proprio le deleghe più costose
             # sparirebbero dal [DLG]. Se l'utente nega, sovrastima di 1: stesso
@@ -1230,7 +1294,8 @@ def main():
                 return
             # UN solo systemMessage: due print JSON separati romperebbero il
             # parsing dell'output hook.
-            msgs = [m for m in (announce_model(data),
+            msgs = [m for m in (rsv_warn,
+                                announce_model(data),
                                 nested_notice(data),
                                 effort_coherence(data, budget),
                                 reliability_notice(data, budget),

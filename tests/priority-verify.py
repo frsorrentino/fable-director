@@ -68,7 +68,22 @@ check("Q1 priority.json scritto con task, sessione, scadenza ~2h; avviso stampat
       and "incident priority on" in r.stdout, r.stdout + r.stderr + str(pr))
 
 
+
+def settle_turn(fd_base):
+    """Ogni scenario qui e' un turno a se': lo Stop hook fra un turno e l'altro
+    salda la riserva del gate (1.60). Senza, le deleghe di scenari diversi si
+    sommerebbero su un budget piccolo e il gate le negherebbe per riserva."""
+    for b in (Path(fd_base) / "budgets").glob("*.json"):
+        try:
+            d = json.loads(b.read_text())
+        except ValueError:
+            continue
+        if isinstance(d, dict) and d.pop("reserve", None) is not None:
+            b.write_text(json.dumps(d))
+
+
 def gate(sid, cwd, used, tool="Agent", extra=None):
+    settle_turn(base)
     q = base / "quota.json"
     q.write_text(json.dumps({"five_hour_used_pct": used, "weekly_used_pct": 10}))
     os.utime(q, None)

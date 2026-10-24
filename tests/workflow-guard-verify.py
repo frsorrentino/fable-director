@@ -84,7 +84,22 @@ def set_session(ctx=600_000, model="claude-fable-5-1"):
                                                 "ctx_size": 1000000, "ts": int(time.time())}))
 
 
+
+def settle_turn(fd_base):
+    """Ogni scenario qui e' un turno a se': lo Stop hook fra un turno e l'altro
+    salda la riserva del gate (1.60). Senza, le deleghe di scenari diversi si
+    sommerebbero su un budget piccolo e il gate le negherebbe per riserva."""
+    for b in (Path(fd_base) / "budgets").glob("*.json"):
+        try:
+            d = json.loads(b.read_text())
+        except ValueError:
+            continue
+        if isinstance(d, dict) and d.pop("reserve", None) is not None:
+            b.write_text(json.dumps(d))
+
+
 def gate(tool_input, event="PreToolUse", env_extra=None, **more):
+    settle_turn(BASE)
     data = {"hook_event_name": event, "tool_name": "Workflow", "cwd": str(proj), "session_id": SID,
             "transcript_path": str(TRANSCRIPT), "tool_input": tool_input}
     data.update(more)
