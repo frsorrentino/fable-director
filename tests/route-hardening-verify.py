@@ -52,7 +52,22 @@ env.pop("CLAUDE_CONFIG_DIR", None)
 env.pop("CLAUDE_EFFORT", None)
 
 
+
+def settle_turn(fd_base):
+    """Ogni scenario qui e' un turno a se': lo Stop hook fra un turno e l'altro
+    salda la riserva del gate (1.60). Senza, le deleghe di scenari diversi si
+    sommerebbero su un budget piccolo e il gate le negherebbe per riserva."""
+    for b in (Path(fd_base) / "budgets").glob("*.json"):
+        try:
+            d = json.loads(b.read_text())
+        except ValueError:
+            continue
+        if isinstance(d, dict) and d.pop("reserve", None) is not None:
+            b.write_text(json.dumps(d))
+
+
 def gate(payload):
+    settle_turn(home / ".claude" / "fable-director")
     return subprocess.run([sys.executable, str(GATE)], env=env, text=True,
                           input=json.dumps(payload), capture_output=True,
                           timeout=120)

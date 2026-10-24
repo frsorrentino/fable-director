@@ -8,7 +8,9 @@ Eventi ammessi: task_open, task_close, budget_flag, retry, escalation, script_pr
 verification, session_summary, schema_anomaly (auto: sentinella formato transcript —
 molti record ma zero usage/timestamp riconosciuti = contabilità inaffidabile, fallire
 rumorosamente), gate_deny (auto: scritto dal gate PreToolUse a ogni delega negata —
-distingue "mai tentata delega" da "negata e ripiegata inline" nelle analisi post-hoc).
+distingue "mai tentata delega" da "negata e ripiegata inline" nelle analisi post-hoc),
+reservation_settle (auto: lo Stop hook salda le riserve impegnate dal gate per le
+deleghe del giro — riservato contro misurato, vedi budget-reserve.py).
 MAI voti di qualità auto-assegnati: la qualità è derivata
 solo da indicatori oggettivi (test pass/fail, rollback, fix successivo).
 

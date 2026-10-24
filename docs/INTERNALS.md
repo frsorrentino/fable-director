@@ -40,6 +40,20 @@ wording, production writes without a backup.
   (names only, never the prompt text). Silent on no match.
 - 🛑 **`PreToolUse` (gate)** — intercepts every `Agent` / `Task` / `Workflow`
   call. No machine-readable budget opened first (`budget-open`) → **denied**.
+  Since 1.60 it also **reserves**: each allowed call commits its share of the
+  estimate (estimate ÷ `--agents` per agent; a Workflow commits its declared
+  fan-out at launch; without `--agents` the ~20k/17k per-agent anchor, never
+  above the estimate) into the budget file under a file lock, so N agents
+  launched in one message are counted *before* they spend. Committed past 3×
+  the estimate → **denied** (rule `reservation`); past 2× → one warning per
+  round. The Stop hook settles the reservations against real usage.
+- ⏱️ **`PostToolUse` (budget reminder)** — on `Bash` / `Write` / `Edit`, at most
+  once every 10 minutes (`FD_REMIND_GAP_S`, `remind_gap_s` in
+  cost-checkpoint.json; 0 disables) and only while a budget is open and has
+  consumed something, refreshes the count with the Stop hook's incremental
+  scan and injects one line to the model: spent so far, reservations in
+  flight, room left before the 2× checkpoint. The remaining budget is known
+  inside a long turn, not only at the 2× warning and the 3× block.
 - 🚧 **`PreToolUse` (perimeter)** — the budget can declare *where* the task may
   write (`--paths`); `Write` / `Edit` outside it are **denied** until an explicit
   amendment. Your own `never_write` patterns (`.fd-perimeter.json` — e.g.
@@ -80,7 +94,11 @@ wording, production writes without a backup.
   mismatch means the pin was ignored, which used to be a silent degradation.
 - ✋ **`Stop` (enforcement)** — at each turn end, compares real token usage
   against the declared budget. Warns once at 2×; at 3× **blocks the turn** until
-  the post-mortem lands in the playbook.
+  the post-mortem lands in the playbook. It also **settles** the gate's
+  reservations: the usage measured since the last settlement pays the oldest
+  entries first; only the entries of agents still in flight (per the
+  delegation meter) survive, reduced by what was paid; the event
+  `reservation_settle` records reserved vs measured per round.
 - 📉 **`SessionEnd` (telemetry)** — logs session totals to SQLite in the
   background. Declared with an explicit `timeout: 30`: a SessionEnd hook with
   no timeout of its own was cancelled at 1.5 s until Claude Code 2.1.268
@@ -419,7 +437,15 @@ org-wide view: on the list, not shipped.
   enforcement rather than silently counting zero.
 - **In-flight subagents.** The Stop hook counts subagent usage once it appears
   in the main transcript, so work still in flight can be temporarily
-  undercounted.
+  undercounted. The gate's reservation covers that gap with an *estimate*:
+  exact only when `--agents` matches the real fan-out; a Workflow without
+  `--agents` is counted by the `agent(` calls in its script, which
+  undercounts loops. Which in-flight entries survive a settlement is chosen
+  by recency, not by agent identity: the amount is right when agents cost
+  about the same. Within one turn a finished delegation's entry is released
+  after 120 s, before its real usage is measured: until the next scan the
+  commitment can sit below the truth, as it did before 1.60. On Windows (no `flock`) two gates firing at the same
+  instant can lose one reservation.
 - **Remote environments.** Managed Agents, cloud routines and remote harnesses
   are outside the local hook stack: the injected policy may still apply, the
   gate, Stop check and telemetry do not.

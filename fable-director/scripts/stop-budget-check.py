@@ -36,6 +36,12 @@ Attribuzione per lineage, non per mtime. Due sorgenti, mai sovrapposte:
   (misurato: 9,2M input freschi invisibili in una sessione).
 Record senza timestamp: inferenza posizionale — il JSONL è append-only
 cronologico, vale il timestamp dell'ultimo record che lo precede.
+
+Saldo della riserva (1.60): il gate impegna la quota di ogni delega nel
+budget prima che parta (budget-reserve.py); qui, a ogni fine turno, il
+consumo misurato paga quelle voci e restano solo quelle degli agenti ancora
+in volo (registro del misuratore). Evento `reservation_settle`: riservato
+contro misurato, dato di taratura per le stime.
 """
 import hashlib
 import importlib.util
@@ -434,6 +440,31 @@ def sum_session_incremental(transcript, since, state_file, declared_iso,
             (state["n_rec"], state["n_usage"], state["n_ts"]), state)
 
 
+def settle_reservations(bfile, budget, actual_out, actual_in, session_id, cwd):
+    """(1.60) Saldo a fine giro delle riserve impegnate dal gate: il consumo
+    misurato (stessa contabilita' dell'enforcement) paga le voci dalla piu'
+    vecchia; restano le piu' recenti quante sono gli agenti ancora in volo
+    secondo il misuratore SubagentStart/Stop. Ritorna il budget riletto dal
+    file (le scritture successive di questo hook non devono riportare in vita
+    voci gia' saldate). Best-effort: un errore qui lascia il budget com'era."""
+    try:
+        if not isinstance(budget.get("reserve"), dict):
+            return budget
+        spec = importlib.util.spec_from_file_location(
+            "budget_reserve", Path(__file__).with_name("budget-reserve.py"))
+        rm = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(rm)
+        summary, fresh = rm.settle(bfile, actual_out, actual_in,
+                                   rm.inflight_count(session_id))
+        if summary:
+            summary["task"] = budget.get("task")
+            summary["auto"] = True
+            log_telemetry("reservation_settle", summary, cwd)
+        return fresh if isinstance(fresh, dict) else budget
+    except Exception:
+        return budget
+
+
 _VERIFY_MSG = None
 _PRINTED = False
 
@@ -630,6 +661,10 @@ def _main():
         sum_session_incremental(
             Path(transcript), declared, state_file, budget.get("declared_at"),
             sid=data.get("session_id"))
+    # Riserva (1.60): il consumo appena misurato salda le voci impegnate dal
+    # gate; da qui in poi `budget` e' la copia riletta dal file.
+    budget = settle_reservations(bfile, budget, actual_out, actual_in,
+                                 data.get("session_id"), cwd)
     # Rework del task finora (None se zero write o modulo assente).
     mod = _fdt()
     rw_stats = mod.rework_stats(state.get("rw")) if mod else None
