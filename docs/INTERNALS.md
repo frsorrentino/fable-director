@@ -88,7 +88,10 @@ wording, production writes without a backup.
   summary of an 88 MB transcript takes ~3 s — in 30 days of local data 4 of 9
   sessions above 20 MB had no summary row. Every closed task leaves a local receipt (estimate vs actual,
   verification contract, perimeter, amendments) under
-  `~/.claude/fable-director/receipts/`.
+  `~/.claude/fable-director/receipts/`, plus a readable `.md` copy: estimate,
+  actual tokens, verification result, duration, executors. `budget-close`
+  prints its path; a value that was never measured says so instead of
+  disappearing.
 
 ## Enforced, advisory, and what leaves your machine
 

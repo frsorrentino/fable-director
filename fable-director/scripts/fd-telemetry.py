@@ -46,7 +46,9 @@ Sottocomandi:
                (tipo fragile: ok solo dopo un fd-verifier o con la rinuncia)
                marca il budget file closed e logga task_close; il consuntivo
                (actual in/out) viene catturato dallo state file dello Stop
-               hook → alimenta la sezione calibrazione del report
+               hook → alimenta la sezione calibrazione del report; scrive la
+               ricevuta in receipts/ (.json e .md leggibile: preventivo,
+               consumo, esito della verifica, durata) e stampa il percorso del .md
   log EVENT [--json '{...}']
                logga un evento puntuale (retry, escalation, verification, script_promotion, budget_flag)
   session-summary [--transcript P --session-id S --cwd P]
@@ -1571,6 +1573,38 @@ def ratio_words(actual, expected):
     return f"cost more than three times the estimate ({r:.1f}×)"
 
 
+def duration_words(budget):
+    """Durata del task dall'apertura alla chiusura del budget: «12 min» sotto
+    le due ore, poi «2 h 5 min». None se una delle due date manca."""
+    try:
+        mins = int((parse_ts(budget.get("closed_at"))
+                    - parse_ts(budget.get("declared_at"))).total_seconds() // 60)
+    except TypeError:  # data assente, o una con fuso orario e una senza
+        return None
+    return f"{mins} min" if mins < 120 else f"{mins // 60} h {mins % 60} min"
+
+
+def verify_words(budget):
+    """Esito del --verify come l'ha lasciato lo Stop hook, in parole."""
+    vrc = budget.get("verify_rc")
+    if vrc is None:
+        return "not run"
+    if vrc == 0:
+        return "passed"
+    if vrc == "timeout":
+        return "timed out"
+    return f"FAILED (exit {vrc})"
+
+
+def tokens_words(out, inp):
+    """«160 output tokens, 30.000 input tokens»; stringa vuota senza nessuno
+    dei due (input 0 = non dichiarato, come in budget-open)."""
+    parts = [f"{fmt(out)} output tokens"] if out is not None else []
+    if inp:
+        parts.append(f"{fmt(inp)} input tokens")
+    return ", ".join(parts)
+
+
 def subagent_state(sid):
     """State del misuratore deleghe per la sessione (subagent-meter.py):
     conteggi, tipi, esiti. {} se assente."""
@@ -1607,8 +1641,9 @@ def external_calls_since(sid, cwd, since_iso):
 def receipt_lines(budget, cwd, sid):
     """Ricevuta LEGGIBILE del task chiuso: cosa era, cosa è costato, chi ha
     eseguito, com'è stato verificato, cosa è uscito dalla macchina. Ogni
-    pezzo assente viene omesso, mai stimato. Ritorna (riga_di_chiusura,
-    righe_dettaglio)."""
+    pezzo accessorio assente viene omesso, mai stimato; preventivo, consumo
+    ed esito della verifica ci sono sempre, e se mancano la riga lo dice.
+    Ritorna (riga_di_chiusura, righe_dettaglio)."""
     outcome = budget.get("outcome") or "?"
     head = {"ok": "Closed fine", "flagged": "Closed flagged (post-mortem due)",
             "abandoned": "Closed as abandoned"}.get(outcome, f"Closed ({outcome})")
@@ -1634,28 +1669,14 @@ def receipt_lines(budget, cwd, sid):
     if reopens is not None:
         bits.append("no file reopened" if not reopens else
                     f"{reopens} file reopen{'s' if reopens != 1 else ''}")
-    vrc = budget.get("verify_rc")
     if budget.get("verify"):
-        if vrc is None:
-            bits.append("verification not run")
-        elif vrc == 0:
-            bits.append("verification passed")
-        elif vrc == "timeout":
-            bits.append("verification timed out")
-        else:
-            bits.append(f"verification FAILED (exit {vrc})")
+        bits.append(f"verification {verify_words(budget)}")
     ext = external_calls_since(sid, cwd, budget.get("declared_at"))
     if ext:
         bits.append("external: " + ", ".join(f"{k} ×{v}" for k, v in sorted(ext.items())))
-    mins = None
-    try:
-        d0 = datetime.fromisoformat(str(budget.get("declared_at")).replace("Z", "+00:00"))
-        d1 = datetime.fromisoformat(str(budget.get("closed_at")).replace("Z", "+00:00"))
-        mins = int((d1 - d0).total_seconds() // 60)
-    except (ValueError, TypeError):
-        pass
-    if mins is not None:
-        bits.append(f"{mins} min" if mins < 120 else f"{mins // 60} h {mins % 60} min")
+    dur = duration_words(budget)
+    if dur:
+        bits.append(dur)
     line = f"{head}: {budget.get('task')}" + (" — " + ", ".join(bits) + "." if bits else ".")
 
     detail = []
@@ -1663,6 +1684,28 @@ def receipt_lines(budget, cwd, sid):
                                   f"effort {budget['effort']}" if budget.get("effort") else None) if x)
     if what:
         detail.append(f"what: {what}")
+    # Il nucleo della ricevuta (1.60): preventivo, consumo ed esito della
+    # verifica sempre presenti. «not measured» è un fatto; una riga omessa
+    # lascerebbe il dubbio a chi la legge (collega, cliente).
+    detail.append("estimate: " + (tokens_words(budget.get("expected_output_tokens"),
+                                               budget.get("expected_input_tokens"))
+                                  or "not declared"))
+    detail.append("actual: " + (tokens_words(budget.get("actual_output_tokens"),
+                                             budget.get("actual_input_tokens"))
+                                or "not measured"))
+    if budget.get("actual_eq_tokens"):
+        crm = budget.get("cache_read_by_model") or {}
+        models = ", ".join(sorted(crm)) if crm else None
+        detail.append(f"cost: {fmt(budget['actual_eq_tokens'])} eq"
+                      + (f" (cache read on {models})" if models else ""))
+    if budget.get("verify"):
+        detail.append(f"verification: {budget['verify']} — {verify_words(budget)}")
+    else:
+        detail.append("verification: none declared")
+    if budget.get("verifier_ran"):
+        detail.append(f"verifier: {VERIFIER_AGENT} ran during the task")
+    elif budget.get("no_verifier"):
+        detail.append(f"verifier: skipped — {budget['no_verifier']}")
     if st and st.get("by_type"):
         who = ", ".join(f"{t} ×{n}" for t, n in sorted(st["by_type"].items(), key=lambda x: -x[1]))
         detail.append(f"executors: {who}")
@@ -1675,13 +1718,6 @@ def receipt_lines(budget, cwd, sid):
                       + (f" with {fmt(sw['context_tokens'])} tokens of context" if sw.get("context_tokens") else "")
                       + (f" — involuntary ({inv}{', ' + sw['category'] if sw.get('category') else ''})"
                          if inv else ""))
-    if budget.get("actual_eq_tokens"):
-        crm = budget.get("cache_read_by_model") or {}
-        models = ", ".join(sorted(crm)) if crm else None
-        detail.append(f"cost: {fmt(budget['actual_eq_tokens'])} eq"
-                      + (f" (cache read on {models})" if models else ""))
-    if budget.get("verify"):
-        detail.append(f"verification: {budget['verify']}")
     if budget.get("parent_session"):
         detail.append(f"opened by parent session {str(budget['parent_session'])[:8]} (bg-session route)")
     if budget.get("data_class"):
@@ -1809,18 +1845,26 @@ def cmd_budget_close(args):
     except Exception:
         pass
     # Ricevuta LEGGIBILE (1.39): la stessa chiusura in parole, per chi non
-    # legge JSON — collega, cliente, la sessione che riparte da qui.
+    # legge JSON — collega, cliente, la sessione che riparte da qui. Dalla
+    # 1.60 porta anche apertura, chiusura e durata, e se ne stampa il
+    # percorso: si allega così com'è, senza riscriverla a mano.
     line, detail = receipt_lines(budget, cwd, close_sid or budget.get("owner_sid"))
+    md_path, md_error = rdir / f"{cwd_slug(cwd)}-{stamp}.md", None
     try:
-        md = [f"# {line}", "", f"- when: {budget.get('closed_at')}", f"- where: {cwd}"]
+        md = [f"# {line}", "",
+              f"- opened: {budget.get('declared_at')}",
+              f"- closed: {budget.get('closed_at')}",
+              f"- duration: {duration_words(budget) or 'not recorded'}",
+              f"- where: {cwd}"]
         md += [f"- {d.strip()}" for d in detail]
-        (rdir / f"{cwd_slug(cwd)}-{stamp}.md").write_text("\n".join(md) + "\n",
-                                                          encoding="utf-8")
-    except Exception:
-        pass
+        md_path.write_text("\n".join(md) + "\n", encoding="utf-8")
+    except Exception as e:
+        md_error = e
     print(line)
     for d in detail:
         print("  " + d)
+    print(f"  receipt: {md_path}" if md_error is None
+          else f"  receipt: not written ({md_error})")
     promo = promotion_question(budget, cwd)
     if promo:
         print("  " + promo)

@@ -2,6 +2,13 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.60.x
+
+- **1.60.0 — a closing receipt you can hand on.**
+  - **`budget-close` prints the receipt's path.** The readable `.md` receipt (since 1.39) now always carries the estimate and the actual tokens, the verification command with its result (passed, FAILED with the exit code, timed out, not run), whether `fd-verifier` ran or was skipped and why, the opening and closing times and the duration. A value that was never measured says so (`actual: not measured`, `verification: none declared`) instead of disappearing. If the file cannot be written, the line says why.
+  - **README: why the gate sits outside the model.** A paragraph cites Ramp Labs' research: in over 14,000 agent messages across several model families, a budget written into the prompt was never referenced.
+  - Suite: `tests/receipt-verify.py` R6-R11.
+
 ## 1.59.x
 
 - **1.59.0 — token totals count each message once.**
