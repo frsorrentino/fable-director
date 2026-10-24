@@ -53,6 +53,30 @@ fd_core() {
     printf '\nFD ⑂ forked session: the open pre-budget is ONE FILE PER CWD, shared with the parent session — parallel budgeted work needs separate worktrees, not a fork.\n'
   fi
 
+  # Modello dei subagent dall'ambiente (docs sub-agents, lette il 24/10/2026).
+  # Ordine di Claude Code dalla 2.1.251: `model` della chiamata, `model` del
+  # frontmatter (`inherit` = modello di sessione), CLAUDE_CODE_SUBAGENT_MODEL,
+  # modello di sessione. La variabile da sola e' quindi un DEFAULT: i pin di
+  # fd-executor (sonnet) e fd-verifier (inherit) reggono; non tocca nemmeno
+  # Explore e Plan. Con CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1 (2.1.257) Claude
+  # Code ignora il `model` delle definizioni e quello passato dalla chiamata
+  # (anche gli agent dei workflow): tutto gira sulla variabile o, se manca, sul
+  # modello di sessione. Una riga sola e solo quando una variabile c'e':
+  # avviso dove i pin cadono, nota dove reggono (la credenza "scavalca tutto"
+  # vale solo prima della 2.1.251). `inherit` vale come assente (docs). Gli
+  # effort pinnati non hanno una regola documentata sotto FORCE: niente riga.
+  SM="${CLAUDE_CODE_SUBAGENT_MODEL:-}"
+  [ "$SM" = "inherit" ] && SM=""
+  SMF="${CLAUDE_CODE_SUBAGENT_MODEL_FORCE:-}"
+  case "$(printf '%s' "$SMF" | tr '[:upper:]' '[:lower:]')" in ""|0|false|no|off) SMF="";; esac
+  if [ -n "$SMF" ] && [ -n "$SM" ]; then
+    printf '\nFD ⚠ CLAUDE_CODE_SUBAGENT_MODEL_FORCE with CLAUDE_CODE_SUBAGENT_MODEL=%s: Claude Code ignores the model in agent files and in Agent/workflow calls — fd-executor (sonnet), fd-verifier (inherit) and every workflow stage run on %s. Unset it (settings.json env) or route knowing the cheap executor and the fresh verifier sit on %s.\n' "$SM" "$SM" "$SM"
+  elif [ -n "$SMF" ]; then
+    printf '\nFD ⚠ CLAUDE_CODE_SUBAGENT_MODEL_FORCE is on without CLAUDE_CODE_SUBAGENT_MODEL: Claude Code ignores the model in agent files and in Agent/workflow calls — fd-executor leaves sonnet for the session model (measured: same correctness, 5.5× the USD on Fable 5.1); fd-verifier (inherit) unchanged.\n'
+  elif [ -n "$SM" ]; then
+    printf '\nFD: CLAUDE_CODE_SUBAGENT_MODEL=%s is a default (Claude Code ≥ 2.1.251): fd-executor stays on sonnet, fd-verifier on the session model; subagents with no model of their own run on %s (Explore and Plan excepted). Only CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1 overrides the pins.\n' "$SM" "$SM"
+  fi
+
   # Righe corte e sempre volute PRIMA dei blocchi lunghi: se il cap taglia,
   # taglia in fondo.
   PB="$HOME/.claude/delega-playbook.md"

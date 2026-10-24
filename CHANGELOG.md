@@ -2,6 +2,14 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.60.x
+
+- **1.60.0 — session start says when the environment picks the subagent model.**
+  - **Pins overridden, said at once.** With `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` (Claude Code 2.1.257), Claude Code ignores the model in agent files and in Agent and workflow calls. Session start now prints one ⚠ line. With `CLAUDE_CODE_SUBAGENT_MODEL` also set, `fd-executor`, `fd-verifier` and every workflow stage run on that model. With the force variable alone, `fd-executor` leaves sonnet for the session model.
+  - **A default is not an override.** Since Claude Code 2.1.251, `CLAUDE_CODE_SUBAGENT_MODEL` alone is a default: the model a call passes and the one in the agent file win over it, so both pins hold. Session start says so in one plain line, without ⚠. No line when neither variable is set; `inherit` counts as unset.
+  - **`opusplan` as an alternative to measure.** The delegation skill names Claude Code's `opusplan` alias (`opus` in plan mode, `sonnet` in execution): the same split by mode instead of by task. Measure it under its own task type against the same work routed by the axes before relying on it; no figure until measured. Under `opusplan`, `fd-verifier` (`model: inherit`) runs on `sonnet` outside plan mode.
+  - Suite: `tests/startup-checks-verify.py` (17 checks).
+
 ## 1.59.x
 
 - **1.59.0 — token totals count each message once.**
