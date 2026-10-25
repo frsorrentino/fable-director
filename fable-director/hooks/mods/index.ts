@@ -25,23 +25,23 @@ export const register: Register = on => {
     const home = (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE'))
     if (!home) return next(e)
     try {
-      const dir = `${home}/.claude/fable-director`
+      // Only data files read by fable-director's own statusline and scripts,
+      // never a build, start-up, settings or instructions file. Each path is
+      // spelled out in the call so the directory review can read it.
       const acct = await accountHash((await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${home}/.claude`)
-      const qf = `${dir}/quota-${acct}.json`
-      const old = parse(await $.fs.read(qf).catch(() => undefined))
+      const old = parse(await $.fs.read(`${home}/.claude/fable-director/quota-${acct}.json`).catch(() => undefined))
       const now = await $.clock.now()
       const mq = merge(q, old, Math.floor(now / 1000))
       if (!same(mq, old)) {
-        await $.fs.write(qf, JSON.stringify(mq))
-        await $.fs.write(`${dir}/usage-snapshot-${acct}.json`, JSON.stringify(snapshot(mq, now)))
+        await $.fs.write(`${home}/.claude/fable-director/quota-${acct}.json`, JSON.stringify(mq))
+        await $.fs.write(`${home}/.claude/fable-director/usage-snapshot-${acct}.json`, JSON.stringify(snapshot(mq, now)))
         if (mq.weekly_used_pct !== old.weekly_used_pct || mq.five_hour_used_pct !== old.five_hour_used_pct) {
-          const hf = `${dir}/quota-history-${acct}.jsonl`
-          const prev = (await $.fs.read(hf).catch(() => '')).split('\n').filter(Boolean)
+          const prev = (await $.fs.read(`${home}/.claude/fable-director/quota-history-${acct}.jsonl`).catch(() => '')).split('\n').filter(Boolean)
           prev.push(JSON.stringify({
             ts: new Date(now).toISOString().replace(/\.\d+Z$/, 'Z'),
             w: mq.weekly_used_pct ?? null, r: mq.five_hour_used_pct ?? null,
           }))
-          await $.fs.write(hf, prev.slice(-300).join('\n') + '\n')
+          await $.fs.write(`${home}/.claude/fable-director/quota-history-${acct}.jsonl`, prev.slice(-300).join('\n') + '\n')
         }
       }
     } catch {

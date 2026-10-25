@@ -36,10 +36,14 @@ fd_core() {
     printf '\nFD ⚠ NO PYTHON 3 on this machine (tried python3, python, py -3): the gates, the perimeter, the Stop check, telemetry and the statusline are OFF, whatever the lines above say. Tell the user once: install Python 3.8+ (python.org) and restart Claude Code.\n'
   fi
   # Windows (Git Bash): `python3` e i path nudi degli script finiscono sull'alias
-  # dello Store — il modello deve lanciarli dal launcher.
+  # dello Store — il modello deve lanciarli dal launcher. Le barre si girano
+  # con tr, non con ${VAR//\\//}: la directory di Anthropic vuole la variabile
+  # della radice scritta col solo nome e seguita da un percorso esplicito.
   case "${OSTYPE:-}" in
     msys*|cygwin*|win*)
-      printf '\nFD Windows: run every plugin script as bash "%s/scripts/py.sh" "%s/scripts/NAME.py" ARGS — never python3 or the bare path (python3 here is the Microsoft Store alias).\n' "${CLAUDE_PLUGIN_ROOT//\\//}" "${CLAUDE_PLUGIN_ROOT//\\//}" ;;
+      FD_WIN_PY="$(printf '%s' "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" | tr '\\' '/')"
+      FD_WIN_SCRIPTS="$(printf '%s' "${CLAUDE_PLUGIN_ROOT}/scripts" | tr '\\' '/')"
+      printf '\nFD Windows: run every plugin script as bash "%s" "%s/NAME.py" ARGS — never python3 or the bare path (python3 here is the Microsoft Store alias).\n' "$FD_WIN_PY" "$FD_WIN_SCRIPTS" ;;
   esac
 
   # Sentinella versione: avvisa se la cache in esecuzione è più vecchia della

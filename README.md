@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.60.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.60.1-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your quota on work the top model didn't need
 to do.** It makes your agent declare what a job should cost before it delegates,
@@ -228,6 +228,15 @@ only the offers with `{"propose": false}`. Source and record format:
 **Writes:** `~/.claude/fable-director/` (telemetry, budgets, handoffs, media cache, anonymizer maps at mode 0600), the `statusLine` and one `autoUpdate` key in `settings.json` (announced, backed up first), and a local error log of its own scripts.
 **Sends:** nothing off your machine by default. The external Gemini/Codex/xAI routes, the error report to GitHub and the Whisper model download run only after you set them up or say yes; `--data-class restricted` refuses the external routes.
 **Keeps:** everything until you delete it. Full policy: **[docs/privacy.md](docs/privacy.md)**.
+
+### The hooks module (mod)
+
+On Claude Code 2.1.287 and later, with Mods on, fable-director also loads a hooks module (`hooks/mods/index.ts`) next to its classic hooks. It does two things and nothing else:
+
+- **`session.measure` writes three data files, all under `~/.claude/fable-director/`:** `quota-<account>.json` (the plan quotas, merged as the statusline does), `usage-snapshot-<account>.json` (the same reading with its time) and `quota-history-<account>.jsonl` (the last 300 quota changes). `<account>` is a short hash of the Claude config folder, so two accounts on one machine keep separate files. Only fable-director's own statusline and scripts read them. They are not build, start-up, settings or instructions files: no tool runs them and no tool takes orders from them.
+- **`agent.spawn` fixes the model of fable-director's own executor, and nothing else.** When a call starts `fable-director:fd-executor` with a model other than sonnet, the module changes that call's model to sonnet. It never touches permissions: it does not allow, deny or ask on any tool call, and it leaves every other agent, and a resumed `fd-executor`, as the caller started it. The agent file already says `model: sonnet`, but a model passed in the Agent or workflow call takes precedence over the file; the pin keeps the cheap executor cheap in that case.
+
+Where the module does not load (older Claude Code, Mods off), nothing changes: the classic hooks do the rest.
 
 ## External free-tier models
 

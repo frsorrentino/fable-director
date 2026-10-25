@@ -4,6 +4,11 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.60.x
 
+- **1.60.1 — directory review fixes: the session kernel names files under the plugin root, and the README says what the hooks module writes and changes.**
+  - **`scripts/session-kernel.sh`.** The Windows launcher line built its paths from `${CLAUDE_PLUGIN_ROOT//\\//}`, the plugin root alone with a substitution inside the braces. It now names `scripts/py.sh` and `scripts/` in full after the bare variable and turns backslashes into slashes with `tr`. Same text printed.
+  - **`hooks/mods/index.ts`.** The three quota files are written with their path spelled out in each call (`~/.claude/fable-director/quota-<account>.json`, `usage-snapshot-<account>.json`, `quota-history-<account>.jsonl`) instead of through variables. Same files, same content.
+  - **README.** New section "The hooks module (mod)": the files `session.measure` writes, and that `agent.spawn` fixes only the model of `fd-executor`, never a permission.
+
 - **1.60.0 — parallel delegations reserve their budget, estimates are calibrated per task type, session start names the subagent model, and budget-close leaves a receipt you can hand on.**
   - **Parallel delegations reserve their budget; the remaining budget is said inside long turns.**
     - **Reservation before launch.** The Stop hook counts at turn end, so N agents launched in one message all spent before any check could fire (the Codex CLI rollout-budget incident; flynn/budget's reserve-then-settle). The delegation gate now commits each allowed call's share of the estimate into the budget file before the agent starts: estimate ÷ `--agents` per agent, a Workflow's whole declared fan-out at launch (minus the agents already in its journal on a resume), the ~20k out / ~17k in per-agent anchor when `--agents` is missing, never above the estimate. Committed = settled actual + max(new actual, open reservations) + this call. Past 2× one warning per round (`FD ⚠ reservation`); past 3× the call is **denied** (rule `reservation`, logged as `gate_deny`) until the in-flight delegations settle. Concurrent gates update the file under a lock; tested with 4 processes firing at once.
