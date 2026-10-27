@@ -4,6 +4,10 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.60.x
 
+- **1.60.2 — the kernel names `ultrathink` among the effort switches that lose the cache.**
+  - **`kernel.md`, Turn economy.** From Claude Code 2.1.311 `ultrathink` runs the turn at xhigh effort, so it is an effort switch like any other: use it where the cache is already lost (compaction, handoff), not mid-task.
+  - **Same length.** The always-on kernel is 6 characters shorter than before, so the onboarding block still fits under the SessionStart cap: the Fast path line is reworded with the same meaning, and the `/config` alternative for idle compaction stays in the delegation skill only.
+
 - **1.60.1 — directory review fixes: the session kernel names files under the plugin root, and the README says what the hooks module writes and changes.**
   - **`scripts/session-kernel.sh`.** The Windows launcher line built its paths from `${CLAUDE_PLUGIN_ROOT//\\//}`, the plugin root alone with a substitution inside the braces. It now names `scripts/py.sh` and `scripts/` in full after the bare variable and turns backslashes into slashes with `tr`. Same text printed.
   - **`hooks/mods/index.ts`.** The three quota files are written with their path spelled out in each call (`~/.claude/fable-director/quota-<account>.json`, `usage-snapshot-<account>.json`, `quota-history-<account>.jsonl`) instead of through variables. Same files, same content.
