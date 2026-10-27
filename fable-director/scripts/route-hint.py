@@ -139,7 +139,7 @@ def cardinality_candidate(prompt_lower):
     names = ", ".join(free)
     return ("external-exec",
             f'- external-exec asse 4 (segnale cardinalità "{m.group(0)}") — '
-            f"free-tier provider: {names}; solo item non quality-sensitive, "
+            f"free-tier provider: {names}; strada di default per item non quality-sensitive, "
             f"pre-budget obbligatorio{track_record(set(free))}")
 
 

@@ -2,6 +2,13 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.61.x
+
+- **1.61.0 — low-risk work goes to the free external providers by default, not only as a proposal.**
+  - **`kernel.md`, axis 4.** Classification, text transformations, first drafts, second opinions and batches of similar items take the free external route (`external-exec.py`) without asking. Unused daily free quota is lost every day.
+  - **Rules unchanged.** Never client-facing final text without top-model review, never `--data-class restricted` inputs, paid providers only on explicit consent, separate ledger. The top model re-checks the output per the verification ladder.
+  - **Same length.** The kernel sentence is replaced, not extended: 7 characters shorter. Delegation skill and the `[fd-route-hint]` line say "default route" instead of "propose".
+
 ## 1.60.x
 
 - **1.60.2 — the kernel names `ultrathink` among the effort switches that lose the cache.**
