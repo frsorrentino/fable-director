@@ -4,6 +4,12 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.61.x
 
+- **1.61.3 — sending a report takes one yes for good, if you want: «Always anonymous».**
+  - **`/fable-director:observe`.** A fourth button, «Always anonymous»: this report goes out anonymously and new errors follow the same way without asking. Errors only, never notes or security observations. Off by default; `/fable-director:observe anonymous off` turns it off. Details in claude-observe's PRIVACY.md.
+  - **Offer on a repeated error.** The same error three times in one session brings the offer at once.
+  - **«Fixed in X».** Whoever reported an error hears, at the next session, that it is fixed and whether to update. `observe/tool.json` lists the two errors fixed in 1.61.1.
+  - **`observe stats`.** A local count of offers, choices and reports, never sent.
+
 - **1.61.2 — `/fable-director:observe` asks again for what a hook cannot see.**
   - **`commands/observe.md`.** The fable-director paragraph is back: a skill that misled you, a script that "succeeded" with a wrong result, the workaround that worked. A sync of claude-observe had removed it in 1.52.4.
   - **claude-observe `dd0f532`.** The lines between the two `plugin-specific` markers now survive every sync.
