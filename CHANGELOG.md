@@ -4,6 +4,11 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.61.x
 
+- **1.61.1 — the kernel gives the scripts' full path, and two skills say what tripped sessions up.**
+  - **`scripts/session-kernel.sh`.** Outside Windows the kernel now prints the full path of `fd-telemetry.py`. The plugin scripts are not on PATH, and sessions were running `python3 fd-telemetry.py` from the project folder or looking for it with `command -v`. The line comes after the executor onboarding and only when it fits under the SessionStart cap.
+  - **`delega-efficiente`.** `--paths` is marked as required on the delegating routes (`agent`, `workflow`, `bg-session`), as `budget-open` already enforces; `--paths none` is the explicit waiver.
+  - **`verifica-modello`.** `/doctor prompt-audit` needs an interactive session: under `claude -p` its reads are denied and no report comes out.
+
 - **1.61.0 — low-risk work goes to the free external providers by default, not only as a proposal.**
   - **`kernel.md`, axis 4.** Classification, text transformations, first drafts, second opinions and batches of similar items take the free external route (`external-exec.py`) without asking. Unused daily free quota is lost every day.
   - **Rules unchanged.** Never client-facing final text without top-model review, never `--data-class restricted` inputs, paid providers only on explicit consent, separate ledger. The top model re-checks the output per the verification ladder.

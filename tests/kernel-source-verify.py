@@ -134,6 +134,18 @@ check("K11 stdin non-JSON → kernel emesso lo stesso",
 check("K12 kernel.md incluso nel testo iniettato",
       "delegation" in out.lower() and len(out) > 500)
 
+# K13: il percorso degli script è nel testo anche fuori da Windows. Senza, il modello
+# lanciava `python3 fd-telemetry.py` dal cwd o lo cercava con `command -v` (note observe
+# 4b42b008 e 49e969d2): gli script del plugin non sono nel PATH.
+# Entra dopo l'onboarding e solo se c'è posto: si prova con l'onboarding già chiuso.
+home4 = fresh_home()
+(home4 / ".claude" / "fable-director" / "xf-onboarding-done").touch()
+out8 = run(home4, payload("startup"))
+check("K13 percorso assoluto degli script nel kernel (Linux/macOS)",
+      f"{ROOT}/scripts/fd-telemetry.py" in out8, out8[-300:])
+check("K13b con l'onboarding in corso la domanda resta prima del percorso",
+      "XF ONBOARDING" in out)
+
 print()
 if FAILS:
     print(f"FAIL: {len(FAILS)} — " + ", ".join(FAILS))
