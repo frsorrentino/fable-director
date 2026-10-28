@@ -68,6 +68,10 @@ run_one() { # $1=arm(off|on) $2=taskfile $3=idx
   local extra=()
   [ "$1" = "on" ] && extra=(--settings "$OUT/bench-settings.json")
   echo "  [$1] $(basename "$2") run $3"
+  # --dangerously-skip-permissions: in -p un permesso negato salta il passo in silenzio
+  # e falsa il confronto off/on. Sicuro solo su input fidati: tasks/*.md e le fixture
+  # del repo, mai contenuti esterni. Input non fidati: contenitore senza credenziali.
+  # Vedi README.md, "Trust assumption".
   claude -p "$(cat "$2")" --output-format json \
     --dangerously-skip-permissions "${model_arg[@]}" "${extra[@]}" \
     > "$OUT/$(basename "$2" .md)__$1__$3.json" 2>"$OUT/$(basename "$2" .md)__$1__$3.err" \
