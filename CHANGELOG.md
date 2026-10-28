@@ -4,6 +4,10 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.61.x
 
+- **1.61.2 — `/fable-director:observe` asks again for what a hook cannot see.**
+  - **`commands/observe.md`.** The fable-director paragraph is back: a skill that misled you, a script that "succeeded" with a wrong result, the workaround that worked. A sync of claude-observe had removed it in 1.52.4.
+  - **claude-observe `dd0f532`.** The lines between the two `plugin-specific` markers now survive every sync.
+
 - **1.61.1 — the kernel gives the scripts' full path, and two skills say what tripped sessions up.**
   - **`scripts/session-kernel.sh`.** Outside Windows the kernel now prints the full path of `fd-telemetry.py`. The plugin scripts are not on PATH, and sessions were running `python3 fd-telemetry.py` from the project folder or looking for it with `command -v`. The line comes after the executor onboarding and only when it fits under the SessionStart cap.
   - **`delega-efficiente`.** `--paths` is marked as required on the delegating routes (`agent`, `workflow`, `bg-session`), as `budget-open` already enforces; `--paths none` is the explicit waiver.
