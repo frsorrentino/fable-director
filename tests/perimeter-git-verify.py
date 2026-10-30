@@ -9,7 +9,9 @@ Contratto:
 - config globale in ~/.claude/fable-director/perimeter.json vale (G6);
 - config malformata → fail-open (G7);
 - regressione: Write con never_write continua a funzionare come prima (G8);
-- normalizzazione spazi: `git  reset   --hard` matcha comunque (G9).
+- normalizzazione spazi: `git  reset   --hard` matcha comunque (G9);
+- comandi del Monitor: negati col payload vero di 2.1.314 (tool_name Bash,
+  niente timeout_ms) e con tool_name Monitor (G10).
 
 Tutto in HOME e cwd usa-e-getta: mai la HOME reale.
 """
@@ -87,6 +89,19 @@ with tempfile.TemporaryDirectory() as td:
     # G9: spazi multipli normalizzati → deny
     out = run(home, proj, bash("git  reset   --hard", proj))
     check("G9 spazi multipli deny", denied(out), out)
+
+    # G10: Monitor — payload vero di 2.1.314 e nome esplicito
+    for tn in ("Bash", "Monitor"):
+        ev = {"tool_name": tn, "cwd": str(proj), "hook_event_name": "PreToolUse",
+              "tool_input": {"command": "git reset --hard", "description": "probe"}}
+        out = run(home, proj, ev)
+        check(f"G10 comando Monitor deny (tool_name {tn})", denied(out), out)
+    out = run(home, proj, {"tool_name": "Monitor", "cwd": str(proj),
+                           "tool_input": {"command": "echo probe"}})
+    check("G10b Monitor senza git allow", not denied(out), out)
+    out = run(home, proj, {"tool_name": "Monitor", "cwd": str(proj),
+                           "tool_input": {"ws": {"url": "wss://x"}}})
+    check("G10c Monitor ws senza comando allow", not denied(out), out)
 
     # G6: config solo globale → deny
     proj2 = Path(td) / "proj2"

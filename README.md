@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.61.3-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.61.4-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your top-model quota on work that doesn't
 need it.** Before your agent delegates, it declares what the job should cost

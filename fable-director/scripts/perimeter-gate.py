@@ -232,7 +232,7 @@ def dash_c_targets(invocations):
 
 
 def check_git_guard(data):
-    """Livello 3: comandi git distruttivi (tool Bash)."""
+    """Livello 3: comandi git distruttivi (tool Bash e Monitor)."""
     cmd = (data.get("tool_input") or {}).get("command") or ""
     cwd = data.get("cwd") or os.getcwd()
     configs, broken = load_configs(cwd)
@@ -335,7 +335,9 @@ def main():
     if data.get("hook_event_name") == "DirectoryAdded":
         on_directory_added(data)
         return
-    if data.get("tool_name") == "Bash":
+    # Claude Code 2.1.314 manda i comandi del Monitor come tool_name "Bash"
+    # (misurato col payload vero): "Monitor" copre un eventuale cambio di nome.
+    if data.get("tool_name") in ("Bash", "Monitor"):
         check_git_guard(data)
         return
     ti = data.get("tool_input") or {}

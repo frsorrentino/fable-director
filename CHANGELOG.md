@@ -4,6 +4,10 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.61.x
 
+- **1.61.4 — `deny_git` also names the Monitor tool.**
+  - **`scripts/perimeter-gate.py`.** The git guard now accepts `tool_name` `Monitor` as well as `Bash`. Claude Code 2.1.314 sends Monitor commands to hooks as `Bash`, so they were already denied, as a real Monitor call confirmed: this only covers a future rename.
+  - **`tests/perimeter-git-verify.py`.** Covers the payload measured on 2.1.314 and the explicit name.
+
 - **1.61.3 — sending a report takes one yes for good, if you want: «Always anonymous».**
   - **`/fable-director:observe`.** A fourth button, «Always anonymous»: this report goes out anonymously and new errors follow the same way without asking. Errors only, never notes or security observations. Off by default; `/fable-director:observe anonymous off` turns it off. Details in claude-observe's PRIVACY.md.
   - **Offer on a repeated error.** The same error three times in one session brings the offer at once.
