@@ -33,7 +33,7 @@ figures, it is never trusted to keep them.
 2. **One canary, then the batch.** To classify 240 reviews or edit 30 files, a
    cheap pinned executor (sonnet) runs one item first; the rest starts only
    after the canary passes the check.
-3. **Low-risk work off your Claude quota by default (new in 1.61).**
+3. **Low-risk work off your Claude quota by default.**
    Classification, text transformations, first drafts, second opinions and
    batches of similar items take the free external route (Gemini, Codex,
    Antigravity) without asking: unused daily free quota is lost every day. The
@@ -202,7 +202,7 @@ table, the hook-by-hook lifecycle and the known limits:
 
 ## External free-tier models
 
-Have a Google or ChatGPT account? Their free tiers reset daily, and since 1.61
+Have a Google or ChatGPT account? Their free tiers reset daily, and
 fable-director routes low-risk work to them by default: an independent
 verifier from a different model family (uncorrelated blind spots), and an
 executor for classification, drafts, second opinions and non-code batches. The
