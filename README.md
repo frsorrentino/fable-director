@@ -4,8 +4,8 @@
 
 **Keeps Claude Code from spending your top-model quota on work that doesn't
 need it.** Before your agent delegates, it declares what the job should cost
-and where it may write; bulk and low-risk work goes to cheap executors or, since
-1.61, to **free external tiers by default**; a runaway job is blocked before it
+and where it may write; bulk and low-risk work goes to cheap executors or
+to **free external tiers by default**; a runaway job is blocked before it
 drains your five-hour limit. The top model stays in charge of the final check,
 and quality is a constraint, never part of the trade.
 
