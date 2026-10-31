@@ -2,6 +2,17 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.62.x
+
+- **1.62.0 — on accounts without the five-hour limit, the gate runs on the weekly pace.** Anthropic is removing that limit from some plans in stages, and quota guard, failover and fan-out sizing switched off in silence without it.
+  - **Not a measurement yet.** No account has received the change: `tests/gate-senza-cinque-ore-verify.py` runs on quota data written by hand. Weekly capacity in eq is an estimate until 5 measured pairs replace it.
+  - **`scripts/quota_pace.py`.** The missing figure is read per account, never from the plan name: key absent, null, or an old value past its reset.
+  - **Today's share.** Weekly quota left ÷ days to the reset, with a divisor of at least 1. A new fan-out above it is denied, and so is a new workflow when the share cannot hold one agent. Resume always passes.
+  - **Warning at 5%/h of weekly quota in the last hour.** A full five-hour window was worth 13.1% and 24.5% of the week on two real accounts, so 2.6 and 4.9%/h reached the old wall. 5%/h would hit it on both and empties a week in 20 hours. Override: `weekly_burn_pct_h_ceiling`.
+  - **Failover and incident priority** use the same signal: over that speed, or the week above 85%.
+  - **Statusline, `/fable-director:status`, advice and route hints** say week and pace instead of five hours. A null `rate_limits` no longer breaks the statusline.
+  - **Accounts with the five-hour limit are unchanged**, and the test proves it even with the week almost gone. One fix applies to them: a value past its reset no longer counts as used.
+
 ## 1.61.x
 
 - **1.61.4 — `deny_git` also names the Monitor tool.**

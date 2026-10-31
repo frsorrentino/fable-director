@@ -16,7 +16,8 @@ pre-gate (solo Stop hook), mai peggio.
 
 Casi budget file:
 - status=open, dichiarato <24h  → allow (silenzio, zero token) — salvo
-  quota guard: NUOVO Workflow con finestra 5h oltre soglia → deny
+  quota guard: NUOVO Workflow con finestra 5h oltre soglia → deny; senza 5 ore
+  (quota_pace.py) residuo settimanale di oggi che non regge un agente → deny
   (il resume passa sempre; vedi quota_guard) — e salvo la riserva (1.60):
   la quota di ogni delega viene impegnata nel budget prima che parta;
   impegnato ≥3× la stima → deny `reservation` (vedi budget-reserve.py).
@@ -37,6 +38,9 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import quota_pace  # noqa: E402
 
 
 def pycmd(script):
@@ -201,7 +205,8 @@ FAILOVER_WINDOW_PCT = 80.0
 
 
 def external_failover(data, budget):
-    """C1.4 (1.39): a quota scarsa (finestra 5h ≥ FAILOVER_WINDOW_PCT) il
+    """C1.4 (1.39): a quota scarsa (finestra 5h ≥ FAILOVER_WINDOW_PCT, o ritmo
+    settimanale sotto pressione dove le 5 ore non ci sono) il
     gate non si limita a negare/lasciare passare: PROPONE la rotta esterna
     pronta da eseguire, solo per budget eleggibili — tipo dichiarato, effort
     non alto (asse 2 resta su Claude), data_class non restricted, rotta
@@ -225,11 +230,20 @@ def external_failover(data, budget):
         qfile = base / f"quota-{acct}.json"
         if not qfile.is_file():
             qfile = base / "quota.json"
-        if not qfile.is_file() or time.time() - qfile.stat().st_mtime > QUOTA_SNAPSHOT_MAX_AGE_S:
-            return None
-        used = json.loads(qfile.read_text()).get("five_hour_used_pct")
-        if used is None or float(used) < FAILOVER_WINDOW_PCT:
-            return None
+        pace = quota_pace.state()
+        if pace and not pace["blind"]:
+            if not pace["pressed"]:
+                return None
+            head = (f"FD ⇄ weekly pace: {pace['burn']:.1f}%/h, week at {pace['weekly']:.0f}%")
+            reason = f"weekly pace {pace['burn']:.1f}%/h"
+        else:
+            if not qfile.is_file() or time.time() - qfile.stat().st_mtime > QUOTA_SNAPSHOT_MAX_AGE_S:
+                return None
+            used = quota_pace.five_hour_used(json.loads(qfile.read_text()))
+            if used is None or float(used) < FAILOVER_WINDOW_PCT:
+                return None
+            head = f"FD ⇄ five-hour window at {float(used):.0f}%"
+            reason = f"quota {float(used):.0f}%"
         cfile = base / "cross-family.json"
         if not cfile.is_file():
             return None
@@ -244,14 +258,14 @@ def external_failover(data, budget):
             return None
         ee = Path(__file__).with_name("external-exec.py")
         tel = Path(__file__).with_name("fd-telemetry.py")
-        return (f"FD ⇄ five-hour window at {float(used):.0f}% — this task "
+        return (f"{head} — this task "
                 f"('{budget.get('type')}', effort {budget.get('effort') or 'n/d'}, "
                 f"data-class {budget.get('data_class') or 'n/d'}) is eligible for the "
                 f"external free route; '{prov}' has credit today. Ready to run per item:\n"
                 f"  {pycmd(ee)} --provider {prov} --spec-file SPEC.md --schema-json "
                 f"--effort low --type {budget.get('type')} --out OUT.json\n"
                 f"and record the switch: {pycmd(tel)} budget-amend --route external "
-                f"--reason \"quota {float(used):.0f}%\". Quality-sensitive items stay on Claude.")
+                f"--reason \"{reason}\". Quality-sensitive items stay on Claude.")
     except Exception:
         return None
 
@@ -280,14 +294,21 @@ def priority_guard(data):
         qfile = base / f"quota-{acct}.json"
         if not qfile.is_file():
             qfile = base / "quota.json"
-        if not qfile.is_file() or time.time() - qfile.stat().st_mtime > QUOTA_SNAPSHOT_MAX_AGE_S:
-            return None
-        used = json.loads(qfile.read_text()).get("five_hour_used_pct")
-        if used is None or float(used) < mod.PRIORITY_WINDOW_PCT:
-            return None
+        pace = quota_pace.state()
+        if pace and not pace["blind"]:
+            if not pace["pressed"]:
+                return None
+            where = f"the weekly pace is under pressure ({pace['burn']:.1f}%/h, week at {pace['weekly']:.0f}%)"
+        else:
+            if not qfile.is_file() or time.time() - qfile.stat().st_mtime > QUOTA_SNAPSHOT_MAX_AGE_S:
+                return None
+            used = quota_pace.five_hour_used(json.loads(qfile.read_text()))
+            if used is None or float(used) < mod.PRIORITY_WINDOW_PCT:
+                return None
+            where = f"the five-hour window is at {float(used):.0f}%"
         return (f"✕ FABLE-DIRECTOR priority — another session on this account is "
                 f"handling an incident ('{pr.get('task')}', since {str(pr.get('since'))[11:16]} UTC) "
-                f"and the five-hour window is at {float(used):.0f}%. New fan-outs "
+                f"and {where}. New fan-outs "
                 f"here wait; single turns are free. The hold expires by itself "
                 f"(2 h) or when that budget closes.")
     except Exception:
@@ -328,6 +349,9 @@ def quota_guard(data):
             return None
         if (data.get("tool_input") or {}).get("resumeFromRunId"):
             return None
+        pace = quota_pace.state()
+        if pace and not pace["blind"]:
+            return pace_guard(pace)
         base = Path.home() / ".claude" / "fable-director"
         ceiling = QUOTA_GUARD_CEILING
         cfile = base / "cost-checkpoint.json"
@@ -346,7 +370,7 @@ def quota_guard(data):
             return None
         if time.time() - qfile.stat().st_mtime > QUOTA_SNAPSHOT_MAX_AGE_S:
             return None
-        used = json.loads(qfile.read_text()).get("five_hour_used_pct")
+        used = quota_pace.five_hour_used(json.loads(qfile.read_text()))
         if used is None or float(used) < ceiling:
             return None
         return (
@@ -465,6 +489,7 @@ def wf_calibration():
         pass
     return {"agent_eq": 330_000.0, "agent_src": "default",
             "window_eq": 3_500_000.0, "window_src": "default",
+            "weekly_eq": 3_500_000.0 / 0.245, "weekly_src": "default",
             "n_agents": 0, "n_pairs": 0}
 
 
@@ -506,8 +531,11 @@ def workflow_fit(data, budget):
         if data.get("tool_name") != "Workflow":
             return None, None
         ti = data.get("tool_input") or {}
+        pace = quota_pace.state()
+        if pace and not pace["blind"]:
+            return pace_fit(data, budget, pace)
         q = quota_snapshot()
-        used = q.get("five_hour_used_pct")
+        used = quota_pace.five_hour_used(q)
         if used is None:
             return None, None
         n = (budget or {}).get("agents")
@@ -554,6 +582,85 @@ def workflow_fit(data, budget):
                       f"Options: {opts} Sources: {srcs}. Delegation allowed.")
     except Exception:
         return None, None
+
+
+def _weekly_reset_text(pace):
+    return time.strftime("%d/%m %H:%M", time.localtime(pace["resets_at"]))
+
+
+def pace_guard(pace):
+    """Quota guard senza finestra di 5 ore: nega il Workflow nuovo quando il
+    residuo di oggi non regge neanche un agente. Il resume passa sempre."""
+    cal = wf_calibration()
+    per = float(cal["agent_eq"]) or 330_000.0
+    remaining = pace["residue"] / 100.0 * float(cal["weekly_eq"])
+    if remaining >= per:
+        return None
+    return (f"✕ FABLE-DIRECTOR weekly pace — {pace['remaining']:.0f}% of the week left over "
+            f"{pace['days']:.1f} days = {pace['residue']:.1f}%/day ≈ {fmt_eq(remaining)} eq: not "
+            f"enough for one agent (~{fmt_eq(per)} eq). On this account the weekly limit is the "
+            f"only wall, and it stays up until {_weekly_reset_text(pace)}.\n"
+            f"Options: (a) inline work and closures only until the reset; (b) resume a previous "
+            f"run — resumeFromRunId is always allowed; (c) tell the user, never another account.")
+
+
+def pace_fit(data, budget, pace):
+    """Il fan-out dichiarato entra nel residuo di oggi? Stessa stima del window
+    fit; il deny scatta appena la stima supera il residuo, non a 2×: qui nessun
+    muro ferma il run a meta', e una stima oltre il ritmo si paga sui giorni dopo.
+    Il resume passa sempre, con un avviso."""
+    ti = data.get("tool_input") or {}
+    cal = wf_calibration()
+    per = float(cal["agent_eq"]) or 330_000.0
+    run_id = ti.get("resumeFromRunId")
+    n = int((budget or {}).get("agents") or 0)
+    if run_id:
+        n = max(n - _journal_done(data, run_id), 0)
+    exp_out = int((budget or {}).get("expected_output_tokens") or 0)
+    exp_in = int((budget or {}).get("expected_input_tokens") or 0)
+    est = max(n * per, 0.0 if run_id else exp_out * 5.0 + exp_in * 1.25)
+    remaining = pace["residue"] / 100.0 * float(cal["weekly_eq"])
+    if est <= remaining or est <= 0:
+        return None, None
+    ratio = est / remaining if remaining > 0 else float("inf")
+    head = (f"{'resume: ' if run_id else ''}{n} agents × ~{fmt_eq(per)} eq ≈ {fmt_eq(est)} eq "
+            f"against {pace['remaining']:.0f}% of the week left over {pace['days']:.1f} days = "
+            f"{pace['residue']:.1f}%/day ≈ {fmt_eq(remaining)} eq ({ratio:.1f}×)")
+    srcs = (f"agent eq {cal['agent_src']}; weekly eq {cal['weekly_src']}; override in "
+            f"cost-checkpoint.json (workflow_agent_eq, weekly_eq)")
+    if run_id:
+        return None, f"FD ⚠ weekly pace — {head}. Resume allowed. Sources: {srcs}."
+    fit = int(remaining // per)
+    return (f"✕ FABLE-DIRECTOR weekly pace — this workflow is over today's share of the weekly "
+            f"limit: {head}. No shorter window stops a run on this account: what it burns today "
+            f"comes off the coming days.\nOptions: (a) chunk: at most {fit} agents now, resume "
+            f"the rest tomorrow (resumeFromRunId, identical args, unchanged script prefix); "
+            f"(b) reading/fetching/extracting stages on `model: 'sonnet'` "
+            f"({sonnet_usd_note(session_snapshot(data).get('model'))}); (c) wait for the weekly "
+            f"reset ({_weekly_reset_text(pace)}).\nSources: {srcs}."), None
+
+
+def pace_notice(data):
+    """Avviso per ogni delega sugli account senza 5 ore: consumo orario sopra
+    soglia (quota_pace.BURN_CEILING_PCT_H, il perche' sta li'), o nessun dato."""
+    try:
+        if data.get("tool_name") not in ("Agent", "Workflow"):
+            return None
+        pace = quota_pace.state()
+        if not pace:
+            return None
+        if pace["blind"]:
+            return ("FD ⚠ no live quota data for this account (no five-hour window, no weekly "
+                    "figure with a future reset): fan-outs are not being sized.")
+        if not pace["over"]:
+            return None
+        hours = pace["remaining"] / pace["burn"]
+        return (f"FD ⚠ weekly pace — burning {pace['burn']:.1f}%/h in the last hour, ceiling "
+                f"{pace['ceiling']:.0f}%/h: at this speed the {pace['remaining']:.0f}% left lasts "
+                f"{hours:.0f} h, reset in {pace['days']:.1f} days. A runaway run is the likely "
+                f"cause, and no shorter window will stop it. Delegation allowed.")
+    except Exception:
+        return None
 
 
 def _first_diff_line(a, b):
@@ -1295,6 +1402,7 @@ def main():
             # UN solo systemMessage: due print JSON separati romperebbero il
             # parsing dell'output hook.
             msgs = [m for m in (rsv_warn,
+                                pace_notice(data),
                                 announce_model(data),
                                 nested_notice(data),
                                 effort_coherence(data, budget),

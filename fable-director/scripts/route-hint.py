@@ -274,10 +274,23 @@ def quota_line():
         qfile = base / f"quota-{acct}.json"
         if not qfile.is_file():
             qfile = base / "quota.json"
+        import sys
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import quota_pace
+        pace = quota_pace.state()
+        if pace and not pace["blind"]:
+            # Senza 5 ore non c'e' nessuna rotta a bassa priorita' da proporre:
+            # resta il limite settimanale.
+            if pace["weekly"] < QUOTA_WEEKLY_EXHAUSTED_PCT:
+                return None
+            at = _fmt_reset(pace["resets_at"], True)
+            line = (f"[fd-route-hint] weekly limit at {pace['weekly']:.0f}%: inline work and closures "
+                    f"only until the reset ({at}); say it to the user, never propose another account.")
+            return ("quota:exhausted", line, {"quota": "exhausted", "weekly": pace["weekly"]})
         if not qfile.is_file() or time.time() - qfile.stat().st_mtime > QUOTA_SNAPSHOT_MAX_AGE_S:
             return None
         q = json.loads(qfile.read_text())
-        five, week = q.get("five_hour_used_pct"), q.get("weekly_used_pct")
+        five, week = quota_pace.five_hour_used(q), q.get("weekly_used_pct")
         if five is None or float(five) < QUOTA_WALL_PCT:
             return None
         five = float(five)

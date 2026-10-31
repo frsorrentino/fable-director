@@ -225,12 +225,17 @@ REWORK_DIAG_MIN = 4
 # ---------------------------------------------------------------------------
 WF_AGENT_EQ_DEFAULT = 330_000
 WF_WINDOW_EQ_DEFAULT = 3_500_000
+# Una finestra di 5 ore piena valeva il 13,1% e il 24,5% della settimana sui due
+# account (storico quota, 10/2026). Si usa il valore piu' alto: meno capacita'
+# settimanale in eq, quindi fan-out piu' piccoli finche' non arriva una misura.
+WF_WEEK_SHARE_OF_WINDOW = 0.245
 WF_CAL_MIN_AGENTS = 5
 WF_CAL_MIN_PAIRS = 5
 
 
 def workflow_calibration(days=90):
-    """Ritorna {agent_eq, agent_src, window_eq, window_src, n_agents, n_pairs}.
+    """Ritorna {agent_eq, agent_src, window_eq, window_src, weekly_eq, weekly_src,
+    n_agents, n_pairs}.
     Precedenza: cost-checkpoint.json (workflow_agent_eq, five_hour_window_eq)
     → misura (mediana) → default. La finestra in eq viene dalle coppie di
     delegation_outcome della stessa sessione con five_hour_pct: Σeq degli
@@ -249,7 +254,8 @@ def workflow_calibration(days=90):
     except (OSError, ValueError):
         cfg = {}
     pinned = set()
-    for key, name in (("workflow_agent_eq", "agent"), ("five_hour_window_eq", "window")):
+    for key, name in (("workflow_agent_eq", "agent"), ("five_hour_window_eq", "window"),
+                      ("weekly_eq", "weekly")):
         try:
             if cfg.get(key):
                 out[f"{name}_eq"] = float(cfg[key])
@@ -257,7 +263,13 @@ def workflow_calibration(days=90):
                 pinned.add(name)
         except (TypeError, ValueError):
             pass
+    def _weekly_default():
+        if "weekly" not in pinned:
+            out["weekly_eq"] = out["window_eq"] / WF_WEEK_SHARE_OF_WINDOW
+            out["weekly_src"] = (f"estimate: {WF_WEEK_SHARE_OF_WINDOW * 100:.1f}% share from quota history "
+                                 f"2026-10, never measured on an account like this one")
     if not DB_PATH.is_file():
+        _weekly_default()
         return out
     try:
         con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, timeout=1.0)
@@ -267,6 +279,7 @@ def workflow_calibration(days=90):
                            (since,)).fetchall()
         con.close()
     except sqlite3.Error:
+        _weekly_default()
         return out
     eqs, by_sess = [], {}
     for ts, sid, p in rows:
@@ -286,7 +299,7 @@ def workflow_calibration(days=90):
         eq = float(eq) if isinstance(eq, (int, float)) and eq > 0 else 0.0
         if eq:
             eqs.append(eq)
-        by_sess.setdefault(sid, []).append((ts, d.get("five_hour_pct"), eq))
+        by_sess.setdefault(sid, []).append((ts, d.get("five_hour_pct"), eq, d.get("weekly_pct")))
     out["n_agents"] = len(eqs)
     if len(eqs) >= WF_CAL_MIN_AGENTS and "agent" not in pinned:
         eqs.sort()
@@ -298,29 +311,39 @@ def workflow_calibration(days=90):
             return datetime.fromisoformat(str(s).replace("Z", "+00:00")).timestamp()
         except (ValueError, TypeError):
             return None
-    ests = []
-    for lst in by_sess.values():
-        prev_pct, prev_ts, acc = None, None, 0.0
-        for ts, pct, eq in lst:
-            acc += eq
-            if pct is None:
-                continue
-            try:
-                pct = float(pct)
-            except (TypeError, ValueError):
-                continue
-            t = _t(ts)
-            if prev_pct is not None and prev_ts is not None and t is not None:
-                delta = pct - prev_pct
-                if 3 <= delta <= 60 and (t - prev_ts) <= 4 * 3600 and acc > 0:
-                    ests.append(acc / delta * 100.0)
-            prev_pct, prev_ts, acc = pct, t, 0.0
+    def _deltas(idx, min_delta, max_delta):
+        ests = []
+        for lst in by_sess.values():
+            prev_pct, prev_ts, acc = None, None, 0.0
+            for row in lst:
+                ts, eq, pct = row[0], row[2], row[idx]
+                acc += eq
+                if pct is None:
+                    continue
+                try:
+                    pct = float(pct)
+                except (TypeError, ValueError):
+                    continue
+                t = _t(ts)
+                if prev_pct is not None and prev_ts is not None and t is not None:
+                    delta = pct - prev_pct
+                    if min_delta <= delta <= max_delta and (t - prev_ts) <= 4 * 3600 and acc > 0:
+                        ests.append(acc / delta * 100.0)
+                prev_pct, prev_ts, acc = pct, t, 0.0
+        return ests
+    ests = _deltas(1, 3, 60)
     out["n_pairs"] = len(ests)
     if len(ests) >= WF_CAL_MIN_PAIRS and "window" not in pinned:
         ests.sort()
         out["window_eq"] = ests[len(ests) // 2]
         out["window_src"] = (f"measured ({len(ests)} five-hour quota deltas, last {days} days; "
                              f"main-thread spend between agents biases it low = conservative)")
+    _weekly_default()
+    week = _deltas(3, 2, 60)   # la settimana si muove piano: bastano 2 punti
+    if len(week) >= WF_CAL_MIN_PAIRS and "weekly" not in pinned:
+        week.sort()
+        out["weekly_eq"] = week[len(week) // 2]
+        out["weekly_src"] = f"measured ({len(week)} weekly quota deltas, last {days} days)"
     return out
 
 
@@ -1440,7 +1463,8 @@ def cmd_budget_open(args):
         priority_set(budget, cwd)
         print(f"FD ▲ incident priority on: other sessions on this account get "
               f"their new fan-outs held while the five-hour window is above "
-              f"{PRIORITY_WINDOW_PCT:.0f}% — expires in {PRIORITY_TTL_S // 3600} h "
+              f"{PRIORITY_WINDOW_PCT:.0f}% (without that window, while the weekly pace is under "
+              f"pressure) — expires in {PRIORITY_TTL_S // 3600} h "
               f"or at budget-close.")
     # E3: memoria dei precedenti dello stesso tipo, al momento giusto.
     sim = similar_tasks_line(budget.get("type"), budget.get("declared_at"))
@@ -2846,7 +2870,8 @@ def cmd_report(args):
         cal = workflow_calibration(days)
         print(f"\nWorkflow window calibration (used by the gate's 'window fit' check): "
               f"agent ≈ {fmt(int(cal['agent_eq']))} eq [{cal['agent_src']}]; "
-              f"five-hour window ≈ {fmt(int(cal['window_eq']))} eq [{cal['window_src']}]")
+              f"five-hour window ≈ {fmt(int(cal['window_eq']))} eq [{cal['window_src']}]; "
+              f"week ≈ {fmt(int(cal['weekly_eq']))} eq [{cal['weekly_src']}]")
     except Exception:
         pass
 

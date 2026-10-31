@@ -195,12 +195,19 @@ def main():
     if qf.is_file():
         try:
             q = json.loads(qf.read_text())
-            if q.get("five_hour_used_pct") is not None:
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            import quota_pace
+            if quota_pace.five_hour_used(q) is not None:
                 add("5H", f"{bar10(q['five_hour_used_pct'])} "
                           f"{q['five_hour_used_pct']:.0f}%")
             if q.get("weekly_used_pct") is not None:
                 add("7D", f"{bar10(q['weekly_used_pct'])} "
                           f"{q['weekly_used_pct']:.0f}%")
+            pace = quota_pace.state()
+            if pace and not pace["blind"]:
+                add("pace", f"{pace['residue']:.1f}%/day, {pace['remaining']:.0f}% left over "
+                            f"{pace['days']:.1f} days, last hour {pace['burn']:.1f}%/h"
+                            + (f" (above {pace['ceiling']:.0f}%/h)" if pace["over"] else ""))
             add("qta", f"[{acct_name}] as-of {age_str(qf.stat().st_mtime)}"
                        f" — updated only by a statusline render")
             # Bound finestra premium (plan-<acct>.json, frazione DICHIARATA
@@ -482,7 +489,8 @@ def main():
         "7D": ("weekly quota", "share of the weekly plan used; resets on the day shown"),
         "qta": ("quota source", "which account and how fresh the statusline snapshot is"),
         "\u2726": ("premium model", "upper bound on the premium model's weekly window, never measured spend"),
-        "burn": ("burn rate", "how fast the five-hour window is going, from recent samples"),
+        "pace": ("weekly pace", "what is left of the week divided by the days to the reset: today's share; fan-outs above it are denied"),
+        "burn": ("burn rate", "how fast the weekly quota is going, from recent samples"),
         "xf": ("external calls", "free-tier calls today per provider, on their own reset window"),
         "dlg": ("delegations", "agents launched this session and tokens they produced, per model"),
         "agt": ("agent effort", "declared effort tier versus what the agent actually ran"),

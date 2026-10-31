@@ -180,8 +180,16 @@ def agent_usage(transcript):
     return agent_usage_meta(transcript)[:3]
 
 
-def five_hour_pct():
-    """Quota 5h vista dallo statusline (file per-account, fresco ≤10 min):
+def quota_pct(key):
+    v = _quota_field(key)
+    try:
+        return float(v) if v is not None else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _quota_field(key):
+    """Quota vista dallo statusline (file per-account, fresco ≤10 min):
     con l'eq dell'agente da' al report/gate la taratura eq↔finestra. None
     se assente o stantio — mai inventata."""
     try:
@@ -194,8 +202,7 @@ def five_hour_pct():
             qf = base / "quota.json"
         if not qf.is_file() or time.time() - qf.stat().st_mtime > 600:
             return None
-        v = json.loads(qf.read_text()).get("five_hour_used_pct")
-        return float(v) if v is not None else None
+        return json.loads(qf.read_text()).get(key)
     except (OSError, ValueError, TypeError):
         return None
 
@@ -509,9 +516,13 @@ def on_stop(data, path):
     rid = run_id_of(transcript)
     if rid:
         payload["run_id"] = rid
-    pct = five_hour_pct()
+    pct = quota_pct("five_hour_used_pct")
     if pct is not None:
         payload["five_hour_pct"] = pct
+    # Senza 5 ore la taratura passa dalla settimana (workflow_calibration).
+    wpct = quota_pct("weekly_used_pct")
+    if wpct is not None:
+        payload["weekly_pct"] = wpct
     log_event("delegation_outcome", payload, session_id=sid, cwd=cwd)
     # Rule of 3, deterministica: al SECONDO fallimento dello stesso tipo di
     # agente nella sessione la diagnosi viene loggata dall'hook (classe

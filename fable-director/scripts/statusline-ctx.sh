@@ -4,6 +4,8 @@
 #   [CTX %]         riempimento context window della conversazione
 #   [5H % HH:MM]    quota piano finestra 5 ore + orario reset locale (staccato, in 239)
 #   [7D %]          quota piano settimanale (se il campo esiste)
+#   [pace %/d]      senza finestra 5 ore: settimana restante / giorni al reset,
+#                   con il consumo orario se sopra soglia (quota_pace.py)
 #   [BDG r×·eff]    pre-budget fable-director: ratio live output consumato/atteso
 #                   (stessa contabilità dello Stop hook, incrementale) + effort
 #                   dichiarato; verde <2×, giallo ≥2×, rosso ≥3× (flagged: 3×).
@@ -51,11 +53,11 @@ fi
 # Campi assenti → "-" → il segmento si omette. Il budget file è di fable-director
 # (fd-telemetry.py budget-open / stop-budget-check.py): qui SOLO lettura.
 export FD_SL_SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
-read -r model pct rl rlt wk wkt bdg xf dlg cache cmp grind eff bar win lk fw prn pru stuck vrf prio dir <<EOF
+read -r model pct rl rlt wk wkt bdg xf dlg cache cmp grind eff bar win lk fw prn pru stuck vrf prio pace brn dir <<EOF
 $(printf '%s' "$input" | "$FD_PYTHON" -c '
 import json,sys,os,time
 from pathlib import Path
-model=pct=rl=rlt=wk=wkt=bdg=xf=dlg=cache=cmp=eff=bar=win=dir="-"
+model=pct=rl=rlt=wk=wkt=bdg=xf=dlg=cache=cmp=eff=bar=win=dir=pace=brn="-"
 def fmt_reset(ts):
     # entro 24h: orario; oltre: "6 Jul"/"6 lug" (giorno + mese secondo il locale)
     try:
@@ -90,13 +92,19 @@ try:
     # che brucia in silenzio, acceso giallo; high e sotto = penombra
     el=d.get("effort",{}).get("level")
     if el: eff=("y:" if el in ("xhigh","max") else "d:")+"·"+str(el)
-    fh=d.get("rate_limits",{}).get("five_hour",{})
+    # "or {}": rate_limits e i suoi bucket possono arrivare null. Un valore col
+    # reset scaduto vale come assente: quella finestra non esiste piu.
+    rlim=d.get("rate_limits") or {}
+    fh=rlim.get("five_hour") or {}
     r=fh.get("used_percentage")
+    try:
+        if fh.get("resets_at") is not None and float(fh.get("resets_at"))<=time.time(): r=None
+    except (TypeError,ValueError): pass
     if r is not None: rl=f"{r:.0f}"
-    rlt=fmt_reset(fh.get("resets_at")) or "-"
+    rlt=(fmt_reset(fh.get("resets_at")) or "-") if r is not None else "-"
     w=None; w_reset=None
     for k in ("seven_day","weekly","seven_days"):
-        wd=d.get("rate_limits",{}).get(k,{})
+        wd=rlim.get(k) or {}
         w=wd.get("used_percentage")
         if w is not None:
             wk=f"{w:.0f}"
@@ -110,11 +118,11 @@ try:
         if r is not None: q["five_hour_used_pct"]=round(float(r),1)
         if w is not None: q["weekly_used_pct"]=round(float(w),1)
         if w_reset: q["weekly_resets_at"]=w_reset
-        if fh.get("resets_at") is not None: q["five_hour_resets_at"]=fh.get("resets_at")
+        if r is not None and fh.get("resets_at") is not None: q["five_hour_resets_at"]=fh.get("resets_at")
         # Sentinella bucket ignoti: se rate_limits espone una chiave nuova
         # (es. un futuro bucket per-modello) la registriamo nel quota file —
         # la si scopre alla prima sessione, non per caso. Mai interpretata.
-        unk=sorted(set(d.get("rate_limits") or {})
+        unk=sorted(set(rlim)
                    -{"five_hour","seven_day","weekly","seven_days"})
         if unk: q["unknown_buckets"]=unk
         if q:
@@ -241,6 +249,19 @@ try:
                     except Exception: pass
     except Exception:
         pass
+    # Ritmo settimanale, solo dove la finestra di 5 ore non c e
+    pace="-"; brn="-"
+    try:
+        if r is None and w is not None:
+            import importlib.util as _iq
+            _sq=_iq.spec_from_file_location("quota_pace",os.path.join(os.environ.get("FD_SL_SCRIPTS") or ".","quota_pace.py"))
+            _qp=_iq.module_from_spec(_sq); _sq.loader.exec_module(_qp)
+            _res=_qp.residue_pct(w,w_reset)
+            if _res:
+                pace=f"{_res[0]:.0f}"
+                _b=_qp.burn_pct_h()
+                if _b>=_qp.burn_ceiling(): brn=f"{_b:.1f}"
+    except Exception: pass
     # plan-<acct>.json: proprieta del piano DICHIARATE dall utente (il plugin
     # non conosce i piani): statusline_links attiva i link OSC 8 (opt-in,
     # solo dopo test sul proprio terminale — su webview che navigano in
@@ -643,7 +664,7 @@ try:
             prio=str(_pr.get("task") or "incident")[:60]
 except Exception: pass
 vrf=str(vrf).replace(" ",","); prio=str(prio).replace(" ",",")
-print(model,pct,rl,rlt,wk,wkt,bdg,xf,dlg,cache,cmp,grind,eff,bar,win,lk,fw,prn,pru,stuck,vrf,prio,dir)
+print(model,pct,rl,rlt,wk,wkt,bdg,xf,dlg,cache,cmp,grind,eff,bar,win,lk,fw,prn,pru,stuck,vrf,prio,pace,brn,dir)
 ' 2>/dev/null)
 EOF
 dir=${dir%$'\r'}   # Windows: print() chiude con \r\n, il \r finiva nel nome cartella
@@ -663,7 +684,7 @@ if [ "$FD_MODE" != "expert" ]; then
   FD_SL_WKT="$wkt" FD_SL_BDG="$bdg" FD_SL_XF="$xf" FD_SL_DLG="$dlg" FD_SL_CACHE="$cache" \
   FD_SL_CMP="$cmp" FD_SL_GRIND="$grind" FD_SL_EFF="$eff" FD_SL_WIN="$win" FD_SL_PRN="$prn" \
   FD_SL_PRU="$pru" FD_SL_STUCK="$stuck" FD_SL_VRF="$vrf" FD_SL_PRIO="$prio" \
-  FD_SL_BADGE="$badge" FD_SL_LK="$lk" FD_SL_DIR="$dir" \
+  FD_SL_PACE="$pace" FD_SL_BRN="$brn" FD_SL_BADGE="$badge" FD_SL_LK="$lk" FD_SL_DIR="$dir" \
   "$FD_PYTHON" "$(dirname "$0")/statusline-plain.py"
   exit 0
 fi
@@ -746,6 +767,13 @@ compose1() {
     seg="$(printf "$(color_for "$wk")7D %s%%\033[0m" "$wk")"
     [ "$wkt" != "-" ] && [ "$1" -ge 1 ] && seg="$seg$(printf '\033[38;5;239m %s\033[0m' "$wkt")"
     app "$(osc8 "$USAGE_URL" "$seg")"
+  fi
+  if [ "$pace" != "-" ]; then
+    if [ "$brn" != "-" ]; then
+      app "$(printf '\033[38;5;220mpace %s%%/d %s%%/h\033[0m' "$pace" "$brn")"
+    else
+      app "$(printf '\033[38;5;245mpace %s%%/d\033[0m' "$pace")"
+    fi
   fi
   # Bound finestra premium (✦≤N% / ✦? a bound saturo) — vive accanto al 7D
   # da cui deriva; stesso link usage: li c e il valore vero per-modello.

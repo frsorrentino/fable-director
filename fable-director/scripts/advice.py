@@ -5,6 +5,7 @@ chiave "advice", e lo mostra nei selettori «Modello» ed «Effort» dell'app.
 
 Regole (la prima che scatta vince; deterministiche, zero token):
   1. quota 5h >= 90%            -> Opus 5.5, effort al massimo medium
+     (senza 5 ore: consumo sopra soglia, quota_pace.py -> stessa proposta)
   2. settimana >= 85%           -> Opus 5.5, effort al massimo medium
   3. su Fable, finestra premium -> Opus 5.5 high + /advisor fable: Opus esegue,
      (7D / premium_weekly_fraction  Fable giudica (bound dichiarato in
@@ -32,6 +33,9 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import quota_pace  # noqa: E402
+
 FABLE, OPUS = "claude-fable-5-1", "claude-opus-5-5"
 TOP = (FABLE, OPUS)
 NAMES = {FABLE: "Fable 5.1", OPUS: "Opus 5.5"}
@@ -58,12 +62,14 @@ def _pct(v):
         return None
 
 
-def compute(snap, quota, plan, budget_open, now):
+def compute(snap, quota, plan, budget_open, now, burn=None):
     model = snap.get("model") or ""
     effort = snap.get("effort")
     ctx = int(snap.get("ctx_tokens") or 0)
     quota, plan = quota or {}, plan or {}
-    r, w = _pct(quota.get("five_hour_used_pct")), _pct(quota.get("weekly_used_pct"))
+    # r: solo una finestra viva. Senza, i rami sotto parlano di settimana e ritmo.
+    r, w = quota_pace.five_hour_used(quota, now), _pct(quota.get("weekly_used_pct"))
+    res = quota_pace.residue_pct(w, quota.get("weekly_resets_at"), now) if r is None else None
     frac = _pct(plan.get("premium_weekly_fraction"))
     base = model.split("[")[0]
     is_fable = base.startswith(FABLE)
@@ -77,6 +83,10 @@ def compute(snap, quota, plan, budget_open, now):
     elif w is not None and w >= 85:
         m, e = OPUS, _cap(effort, "medium")
         why = f"settimana al {w:.0f}%: Opus 5.5 a effort {e} per i lavori nuovi"
+    elif r is None and burn and burn >= quota_pace.burn_ceiling():
+        m, e = OPUS, _cap(effort, "medium")
+        why = (f"consumo {burn:.1f}%/h, sopra il ritmo settimanale: Opus 5.5 a effort {e} "
+               f"per i lavori nuovi")
     elif is_fable and w is not None and frac and w / frac >= 80:
         m, e = OPUS, _cap(effort, "high")
         why = (f"finestra Fable ≤{min(100, w / frac):.0f}%: Opus 5.5 esegue, "
@@ -86,12 +96,17 @@ def compute(snap, quota, plan, budget_open, now):
         why = "la sessione principale pianifica e verifica: Opus 5.5; l'esecuzione va agli agenti"
     elif effort in ("xhigh", "max") and max(r or 0, w or 0) >= 70:
         m, e = model, "high"
-        why = (f"quota alta (5h {r or 0:.0f}%, settimana {w or 0:.0f}%): effort {effort} "
+        level = f"5h {r:.0f}%, settimana {w or 0:.0f}%" if r is not None else f"settimana {w or 0:.0f}%"
+        why = (f"quota alta ({level}): effort {effort} "
                f"la consuma in silenzio, high basta")
     else:
         m, e = model, effort
-        why = (f"quota ok (5h {r:.0f}%, settimana {w:.0f}%): {_name(m)} {e} va bene"
-               if r is not None and w is not None else f"{_name(m)} {e} va bene")
+        if r is not None and w is not None:
+            why = f"quota ok (5h {r:.0f}%, settimana {w:.0f}%): {_name(m)} {e} va bene"
+        elif res:
+            why = f"quota ok (settimana {w:.0f}%, ritmo {res[0]:.1f}%/g): {_name(m)} {e} va bene"
+        else:
+            why = f"{_name(m)} {e} va bene"
 
     differs = (m.split("[")[0] != base) or (e != effort)
     when = "now" if ctx < FRESH_CTX and not budget_open else "next_task"
@@ -135,7 +150,8 @@ def for_snapshot(snap, now=None):
     acct = snap.get("account") or default_account()
     return compute(snap, _load(BASE / f"quota-{acct}.json"),
                    _load(BASE / f"plan-{acct}.json"),
-                   budget_is_open(snap.get("cwd")), now or time.time())
+                   budget_is_open(snap.get("cwd")), now or time.time(),
+                   burn=quota_pace.burn_pct_h(now, acct))
 
 
 def rewrite(sf):

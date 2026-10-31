@@ -105,6 +105,12 @@ def main():
             when = (f"resets in {mins} min" if mins is not None and mins < 120
                     else f"resets {rlt}" if rlt else "resets later")
             exc.append((3, RED, f"quota {rl:.0f}% used, {when}"))
+    # --- senza finestra di 5 ore: settimana e ritmo al suo posto ---------------
+    pace, brn = num(env("FD_SL_PACE")), num(env("FD_SL_BRN"))
+    if rl is None and wk is not None and pace is not None:
+        normal.append((RED if wk >= 80 else YEL if wk >= 60 else GREY, f"week {wk:.0f}%, pace {pace:.0f}%/day"))
+        if brn is not None:
+            exc.append((3, RED, f"burning {brn:.1f}%/h, above the weekly pace — check running agents"))
     # --- quota settimanale ----------------------------------------------------
     if wk is not None:
         if wk >= 80:
