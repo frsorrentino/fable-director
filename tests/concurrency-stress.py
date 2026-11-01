@@ -84,12 +84,17 @@ def t1_amend_never_resurrects_flagged():
     def flagger():
         import time
         time.sleep(0.4)  # a metà della gragnuola di amend
-        # mimo lo Stop hook: read → flagged → replace atomico
-        b = json.loads(bfile.read_text())
-        b["status"] = "flagged"
-        tmp = bfile.with_name(f"{bfile.name}.flag.tmp")
-        tmp.write_text(json.dumps(b))
-        os.replace(tmp, bfile)
+        # mimo lo Stop hook: read → flagged → replace atomico, sotto il suo lock
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("budget_reserve", SCRIPTS / "budget-reserve.py")
+        rm = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(rm)
+
+        def flag(b):
+            b["status"] = "flagged"
+            return True, True
+
+        rm.locked_update(bfile, flag)
 
     procs = [Process(target=amender, args=(i,)) for i in range(4)]
     procs.append(Process(target=flagger))

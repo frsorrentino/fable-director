@@ -4,9 +4,13 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.62.x
 
-- **1.62.1 — `anonymizer.py --json` prints only JSON on stdout.**
+- **1.62.1 — `anonymizer.py --json` prints only JSON on stdout, and budget writers no longer overwrite each other.**
   - **Before:** `scan --json` and `test --json` added the STATUS lines after the JSON, so `json.load` on the pipe failed with `Extra data`.
   - **Now:** with `--json`, STATUS, OUTPUT and DETAIL go to stderr, errors included. Read them there if a script took them from stdout.
+  - **Budget race.** A `budget-amend` running while the Stop hook flagged the budget set it back to open, so the 3× block fired twice. The hook could also drop an amendment made during its turn, or flag a budget just closed.
+  - **Now:** `budget-amend`, `budget-close`, the Stop hook and the gate update the file under one lock, on the state on disk. `tests/budget-amend-race-verify.py` forces each race, on Linux and Windows.
+  - **The lock never holds the block back.** It waits 5 seconds at most; expired or missing, the write goes ahead without it, as before.
+  - **`budget-amend --route X --add-paths Y`** now keeps the route too: the paths step used to discard it.
 
 - **1.62.0 — on accounts without the five-hour limit, the gate runs on the weekly pace.** Anthropic is removing that limit from some plans in stages, and quota guard, failover and fan-out sizing switched off in silence without it.
   - **Not a measurement yet.** No account has received the change: `tests/gate-senza-cinque-ore-verify.py` runs on quota data written by hand. Weekly capacity in eq is an estimate until 5 measured pairs replace it.

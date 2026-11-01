@@ -26,21 +26,31 @@ gia' pagato; la marca avanza al consuntivo; evento `reservation_settle`
 (riservato contro misurato: dato di taratura per le stime).
 
 Scritture concorrenti: N gate partono nello stesso istante per N deleghe
-nello stesso messaggio — read-modify-write sotto flock dove esiste (Windows:
-solo rinomina atomica, un aggiornamento puo' perdersi). Fail-open ovunque:
-un errore qui non nega mai una delega e non blocca mai uno Stop.
+nello stesso messaggio — read-modify-write sotto budget_lock (flock, msvcrt su
+Windows). Il lock e' a tempo: scaduto o assente si scrive lo stesso con la sola
+rinomina atomica, un aggiornamento puo' perdersi. Fail-open ovunque: un errore
+qui non nega mai una delega e non blocca mai uno Stop.
 """
 import json
 import os
 import re
 import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
 try:
-    import fcntl  # assente su Windows: sotto si degrada a sola rinomina atomica
+    import fcntl  # assente su Windows: li' msvcrt
 except ImportError:
     fcntl = None
+try:
+    import msvcrt  # assente fuori da Windows
+except ImportError:
+    msvcrt = None
+
+# Attesa massima del lock del budget: lo tengono scritture di millisecondi, e chi
+# muore lo rilascia col processo. Scaduta, si procede senza: e' enforcement.
+LOCK_TIMEOUT_S = 5.0
 
 # Stesse ancore del fan-out in fd-telemetry.py budget-open (playbook confermata):
 # ~20k output e ~17k input di cold start PER AGENTE, prima dei file letti.
@@ -82,17 +92,63 @@ def fmt_k(n):
     return f"{n / 1e3:.0f}k"
 
 
+def _try_lock(fh):
+    if fcntl is not None:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    else:
+        fh.seek(0)
+        msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+
+
+def _unlock(fh):
+    if fcntl is not None:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+    else:
+        fh.seek(0)
+        msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+
+
+@contextmanager
+def budget_lock(bfile, timeout=None):
+    """Lock esclusivo del budget file, per ogni read-modify-write. Non blocca
+    mai oltre `timeout` e non solleva: entra comunque, col valore False se non
+    ha il lock (scaduto, primitiva assente, file non apribile), perche' un lock
+    non deve mai far perdere una scrittura di enforcement."""
+    bfile = Path(bfile)
+    fh, held = None, False
+    if fcntl is not None or msvcrt is not None:
+        try:
+            fh = open(bfile.with_name(bfile.stem + ".lock"), "a+")
+            end = time.monotonic() + (LOCK_TIMEOUT_S if timeout is None else timeout)
+            while True:
+                try:
+                    _try_lock(fh)
+                    held = True
+                    break
+                except OSError:
+                    if time.monotonic() >= end:
+                        break
+                    time.sleep(0.01)
+        except OSError:
+            pass
+    try:
+        yield held
+    finally:
+        if fh is not None:
+            try:
+                if held:
+                    _unlock(fh)
+            except OSError:
+                pass
+            fh.close()
+
+
 def locked_update(bfile, mutate):
     """Read-modify-write del budget file sotto lock. `mutate(budget)` ritorna
     (result, changed): con changed falso il file non viene riscritto. Ritorna
     (result, budget); (None, None) se il file manca o non si legge."""
     bfile = Path(bfile)
-    lock = bfile.with_name(bfile.stem + ".lock")
-    fh = None
-    try:
-        if fcntl is not None:
-            fh = open(lock, "a+")
-            fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+    with budget_lock(bfile):
         try:
             budget = json.loads(bfile.read_text())
         except (OSError, ValueError):
@@ -105,13 +161,6 @@ def locked_update(bfile, mutate):
             tmp.write_text(json.dumps(budget, ensure_ascii=False, indent=1))
             os.replace(tmp, bfile)
         return result, budget
-    finally:
-        if fh is not None:
-            try:
-                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
-            except OSError:
-                pass
-            fh.close()
 
 
 def state_actual(bfile, declared_at):

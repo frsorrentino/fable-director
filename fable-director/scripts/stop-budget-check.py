@@ -440,6 +440,37 @@ def sum_session_incremental(transcript, since, state_file, declared_iso,
             (state["n_rec"], state["n_usage"], state["n_ts"]), state)
 
 
+def update_budget(bfile, budget, fields):
+    """Scrive `fields` sul budget com'e' ORA su disco, sotto lock: fra la lettura
+    a inizio hook e qui passano scan e --verify, e riscrivere la copia di allora
+    cancellerebbe emendamenti e riaprirebbe budget chiusi. Vero se scritto; falso
+    se il budget non e' piu' quello aperto letto (l'ha gestito un altro).
+    Se il lock o il modulo non ci sono si scrive la copia: mai perdere il blocco."""
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "budget_reserve", Path(__file__).with_name("budget-reserve.py"))
+        rm = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(rm)
+
+        def mutate(b):
+            if b.get("status") != "open" or b.get("declared_at") != budget.get("declared_at"):
+                return False, False
+            b.update(fields)
+            return True, True
+
+        applied, fresh = rm.locked_update(bfile, mutate)
+        if fresh is not None:
+            if applied:
+                budget.clear()
+                budget.update(fresh)
+            return bool(applied)
+    except Exception:
+        pass
+    budget.update(fields)
+    write_json_atomic(bfile, budget)
+    return True
+
+
 def settle_reservations(bfile, budget, actual_out, actual_in, session_id, cwd):
     """(1.60) Saldo a fine giro delle riserve impegnate dal gate: il consumo
     misurato (stessa contabilita' dell'enforcement) paga le voci dalla piu'
@@ -647,8 +678,7 @@ def _main():
         return
     now = datetime.now(timezone.utc)
     if (now - declared).total_seconds() > 86400:
-        budget["status"] = "stale"
-        write_json_atomic(bfile, budget)
+        update_budget(bfile, budget, {"status": "stale"})
         return
 
     transcript = data.get("transcript_path")
@@ -709,8 +739,8 @@ def _main():
     if n_rec >= SENTINEL_MIN_RECORDS and (n_usage == 0 or n_ts == 0):
         missing = "usage" if n_usage == 0 else "timestamp"
         if not budget.get("schema_warned"):
-            budget["schema_warned"] = True
-            write_json_atomic(bfile, budget)
+            if not update_budget(bfile, budget, {"schema_warned": True}):
+                return
             log_telemetry("schema_anomaly", {
                 "source": "stop-budget-check", "missing": missing,
                 "n_records": n_rec, "transcript": str(transcript),
@@ -730,8 +760,8 @@ def _main():
     if not (out_bust or in_bust):
         warn = actual_out >= 2 * exp_out or (exp_in > 0 and actual_in >= 2 * exp_in)
         if warn and not budget.get("warned"):
-            budget["warned"] = True
-            write_json_atomic(bfile, budget)
+            if not update_budget(bfile, budget, {"warned": True}):
+                return
             # Riga rework al checkpoint: il fatto sempre (se c'è), la diagnosi
             # solo sopra soglia — 1-2 riaperture non provano niente, un file
             # riaperto 2+ volte o 4+ totali sì (REWORK_DIAG_MIN in fd-telemetry).
@@ -762,13 +792,13 @@ def _main():
             )})
         return
 
-    budget["status"] = "flagged"
-    budget["actual_output_tokens"] = actual_out
-    budget["actual_input_tokens"] = actual_in
+    flag_fields = {"status": "flagged", "actual_output_tokens": actual_out,
+                   "actual_input_tokens": actual_in,
+                   "flagged_at": now.strftime("%Y-%m-%dT%H:%M:%SZ")}
     if actual_eq is not None:
-        budget["actual_eq_tokens"] = actual_eq
-    budget["flagged_at"] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
-    write_json_atomic(bfile, budget)
+        flag_fields["actual_eq_tokens"] = actual_eq
+    if not update_budget(bfile, budget, flag_fields):
+        return  # gia' flaggato o chiuso da un altro nel frattempo
 
     dim = "output" if out_bust else "input"
     actual = actual_out if out_bust else actual_in

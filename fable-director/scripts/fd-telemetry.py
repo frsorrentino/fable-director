@@ -81,6 +81,7 @@ Sottocomandi:
                rung-1). KEY = sha256 di schema_version + prompt + contenuto input.
 """
 import hashlib
+import contextlib
 import importlib.util
 import json
 import os
@@ -1030,6 +1031,19 @@ def similar_tasks_line(task_type, exclude_declared_at=None):
     return head + (": " + "; ".join(parts) if parts else "") + "."
 
 
+def budget_lock(bfile):
+    """budget-reserve.budget_lock per ogni read-modify-write del budget file (lo
+    condividono Stop hook e gate). Modulo assente: si procede senza lock."""
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "budget_reserve", Path(__file__).with_name("budget-reserve.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod.budget_lock(bfile)
+    except Exception:
+        return contextlib.nullcontext(False)
+
+
 def verify_lint():
     """verify-lint.py come modulo (nome con trattino: importlib)."""
     spec = importlib.util.spec_from_file_location(
@@ -1439,7 +1453,8 @@ def cmd_budget_open(args):
     if cal:
         budget["calibration"] = cal
     bfile = BUDGETS / f"{cwd_slug(cwd)}.json"
-    write_json_atomic(bfile, budget)
+    with budget_lock(bfile):
+        write_json_atomic(bfile, budget)
     log_event("task_open", budget, cwd=cwd)
     print(f"budget open: {bfile}")
     # /goal (Claude Code 2.1.282): la condizione di sessione giudicata da un
@@ -1558,6 +1573,15 @@ def resolve_budget_file(cwd_opt):
     return cwd, bfile
 
 
+def _amend_read(bfile):
+    """Il budget com'è ora, da chiamare sotto budget_lock; esce se non è più aperto."""
+    budget = json.loads(bfile.read_text())
+    if budget.get("status") != "open":
+        sys.exit(f"budget-amend aborted: budget status changed to "
+                 f"'{budget.get('status')}' meanwhile — resolve that first")
+    return budget
+
+
 def cmd_budget_amend(args):
     """Emendamento ESPLICITO del perimetro del budget aperto: il deny del
     perimeter-gate non si aggira, si emenda — e l'emendamento resta nel
@@ -1582,13 +1606,14 @@ def cmd_budget_amend(args):
         vkind, vreason = verify_lint().classify(opts["--verify"], budget.get("cwd") or cwd)
         if vkind != "command":
             sys.exit(vreason)
-        budget = json.loads(bfile.read_text())
-        prev = budget.get("verify")
-        budget["verify"] = opts["--verify"]
-        budget.setdefault("amendments", []).append({
-            "verify": opts["--verify"], "from": prev, "reason": opts["--reason"],
-            "at": now_iso()})
-        write_json_atomic(bfile, budget)
+        with budget_lock(bfile):
+            budget = _amend_read(bfile)
+            prev = budget.get("verify")
+            budget["verify"] = opts["--verify"]
+            budget.setdefault("amendments", []).append({
+                "verify": opts["--verify"], "from": prev, "reason": opts["--reason"],
+                "at": now_iso()})
+            write_json_atomic(bfile, budget)
         print(f"verify amended: {opts['--verify']}")
         if not opts["--add-paths"] and not opts["--route"]:
             return
@@ -1597,32 +1622,30 @@ def cmd_budget_amend(args):
         # falsificata, non errore): loggato, e il budget ricorda la rotta nuova.
         if opts["--route"] not in ("inline", "workflow", "script", "agent", "external"):
             sys.exit("invalid --route")
-        prev = budget.get("route")
-        budget["route"] = opts["--route"]
-        budget.setdefault("amendments", []).append({
-            "route": opts["--route"], "from": prev, "reason": opts["--reason"],
-            "ts": now_iso()})
+        with budget_lock(bfile):
+            budget = _amend_read(bfile)
+            prev = budget.get("route")
+            budget["route"] = opts["--route"]
+            budget.setdefault("amendments", []).append({
+                "route": opts["--route"], "from": prev, "reason": opts["--reason"],
+                "ts": now_iso()})
+            write_json_atomic(bfile, budget)
         log_event("reversal", {"from": prev or "?", "to": opts["--route"],
                                "reason": opts["--reason"], "kind": "route",
                                "at": "budget-amend"}, cwd=cwd)
         if not opts["--add-paths"]:
-            write_json_atomic(bfile, budget)
             print(f"route amended: {prev or '?'} → {opts['--route']} (reversal logged)")
             return
     new = [p.strip() for p in opts["--add-paths"].split(",") if p.strip()]
-    # Ri-lettura FRESCA immediatamente prima della write: uno Stop hook
-    # concorrente può aver flaggato il budget tra la nostra read e qui —
-    # sovrascrivere riaprirebbe un budget bloccato (review esterna 2026-07-11).
-    # La finestra residua è µs; la mutazione avviene sull'oggetto fresco.
-    budget = json.loads(bfile.read_text())
-    if budget.get("status") != "open":
-        sys.exit(f"budget-amend aborted: budget status changed to "
-                 f"'{budget.get('status')}' meanwhile — resolve that first")
-    paths = budget.get("paths") or []
-    budget["paths"] = paths + [p for p in new if p not in paths]
-    budget.setdefault("amendments", []).append(
-        {"added": new, "reason": opts["--reason"], "at": now_iso()})
-    write_json_atomic(bfile, budget)
+    # Lettura FRESCA sotto lock: uno Stop hook concorrente può aver flaggato il
+    # budget — sovrascrivere riaprirebbe un budget bloccato.
+    with budget_lock(bfile):
+        budget = _amend_read(bfile)
+        paths = budget.get("paths") or []
+        budget["paths"] = paths + [p for p in new if p not in paths]
+        budget.setdefault("amendments", []).append(
+            {"added": new, "reason": opts["--reason"], "at": now_iso()})
+        write_json_atomic(bfile, budget)
     log_event("perimeter_amend", {"added": new, "reason": opts["--reason"],
                                   "task": budget.get("task")}, cwd=cwd)
     print(f"perimeter amended: +{', '.join(new)}")
@@ -1943,7 +1966,20 @@ def cmd_budget_close(args):
                     budget.setdefault("verify_at", st.get("verify_at"))
         except (json.JSONDecodeError, OSError, ValueError):
             pass
-    write_json_atomic(bfile, budget)
+    with budget_lock(bfile):
+        # Quanto è cambiato su disco dopo la lettura (emendamenti, riserve) resta
+        # nella ricevuta; la chiusura decide solo i campi che ha scritto lei.
+        try:
+            disk = json.loads(bfile.read_text())
+            if disk.get("declared_at") == budget.get("declared_at"):
+                for k in ("paths", "amendments", "verify", "route"):
+                    if k in disk:
+                        budget[k] = disk[k]
+                for k, v in disk.items():
+                    budget.setdefault(k, v)
+        except (json.JSONDecodeError, OSError):
+            pass
+        write_json_atomic(bfile, budget)
     if budget.get("priority") == "incident":
         priority_clear(budget.get("owner_sid"), cwd)
     # Lo state file dello Stop incrementale è chiavato su declared_at: a
@@ -2090,24 +2126,25 @@ def reap_open_budget(cwd, session_id=None):
     if not bfile.is_file():
         return
     try:
-        budget = json.loads(bfile.read_text())
-        if budget.get("status") != "open":
-            return
-        declared = parse_ts(budget.get("declared_at"))
-        age = (datetime.now(timezone.utc) - declared).total_seconds() if declared else None
-        owner = budget.get("owner_sid")
-        sid = safe_sid(session_id)
-        if owner and sid and owner == sid:
-            pass  # mio: chiudi subito
-        elif owner:
-            if age is None or age < REAP_FOREIGN_AGE_S:
-                return  # di un'altra sessione, non orfano: non toccare
-        elif age is not None and age < REAP_MIN_AGE_S:
-            return  # legacy senza owner: orizzonte prudente
-        budget["status"] = "closed"
-        budget["outcome"] = "abandoned"
-        budget["closed_at"] = now_iso()
-        write_json_atomic(bfile, budget)
+        with budget_lock(bfile):
+            budget = json.loads(bfile.read_text())
+            if budget.get("status") != "open":
+                return
+            declared = parse_ts(budget.get("declared_at"))
+            age = (datetime.now(timezone.utc) - declared).total_seconds() if declared else None
+            owner = budget.get("owner_sid")
+            sid = safe_sid(session_id)
+            if owner and sid and owner == sid:
+                pass  # mio: chiudi subito
+            elif owner:
+                if age is None or age < REAP_FOREIGN_AGE_S:
+                    return  # di un'altra sessione, non orfano: non toccare
+            elif age is not None and age < REAP_MIN_AGE_S:
+                return  # legacy senza owner: orizzonte prudente
+            budget["status"] = "closed"
+            budget["outcome"] = "abandoned"
+            budget["closed_at"] = now_iso()
+            write_json_atomic(bfile, budget)
         log_event("task_close", budget, cwd=cwd)
     except (json.JSONDecodeError, OSError):
         return
