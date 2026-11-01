@@ -31,6 +31,7 @@ Output sempre:
   STATUS: ok | error | unavailable
   OUTPUT: <path | ->
   DETAIL: <breve>
+With --json they go to stderr, so that stdout is the JSON alone.
 No value ever reaches stdout except the redacted/restored text itself and
 `test --show-misses` (explicit, for reviewing annotations).
 """
@@ -166,7 +167,8 @@ def cmd_scan(opts, pos, cfg):
     for rep in reports:
         for k, v in rep["counts"].items():
             total[k] = total.get(k, 0) + v
-    emit("ok", "-", f"{len(reports)} file, " + (", ".join(f"{k} {v}" for k, v in sorted(total.items())) or "nothing found"))
+    emit("ok", "-", f"{len(reports)} file, " + (", ".join(f"{k} {v}" for k, v in sorted(total.items())) or "nothing found"),
+         stream=sys.stderr if opts.get("json") else None)
 
 
 def cmd_redact(opts, pos, cfg):
@@ -249,7 +251,8 @@ def cmd_test(opts, pos, cfg):
                     for x in ms:
                         print(f"   miss {did}: {x['kind']} {x['cat']} @{x['start']}-{x['end']}")
     status = "ok" if all_pass or not opts.get("strict") else "error"
-    emit(status, "-", "; ".join(labels) + ("" if all_pass else "; thresholds NOT met"))
+    emit(status, "-", "; ".join(labels) + ("" if all_pass else "; thresholds NOT met"),
+         stream=sys.stderr if opts.get("json") else None)
     return 0 if status == "ok" else 1
 
 
@@ -304,11 +307,11 @@ def main(argv=None):
         rc = COMMANDS[cmd](opts, pos, cfg)
         return rc or 0
     except Fail as e:
-        stream = sys.stderr if (cmd in ("redact", "restore") and not opts_has_out(argv)) else sys.stdout
+        stream = sys.stderr if ("--json" in argv or (cmd in ("redact", "restore") and not opts_has_out(argv))) else sys.stdout
         emit(e.status, "-", str(e), stream=stream)
         return 1
     except _config.ConfigError as e:
-        emit("error", "-", f"config: {e}")
+        emit("error", "-", f"config: {e}", stream=sys.stderr if "--json" in argv else None)
         return 1
 
 

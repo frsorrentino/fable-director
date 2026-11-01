@@ -60,6 +60,14 @@ def field(out, key):
     return None
 
 
+def is_json(text):
+    try:
+        json.loads(text)
+        return True
+    except ValueError:
+        return False
+
+
 def run(home, args, stdin=None, cwd=None):
     env = dict(os.environ, HOME=str(home))
     return subprocess.run([sys.executable, str(SCRIPT)] + args, input=stdin,
@@ -286,13 +294,14 @@ def test_corpus():
 def test_cli(home):
     from anonymizer.pmap import map_path
     r = run(home, ["test", "--strict", "--json"])
-    check("A8 test --strict on public corpus passes", r.returncode == 0 and field(r.stdout, "STATUS") == "ok", r.stdout[-800:] + r.stderr[-800:])
+    check("A8 test --strict on public corpus passes", r.returncode == 0 and field(r.stderr, "STATUS") == "ok", r.stdout[-800:] + r.stderr[-800:])
+    check("A8 test --json: stdout is JSON alone, STATUS on stderr", is_json(r.stdout), r.stdout[-300:])
     values = []
     for f in (FIXTURES / "docs").glob("*.spans.json"):
         values += [s["text"] for s in json.loads(f.read_text())["spans"]]
-    leaked = [v for v in values if v in r.stdout]
+    leaked = [v for v in values if v in r.stdout + r.stderr]
     check("A8 test report leaks no corpus value", leaked == [], leaked[:5])
-    check("A8 test report names public corpus only (no private dir in throwaway HOME)", "public" in r.stdout and "private" not in field(r.stdout, "DETAIL"), field(r.stdout, "DETAIL"))
+    check("A8 test report names public corpus only (no private dir in throwaway HOME)", "public" in r.stdout and "private" not in field(r.stderr, "DETAIL"), r.stderr[-300:])
 
     src = FIXTURES / "docs" / "email-thread.txt"
     maps_dir = map_path("x", home).parent
@@ -302,7 +311,10 @@ def test_cli(home):
     after = sorted(p.name for p in maps_dir.glob("*")) if maps_dir.is_dir() else []
     check("A9 scan writes no map", before == after, (before, after))
     r = run(home, ["scan", str(src), "--json"])
-    check("A9 scan --json is parseable and value-free", '"counts"' in r.stdout and "@" not in r.stdout.split("STATUS:")[0], r.stdout[:300])
+    check("A9 scan --json: stdout is JSON alone, STATUS on stderr", is_json(r.stdout) and field(r.stderr, "STATUS") == "ok", r.stdout[-300:])
+    check("A9 scan --json is value-free", '"counts"' in r.stdout and "@" not in r.stdout, r.stdout[:300])
+    r = run(home, ["scan", str(src) + ".missing", "--json"])
+    check("A9 scan --json error: nothing on stdout, STATUS error on stderr", r.returncode == 1 and r.stdout == "" and field(r.stderr, "STATUS") == "error", r.stdout + r.stderr)
 
     out = home / "red.txt"
     r = run(home, ["redact", str(src), "--map", "sess1", "--out", str(out)])
