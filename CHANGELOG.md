@@ -4,6 +4,10 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.62.x
 
+- **1.62.1 — `anonymizer.py --json` prints only JSON on stdout.**
+  - **Before:** `scan --json` and `test --json` added the STATUS lines after the JSON, so `json.load` on the pipe failed with `Extra data`.
+  - **Now:** with `--json`, STATUS, OUTPUT and DETAIL go to stderr, errors included. Read them there if a script took them from stdout.
+
 - **1.62.0 — on accounts without the five-hour limit, the gate runs on the weekly pace.** Anthropic is removing that limit from some plans in stages, and quota guard, failover and fan-out sizing switched off in silence without it.
   - **Not a measurement yet.** No account has received the change: `tests/gate-senza-cinque-ore-verify.py` runs on quota data written by hand. Weekly capacity in eq is an estimate until 5 measured pairs replace it.
   - **`scripts/quota_pace.py`.** The missing figure is read per account, never from the plan name: key absent, null, or an old value past its reset.
