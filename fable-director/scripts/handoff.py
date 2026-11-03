@@ -73,8 +73,18 @@ SECTIONS = [
     "4. Open: what is missing, proposals not executed, questions for the user",
     "5. Paths touched (files, folders, budgets/receipts)",
     "6. Invoke next: skills, commands, briefs to execute",
-    "7. Date and what invalidates this handoff",
+    "7. Resume: where the work stopped and the first step after /clear "
+    "(the next session recaps from here, then takes that step)",
+    "8. Date and what invalidates this handoff",
 ]
+# Una sessione che riparte da un handoff (dopo /clear, o un riavvio entro
+# FRESH_HOURS) apre con un recap dello stato e poi riprende: richiesto da
+# Franz il 03/11. Un handoff vecchio trovato a un avvio qualunque resta un
+# rimando di una riga: il lavoro di oggi puo' essere un altro.
+FRESH_HOURS = 12
+RECAP_LINE = ("Resume from it — your FIRST reply, before anything else: read it, open with "
+              "a short recap of the work state (done, open, next step), then continue from "
+              "its \"Resume\" section; if that step needs the user's choice or ok, ask for it.")
 
 
 def slug_of(cwd):
@@ -317,6 +327,13 @@ def cmd_resume_line(data):
     except (ValueError, OSError):
         pass
     print(f"Handoff {date}: {shown} — read it before starting.")
+    source = str(data.get("source") or "")
+    try:
+        fresh = time.time() - path.stat().st_mtime < FRESH_HOURS * 3600
+    except OSError:
+        fresh = False
+    if source == "clear" or (source == "startup" and fresh):
+        print(RECAP_LINE)
 
 
 def cmd_prepare(here):
@@ -366,7 +383,8 @@ def cmd_written(path):
     print("STATUS: ok")
     print(f"OUTPUT: {p}")
     print(f"DETAIL: {size} bytes (~{size // 4} tokens). Close this session and open "
-          f"`claude` in the same folder: the handoff is announced at startup.")
+          f"`claude` in the same folder: the handoff is announced at startup and the "
+          f"first reply opens with a recap of the work state, then resumes.")
 
 
 def main():

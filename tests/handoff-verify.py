@@ -186,6 +186,31 @@ def main():
           and r2.stdout == "" and r3.stdout.strip() == f"Handoff {today}: docs/handoff-{today}.md — read it before starting.",
           r0.stdout + r1.stdout + r2.stdout + r3.stdout)
 
+    # H6b — after /clear (source "clear") or a restart within 12 h, the line
+    # adds the recap instruction: first reply = recap of the work state, then
+    # resume. An old handoff at a plain startup stays a one-line pointer.
+    rc = run([sys.executable, HANDOFF, "--resume-line"], h6,
+             stdin=json.dumps({"cwd": str(proj), "source": "clear"}))
+    rs = run([sys.executable, HANDOFF, "--resume-line"], h6,
+             stdin=json.dumps({"cwd": str(proj), "source": "startup"}))
+    hp = proj / "docs" / f"handoff-{today}.md"
+    past = time.time() - 13 * 3600
+    os.utime(hp, (past, past))
+    ro = run([sys.executable, HANDOFF, "--resume-line"], h6,
+             stdin=json.dumps({"cwd": str(proj), "source": "startup"}))
+    rco = run([sys.executable, HANDOFF, "--resume-line"], h6,
+              stdin=json.dumps({"cwd": str(proj), "source": "clear"}))
+    rr = run([sys.executable, HANDOFF, "--resume-line"], h6,
+             stdin=json.dumps({"cwd": str(proj), "source": "resume"}))
+    check("H6b recap: clear → recap / fresh startup → recap / 13 h startup → pointer only / "
+          "clear on an old file → recap / resume → pointer only",
+          "FIRST reply" in rc.stdout and "recap of the work state" in rc.stdout
+          and "Resume" in rc.stdout and rc.stdout.count("\n") == 2
+          and "FIRST reply" in rs.stdout
+          and "FIRST reply" not in ro.stdout and ro.stdout.count("\n") == 1
+          and "FIRST reply" in rco.stdout and "FIRST reply" not in rr.stdout,
+          rc.stdout + rs.stdout + ro.stdout + rco.stdout + rr.stdout)
+
     # H7 — SessionStart with the handoff line still fits the onboarding block.
     h7 = work / "h7"
     fd(h7)
@@ -209,11 +234,11 @@ def main():
     r_here = run([sys.executable, HANDOFF, "--prepare", "--here"], h8, cwd=proj)
     p_ok = re.search(r"^PATH: (.*)$", r_ok.stdout, re.M)
     p_here = re.search(r"^PATH: (.*)$", r_here.stdout, re.M)
-    check("H8 prepare: refused (exit 1) with open budget; PATH in store / in docs/ with --here; 7 sections",
+    check("H8 prepare: refused (exit 1) with open budget; PATH in store / in docs/ with --here; 8 sections, the 7th is Resume",
           r_ref.returncode == 1 and "STATUS: refused" in r_ref.stdout and "budget is open" in r_ref.stdout
           and r_ok.returncode == 0 and p_ok and p_ok.group(1).startswith(str(fd(h8) / "handoffs" / slug(proj)))
           and p_here and p_here.group(1) == str(proj / "docs" / f"handoff-{today}.md")
-          and r_ok.stdout.count("\n  ") == 7 and "THEN: bash " in r_ok.stdout and "py.sh" in r_ok.stdout,
+          and r_ok.stdout.count("\n  ") == 8 and "\n  7. Resume:" in r_ok.stdout and "THEN: bash " in r_ok.stdout and "py.sh" in r_ok.stdout,
           r_ref.stdout + r_ok.stdout + r_here.stdout + r_ok.stderr)
 
     # H9 — written: event logged; report prints the Handoff block.

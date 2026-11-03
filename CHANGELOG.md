@@ -2,6 +2,15 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.63.x
+
+- **1.63.0 — after a handoff and /clear, the session opens with a recap of the work and picks up where it stopped.**
+  - **Before:** the startup line only pointed at the handoff file. The next session read it, or not, and waited.
+  - **Now:** after `/clear`, or a restart within 12 hours of the handoff, the startup line tells the first reply to recap the work state (done, open, next step) and then continue. If that step needs the user's choice or ok, it asks.
+  - **New section 7 «Resume»** in the handoff: where the work stopped and the first step to take. The date and what invalidates the handoff move to section 8.
+  - **Unchanged:** an older handoff found at a plain startup, a `--resume` or a compaction stays a one-line pointer: today's work may be something else.
+  - `tests/handoff-verify.py` H6b, H8. Task: fd-handoff-recap-03-11.
+
 ## 1.62.x
 
 - **1.62.2 — the effort warning names the level a subagent really runs at (Claude Code 2.1.316-2.1.317).**

@@ -13,12 +13,13 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" "${CLAUDE_PLUGIN_ROOT}/scripts/handof
 
    If it prints `STATUS: refused`, report its DETAIL line to the user as-is and stop: a budget is open, the task is not at a verified boundary, and mid-task the reasoning in this context is load-bearing.
 
-2. Write the file at the `PATH:` it printed, with the seven `SECTIONS:` as H2 headings, in that order. Rules:
+2. Write the file at the `PATH:` it printed, with the eight `SECTIONS:` as H2 headings, in that order. Rules:
    - about 2k tokens at most; facts with numbers, commands and paths; no narrative, no praise, no restating what the code or the git log already shows;
    - section 2 only for decisions someone would otherwise re-litigate; section 4 lists proposals you made that the user did not take up, and open questions;
    - section 6 names the skills, commands or brief files the next session should invoke first;
-   - section 7 carries today's date and what would make this handoff stale (a release, a file, a decision).
+   - section 7 «Resume» says where the work stopped and the one next step to take, with the command or file to start from: after `/clear` the next session opens with a recap of the work state (done, open, next step) and then takes that step;
+   - section 8 carries today's date and what would make this handoff stale (a release, a file, a decision).
 
 3. Run the `THEN:` command it printed (`--written PATH`): it logs the event and prints the size.
 
-4. Tell the user in two lines: the path, and that sending `/clear` is enough — the startup hooks run again and announce the handoff, and the window and MCP connections stay. You cannot run `/clear` yourself: the user sends it (terminal or phone). A new `claude` process only when something read at process start changed: Claude Code version, plugin update, settings, hooks, MCP servers.
+4. Tell the user in two lines: the path, and that sending `/clear` is enough — the startup hooks run again and announce the handoff, the first reply opens with a recap of the work state and then resumes from section 7, and the window and MCP connections stay. You cannot run `/clear` yourself: the user sends it (terminal or phone). A new `claude` process only when something read at process start changed: Claude Code version, plugin update, settings, hooks, MCP servers.
