@@ -4,6 +4,12 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.62.x
 
+- **1.62.2 — the effort warning names the level a subagent really runs at (Claude Code 2.1.316-2.1.317).**
+  - **Before:** an agent without a pinned effort was assumed to inherit the session effort. Since 2.1.317 a subagent on another model family uses the effort saved for that model (`modelSettings.<model>.effortLevel`) or its default: measured live, an Opus session at `high` ran a Sonnet subagent at `medium`, and the gate stayed silent.
+  - **Now:** `pre-delegation-gate.py` resolves the effort in Claude Code's order: `CLAUDE_CODE_EFFORT_LEVEL`, the call's `effort`, the frontmatter pin, `CLAUDE_CODE_SUBAGENT_EFFORT`, the saved or default effort of a different model, then the session. The warning and the `effort_mismatch` event say which one applies.
+  - **Unchanged:** fd-executor stays pinned to `low`, fd-verifier to `high`. The real level is still read from SubagentStop by `subagent-meter.py`.
+  - `tests/route-hardening-verify.py` H12-H17 use the payload captured on 2.1.317. Task: fd-effort-subagenti-03-11.
+
 - **1.62.1 — `anonymizer.py --json` prints only JSON on stdout, and budget writers no longer overwrite each other.**
   - **Before:** `scan --json` and `test --json` added the STATUS lines after the JSON, so `json.load` on the pipe failed with `Extra data`.
   - **Now:** with `--json`, STATUS, OUTPUT and DETAIL go to stderr, errors included. Read them there if a script took them from stdout.

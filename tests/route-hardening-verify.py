@@ -158,6 +158,55 @@ r8 = gate({"hook_event_name": "PreToolUse", "tool_name": "Agent",
 check("H11 'lower' su fd-executor (pin low) → resta low, silenzio",
       "effort raised" not in r8.stdout and "effort mismatch" not in r8.stdout, r8.stdout)
 
+
+# H12-H17: Claude Code 2.1.316-2.1.317 — un subagente su un modello di
+# un'altra famiglia usa l'effort salvato per quel modello o il suo default,
+# non quello della sessione; CLAUDE_CODE_SUBAGENT_EFFORT vale quando niente
+# altro lo nomina. Payload PreToolUse ricalcato su quello catturato dal vivo
+# (2.1.317: `effort.level` = sessione, nessun campo modello → sessions/<sid>.json).
+import time as _t
+sess_dir = home / ".claude" / "fable-director" / "sessions"
+sess_dir.mkdir(parents=True, exist_ok=True)
+(sess_dir / "s1.json").write_text(json.dumps(
+    {"session_id": "s1", "model": "claude-opus-5-5", "effort": "low", "ts": int(_t.time())}))
+P_SONNET = {"hook_event_name": "PreToolUse", "tool_name": "Agent", "cwd": str(work),
+            "session_id": "s1", "effort": {"level": "low"},
+            "tool_input": {"subagent_type": "general-purpose", "model": "sonnet",
+                           "description": "ping", "prompt": "PONG"}}
+r12 = gate(P_SONNET)
+check("H12 modello diverso, nessun effort salvato → default del modello, non la sessione",
+      "effort mismatch" in r12.stdout and "default effort" in r12.stdout
+      and "inherits the session effort" not in r12.stdout, r12.stdout)
+check("H12b evento effort_mismatch con origine 'model_default'",
+      any('"origin": "model_default"' in e for e in events("effort_mismatch")),
+      str(events("effort_mismatch")))
+(home / ".claude" / "settings.json").write_text(json.dumps(
+    {"modelSettings": {"claude-sonnet-5-5": {"effortLevel": "medium"}}}))
+r13 = gate(P_SONNET)
+check("H13 modello diverso con modelSettings → effort salvato 'medium'",
+      "effort mismatch" in r13.stdout and "saved for that model 'medium'" in r13.stdout, r13.stdout)
+(home / ".claude" / "settings.json").write_text(json.dumps(
+    {"modelSettings": {"claude-sonnet-5-5": {"effortLevel": "low"}}}))
+r13b = gate(P_SONNET)
+check("H13b effort salvato = dichiarato → silenzio",
+      "effort mismatch" not in r13b.stdout, r13b.stdout)
+(home / ".claude" / "settings.json").unlink()
+r14 = gate({**P_SONNET, "tool_input": {"subagent_type": "general-purpose", "model": "opus"}})
+check("H14 stessa famiglia della sessione → eredita la sessione (low = dichiarato), silenzio",
+      "effort mismatch" not in r14.stdout, r14.stdout)
+r15 = gate({**P_SONNET, "tool_input": {"subagent_type": "fable-director:fd-executor"}})
+check("H15 fd-executor (sonnet, pin low) da sessione opus → il pin vince, silenzio",
+      "effort mismatch" not in r15.stdout, r15.stdout)
+env["CLAUDE_CODE_SUBAGENT_EFFORT"] = "high"
+r16 = gate({**P_SONNET, "tool_input": {"subagent_type": "general-purpose"}})
+check("H16 CLAUDE_CODE_SUBAGENT_EFFORT=high, nessun pin → mismatch con origine env",
+      "effort mismatch" in r16.stdout and "CLAUDE_CODE_SUBAGENT_EFFORT" in r16.stdout, r16.stdout)
+r17 = gate({**P_SONNET, "tool_input": {"subagent_type": "general-purpose", "effort": "low"}})
+check("H17 effort della chiamata vince su CLAUDE_CODE_SUBAGENT_EFFORT → silenzio",
+      "effort mismatch" not in r17.stdout, r17.stdout)
+env.pop("CLAUDE_CODE_SUBAGENT_EFFORT")
+(sess_dir / "s1.json").unlink()
+
 print()
 print("external-exec: free tier chiuso ≠ rate limit")
 

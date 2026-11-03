@@ -1023,11 +1023,10 @@ def announce_model(data):
             f"session-cost-report.py)")
 
 
-def agent_pinned_effort(subagent_type):
-    """Effort pinnato nel frontmatter dell'agent shipped col plugin (agents/).
+def agent_frontmatter(subagent_type, key):
+    """Valore di `key` nel frontmatter dell'agent shipped col plugin (agents/).
     Parse a runtime invece di mappa hardcoded: zero drift se il frontmatter
-    cambia. Solo agent fd-* del plugin; per tutti gli altri ritorna None
-    (l'effort eredita dalla sessione, nessuna coerenza da verificare)."""
+    cambia. Solo agent fd-* del plugin; per tutti gli altri ritorna None."""
     if not subagent_type:
         return None
     name = str(subagent_type).split(":")[-1]
@@ -1041,9 +1040,60 @@ def agent_pinned_effort(subagent_type):
                 break
             in_fm = True
             continue
-        if in_fm and line.startswith("effort:"):
+        if in_fm and line.startswith(key + ":"):
             return line.split(":", 1)[1].strip() or None
     return None
+
+
+def agent_pinned_effort(subagent_type):
+    """Effort pinnato nel frontmatter di un agent fd-*; None per gli altri."""
+    return agent_frontmatter(subagent_type, "effort")
+
+
+MODEL_FAMILIES = ("fable", "opus", "sonnet", "haiku")
+
+
+def model_family(model):
+    """Famiglia di un modello (alias o id): 'claude-sonnet-5-5' e 'sonnet'
+    sono la stessa. None per 'inherit', vuoto o sconosciuto."""
+    m = str(model or "").strip().lower()
+    if not m or m == "inherit":
+        return None
+    for fam in MODEL_FAMILIES:
+        if fam in m:
+            return fam
+    return m
+
+
+def session_model(data):
+    """Modello della sessione: il payload PreToolUse non lo porta (misurato su
+    2.1.317), lo scrive lo statusline in sessions/<sid>.json."""
+    return session_snapshot(data).get("model") or os.environ.get("ANTHROPIC_MODEL")
+
+
+def saved_model_effort(family, cwd):
+    """Effort salvato per un modello: `modelSettings.<modello>.effortLevel`
+    nei settings (utente, progetto, locale; vince l'ultimo). E' la tabella che
+    Claude Code 2.1.317 legge per un subagente su un modello diverso dalla
+    sessione. None se nessun file la nomina."""
+    cfg = Path(os.environ.get("CLAUDE_CONFIG_DIR") or (Path.home() / ".claude"))
+    files = [cfg / "settings.json"]
+    if cwd:
+        files += [Path(cwd) / ".claude" / "settings.json",
+                  Path(cwd) / ".claude" / "settings.local.json"]
+    found = None
+    for f in files:
+        try:
+            ms = json.loads(f.read_text()).get("modelSettings")
+        except (OSError, ValueError, AttributeError):
+            continue
+        if not isinstance(ms, dict):
+            continue
+        for k, v in ms.items():
+            lvl = v.get("effortLevel") if isinstance(v, dict) else None
+            if model_family(k) == family and isinstance(lvl, str) and lvl.strip():
+                found = lvl.strip().lower()
+    return found
 
 
 EFFORT_ORDER = ("low", "medium", "high", "xhigh", "max")
@@ -1059,17 +1109,30 @@ def effort_coherence(data, budget):
         declared = (budget or {}).get("effort")
         ti = data.get("tool_input") or {}
         pinned = agent_pinned_effort(ti.get("subagent_type"))
-        # Un agent SENZA effort pinnato eredita quello della sessione: il
-        # payload dell'hook lo porta nativo (`effort.level`, anche in
-        # $CLAUDE_EFFORT). Prima la coerenza si poteva verificare solo sugli
-        # agent fd-*; ora vale per qualunque bersaglio — e un budget dichiarato
-        # 'low' su un target non pinnato, in una sessione a 'xhigh', smette di
-        # essere un mismatch invisibile.
+        # Effort REALE del subagente, nell'ordine di Claude Code 2.1.317
+        # (letto dal binario, misurato con un hook di cattura):
+        # pin nel frontmatter > CLAUDE_CODE_SUBAGENT_EFFORT (2.1.316) >
+        # se il modello del subagente e' di un'altra famiglia rispetto alla
+        # sessione, l'effort salvato per quel modello o il suo default (non
+        # piu' quello della sessione) > effort della sessione. Il payload
+        # porta `effort.level`, l'effort della sessione (anche in
+        # $CLAUDE_EFFORT). CLAUDE_CODE_EFFORT_LEVEL, se impostato, vince su
+        # tutto, chiamata compresa.
         session_eff = ((data.get("effort") or {}).get("level")
                        if isinstance(data.get("effort"), dict) else None)
         session_eff = session_eff or os.environ.get("CLAUDE_EFFORT") or None
-        effective = pinned or session_eff
-        origin = "frontmatter" if pinned else "session"
+        sub_env = str(os.environ.get("CLAUDE_CODE_SUBAGENT_EFFORT") or "").strip().lower()
+        target_model = ti.get("model") or agent_frontmatter(ti.get("subagent_type"), "model")
+        t_fam, s_fam = model_family(target_model), model_family(session_model(data))
+        if pinned:
+            effective, origin = pinned, "frontmatter"
+        elif sub_env in EFFORT_ORDER:
+            effective, origin = sub_env, "env"
+        elif t_fam and s_fam and t_fam != s_fam:
+            effective = saved_model_effort(t_fam, data.get("cwd"))
+            origin = "model_saved" if effective else "model_default"
+        else:
+            effective, origin = session_eff, "session"
         # Claude Code 2.1.292: l'Agent tool accetta `effort`. Un livello col
         # nome vince su frontmatter e sessione; "lower"/"higher" sono un passo
         # dall'effort che l'agente avrebbe avuto (di solito il pin o la sessione).
@@ -1080,6 +1143,9 @@ def effort_coherence(data, budget):
             i = EFFORT_ORDER.index(effective) + (1 if asked == "higher" else -1)
             effective = EFFORT_ORDER[min(max(i, 0), len(EFFORT_ORDER) - 1)]
             origin = "call"
+        forced = str(os.environ.get("CLAUDE_CODE_EFFORT_LEVEL") or "").strip().lower()
+        if forced in EFFORT_ORDER:
+            effective, origin = forced, "env_forced"
         lines = []
         # Una chiamata che alza un esecutore pinnato (fd-executor: low) lo fa
         # ragionare e costare di piu' di quanto il pin garantisce: avviso
@@ -1100,21 +1166,37 @@ def effort_coherence(data, budget):
                          f"allowed — drop `effort` from the call unless the user asked for it.")
         # (1.39) Nessun effort effettivo noto → nessun mismatch: 9 dei 16
         # eventi misurati erano "low≠None", rumore del gate, non un segnale.
-        if not declared or not effective or effective == declared:
+        # Eccezione: modello diverso senza effort salvato → gira al default
+        # del suo modello, non a quello della sessione; un budget che
+        # dichiara l'effort della sessione va avvisato.
+        if origin == "model_default":
+            if not declared or declared != session_eff:
+                return "\n".join(lines) or None
+        elif not declared or not effective or effective == declared:
             return "\n".join(lines) or None
         try:
             payload = {"declared": declared, "pinned": pinned,
                        "effective": effective, "origin": origin,
                        "session_effort": session_eff,
+                       "target_model": target_model,
                        "subagent_type": ti.get("subagent_type"),
                        "task": (budget or {}).get("task")}
             log_gate_event(data, "effort_mismatch", payload)
         except Exception:
             pass
-        where = (f"runs at '{effective}' as the call asks (`effort`)" if origin == "call"
-                 else f"has effort pinned to '{pinned}' (frontmatter)" if pinned
-                 else f"inherits the session effort '{effective}' "
-                      f"(no pinned tier)")
+        where = {
+            "call": f"runs at '{effective}' as the call asks (`effort`)",
+            "frontmatter": f"has effort pinned to '{pinned}' (frontmatter)",
+            "env": f"runs at '{effective}' from CLAUDE_CODE_SUBAGENT_EFFORT",
+            "env_forced": f"runs at '{effective}' from CLAUDE_CODE_EFFORT_LEVEL",
+            "model_saved": f"runs on {target_model}, not the session model: it uses the "
+                           f"effort saved for that model '{effective}' (modelSettings), "
+                           f"not the session's '{session_eff}'",
+            "model_default": f"runs on {target_model}, not the session model: it uses "
+                             f"that model's default effort, not the session's "
+                             f"'{session_eff}' (Claude Code 2.1.317; the real level is in "
+                             f"the SubagentStop log)",
+        }.get(origin, f"inherits the session effort '{effective}' (no pinned tier)")
         lines.append(f"FD ⚠ effort mismatch — the budget declares '{declared}' but "
                      f"{ti.get('subagent_type') or 'the target'} {where}. "
                      f"Delegation allowed — double-check the route or reopen the "
