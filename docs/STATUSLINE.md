@@ -79,8 +79,13 @@ The plain line has no segments to learn: its exception texts are the legend
 Updates are event-driven, and event triggers go quiet exactly while a
 coordinator waits on background subagents — the minutes when the budget climbs
 and the in-flight count is the only thing you'd want to see. Since 1.29.0 the
-installer also writes `refreshInterval: 5` (seconds) so the line keeps breathing
-during the wait; `FD_STATUSLINE_REFRESH=<n>` changes it, `0` turns it off.
+installer also writes `refreshInterval` (30 seconds since 1.63.1, 5 before) so the
+line keeps breathing during the wait; `FD_STATUSLINE_REFRESH=<n>` changes it, `0`
+turns it off. One render runs at a time per session: a refresh that finds one
+in progress prints the last line at once, a render that takes longer than 2
+seconds (`FD_SL_WAIT_S`) leaves the last line on screen and finishes for the
+next refresh, and the heavy parts (transcript scan, delegations in flight,
+external calls, session snapshot) run at most every 30 seconds (`FD_SL_HEAVY_S`).
 
 On narrow screens (real terminal width via `COLUMNS`) both rows trim by the same
 rule — **decoration goes, data stays**. In the plain line the `caveman` badge

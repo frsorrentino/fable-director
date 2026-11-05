@@ -69,7 +69,7 @@ The numbers behind these lines live in `/fable-director:status` (one row per ite
 
 On narrow screens both rows degrade deterministically, and the rule is the same: **decoration goes, data stays.** Row 1 sheds the `caveman` badge first, then the `ctx` gauge (the percentage right next to it already says it, and the colour already carries the alarm), then the reset times — the model, every percentage, `fail ×N` and the alarms survive at any width. Row 2 sheds `cache` first, then `dlg`, then `xf` — never the budget. Width comes from the real terminal (`COLUMNS`, Claude Code ≥ 2.1.153; fallback 120) and is measured in characters — the zen glyphs are multibyte-safe.
 
-Renders are event-driven **plus** a 5-second timer (`refreshInterval`, written by the installer): event triggers go quiet precisely while the coordinator waits on background subagents, which is when `bdg` and `dlg ⟲N` move. `FD_STATUSLINE_REFRESH=<seconds>` before running the installer changes it, `0` disables the timer.
+Renders are event-driven **plus** a 30-second timer (`refreshInterval`, written by the installer; 5 seconds before 1.63.1): event triggers go quiet precisely while the coordinator waits on background subagents, which is when `bdg` and `dlg ⟲N` move. `FD_STATUSLINE_REFRESH=<seconds>` before running the installer changes it, `0` disables the timer.
 
 ## Commands
 

@@ -4,6 +4,13 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.63.x
 
+- **1.63.1 — the statusline no longer disappears: one render at a time, the last line at once, and it runs on Windows again.**
+  - **Before:** on a loaded machine one render took 10-14 s. With `refreshInterval` 5 the renders piled up (38 starts in 20 s across four sessions), Claude Code cancelled the one in progress at every update and the line went blank. On Windows the inline `python -c` block had grown past the 32,767-character command-line limit, so Python never started and the line showed only «Claude».
+  - **Now:** the computation lives in `statusline-core.py`, and the plain line renders in that same process. One render runs per session, under a lock (`statusline-cache/<sid>.lock`). A refresh that finds one in progress prints the last line at once. A render that takes more than 2 s (`FD_SL_WAIT_S`) leaves the last line on screen and finishes in the background for the next refresh. The heavy parts (transcript scan, delegations in flight, external calls, session snapshot with the advice, weekly pace) run at most every 30 s (`FD_SL_HEAVY_S`), and at once when model, effort, folder or budget change. The installer writes `refreshInterval` 30; existing installs get it at the next session start.
+  - **Measured** (4 sessions, one refresh per second each for 20 s, CPU saturated): on Linux the median render went from 22.5 s to 0.45 s and Python starts from 137 to 34 for 80 renders; on Windows the p90 went from 22.9 s to 5.4 s and Python starts from 160 to 67. Not a single blank line.
+  - **Unchanged:** segments, colours, plain and expert modes, the quota bridge to the gate.
+  - `tests/statusline-cadence-verify.py` C1-C7. Task: fable-director-statusline-05-11.
+
 - **1.63.0 — after a handoff and /clear, the session opens with a recap of the work and picks up where it stopped.**
   - **Before:** the startup line only pointed at the handoff file. The next session read it, or not, and waited.
   - **Now:** after `/clear`, or a restart within 12 hours of the handoff, the startup line tells the first reply to recap the work state (done, open, next step) and then continue. If that step needs the user's choice or ok, it asks.

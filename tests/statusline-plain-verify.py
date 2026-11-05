@@ -27,6 +27,11 @@ import json, os, re, subprocess, sys, tempfile, time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+# Questi casi cambiano lo stato tra due render della stessa sessione a pochi
+# secondi: verificano il calcolo, non la cadenza delle parti pesanti (1.63.1,
+# statusline-cadence-verify.py), quindi la cadenza qui e zero.
+os.environ["FD_SL_HEAVY_S"] = "0"
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent / "fable-director" / "scripts"
 passed, failed = [], []
