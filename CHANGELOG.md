@@ -4,6 +4,11 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.64.x
 
+- **1.64.3 — the shared task contract takes supervisor 0.8.129's `task.follows`.**
+  - **Before:** the copy of `schemas/task-contract.v1.json` (additionalProperties false) refused the contracts that use the optional `task.follows` (the id of the task this one follows).
+  - **Now:** the copy is byte-identical to supervisor 0.8.129 again, so those contracts pass.
+  - Follow-up of supervisor-ok-seguito-05-11.
+
 - **1.64.2 — one resume line after a handoff, even when supervisor wrote it; no «close the session» when supervisor sends /clear.**
   - **Before:** at startup `--resume-line` announced the newest fable-director handoff of the folder, even when supervisor had written a newer one minutes later: with supervisor's automatic /clear the session would see two lines in conflict. After `--written`, the DETAIL always said to close the session and open `claude` again.
   - **Now:** `handoff.py --written` also writes the pointer shared with supervisor, `<state_dir>/handoffs/last-<sha1(realpath cwd)[:12]>.json` (`path`, `at`, `by: fable-director`; supervisor's other keys stay). `--resume-line` stays silent when the pointer names another handoff written after ours: supervisor announces its own. With supervisor's `~/.claude/supervisor/features.json` saying `autoclear_after_handoff` (updated within 24 hours), the DETAIL says /clear arrives by itself at the end of the turn.
