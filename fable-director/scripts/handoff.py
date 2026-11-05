@@ -24,7 +24,9 @@ command:
                one-word reply) → ONE additionalContext line telling the model
                to ask the user, marker consumed.
   --resume-line (SessionStart, stdin = hook payload) newest handoff for this
-               cwd, < 14 days → one line <= 110 chars naming the file.
+               cwd, < 14 days → one line <= 110 chars naming the file; silent when
+               supervisor's pointer (<state_dir>/handoffs/last-<sha1>.json) names a
+               newer handoff of its own. --written writes that pointer too.
   --prepare [--here]  (command) refuses with an open budget; otherwise prints
                the destination path, the context %, the sections. The model
                then writes the file and calls --written PATH (event
@@ -311,12 +313,67 @@ def newest_handoff(cwd):
     return path, date
 
 
+# Puntatore condiviso con supervisor (1.64.2, supervisor-clear-dopo-handoff-05-11):
+# <state_dir>/handoffs/last-<sha1(realpath cwd)[:12]>.json = {"path", "at", "by", ...}.
+# L'ultimo handoff scritto per la cartella, da chiunque: una sola riga di ripresa.
+def supervisor_state_dir():
+    cfg = load_json(Path.home() / ".config" / "cc-supervisor" / "config.json")
+    sd = cfg.get("state_dir") if isinstance(cfg, dict) else None
+    return Path(os.path.expanduser(str(sd))) if sd else Path.home() / ".claude"
+
+
+def pointer_path(cwd):
+    key = hashlib.sha1(os.path.realpath(str(cwd)).encode("utf-8")).hexdigest()[:12]
+    return supervisor_state_dir() / "handoffs" / f"last-{key}.json"
+
+
+def write_pointer(cwd, path):
+    """Il puntatore indica il handoff appena scritto; le chiavi altrui (announced) restano."""
+    pp = pointer_path(cwd)
+    cur = load_json(pp)
+    cur = cur if isinstance(cur, dict) else {}
+    cur.update({"path": str(Path(path).resolve()), "at": int(time.time()), "by": "fable-director"})
+    try:
+        pp.parent.mkdir(parents=True, exist_ok=True)
+        tmp = pp.with_name(f"{pp.name}.{os.getpid()}.tmp")
+        tmp.write_text(json.dumps(cur), encoding="utf-8")
+        os.replace(tmp, pp)
+    except OSError:
+        pass
+
+
+def superseded(cwd, path):
+    """True se il puntatore indica un ALTRO handoff, scritto dopo il nostro."""
+    ptr = load_json(pointer_path(cwd))
+    if not isinstance(ptr, dict) or not ptr.get("path"):
+        return False
+    try:
+        if os.path.realpath(str(ptr["path"])) == os.path.realpath(str(path)):
+            return False
+        return float(ptr.get("at") or 0) > Path(path).stat().st_mtime
+    except (OSError, TypeError, ValueError):
+        return False
+
+
+def autoclear_on():
+    """supervisor manda /clear da se dopo un --written: features.json fresco (< 24 h)."""
+    f = load_json(Path.home() / ".claude" / "supervisor" / "features.json")
+    if not isinstance(f, dict) or f.get("autoclear_after_handoff") is not True:
+        return False
+    try:
+        return time.time() - float(f.get("updated_at") or 0) < 24 * 3600
+    except (TypeError, ValueError):
+        return False
+
+
 def cmd_resume_line(data):
     cwd = data.get("cwd") or os.getcwd()
     hit = newest_handoff(cwd)
     if not hit:
         return
     path, date = hit
+    if superseded(cwd, path):
+        return   # c'e un handoff piu recente di supervisor: la riga e sua
     shown = str(path)
     home = str(Path.home())
     if shown.startswith(home):
@@ -380,11 +437,17 @@ def cmd_written(path):
     log_event("handoff_written", {"path": str(p), "bytes": size,
                                   "pct": (round(pct, 1) if pct is not None else None)},
               sid, os.getcwd())
+    write_pointer(os.getcwd(), p)
     print("STATUS: ok")
     print(f"OUTPUT: {p}")
-    print(f"DETAIL: {size} bytes (~{size // 4} tokens). Close this session and open "
-          f"`claude` in the same folder: the handoff is announced at startup and the "
-          f"first reply opens with a recap of the work state, then resumes.")
+    if autoclear_on():
+        print(f"DETAIL: {size} bytes (~{size // 4} tokens). supervisor sends /clear at the "
+              f"end of this turn: nothing to do. The handoff is announced after the /clear "
+              f"and the first reply opens with a recap of the work state, then resumes.")
+    else:
+        print(f"DETAIL: {size} bytes (~{size // 4} tokens). Close this session and open "
+              f"`claude` in the same folder: the handoff is announced at startup and the "
+              f"first reply opens with a recap of the work state, then resumes.")
 
 
 def main():

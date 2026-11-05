@@ -14,6 +14,9 @@ Real scripts against a throwaway HOME; no model, no network.
   H8  --prepare: refused with an open budget; PATH in the store, or in docs/ with --here
   H9  --written: event logged, size printed; report shows the Handoff block
   H10 statusline says /fable-director:handoff at 85%
+  H11 --written writes the pointer shared with supervisor (last-<sha1>.json)
+  H12 --resume-line is silent when the pointer names a newer handoff of supervisor's
+  H13 --written: with supervisor's autoclear on, no «close the session»
 
 Usage: python3 tests/handoff-verify.py   (exit 0 = all green)
 """
@@ -263,6 +266,62 @@ def main():
     check("H10 statusline: 'context N% full — /fable-director:handoff, then /clear'",
           "full — /fable-director:handoff, then /clear" in src
           and "finish the task and start a new session" not in src)
+
+    # H11 — written writes the pointer shared with supervisor; foreign keys kept;
+    # state_dir from ~/.config/cc-supervisor/config.json moves it.
+    h11 = work / "h11"
+    proj = work / "proj11"   # cartella propria: in quella di H6 c'e docs/handoff-<oggi>.md
+    proj.mkdir()
+    fd(h11)
+    key = hashlib.sha1(os.path.realpath(str(proj)).encode("utf-8")).hexdigest()[:12]
+    ptr = h11 / ".claude" / "handoffs" / f"last-{key}.json"
+    ptr.parent.mkdir(parents=True)
+    ptr.write_text(json.dumps({"path": "/elsewhere/old.md", "at": 1, "by": "supervisor",
+                               "announced": ["sA"]}))
+    d11 = fd(h11) / "handoffs" / slug(proj)
+    d11.mkdir(parents=True)
+    f11 = d11 / f"{today}.md"
+    f11.write_text("# handoff\n")
+    r11 = run([sys.executable, HANDOFF, "--written", str(f11)], h11, cwd=proj)
+    p11 = json.loads(ptr.read_text()) if ptr.is_file() else {}
+    sdir = h11 / "altrove"
+    (h11 / ".config" / "cc-supervisor").mkdir(parents=True)
+    (h11 / ".config" / "cc-supervisor" / "config.json").write_text(json.dumps({"state_dir": str(sdir)}))
+    run([sys.executable, HANDOFF, "--written", str(f11)], h11, cwd=proj)
+    p11b = sdir / "handoffs" / f"last-{key}.json"
+    check("H11 written: pointer last-<sha1>.json → our file, by fable-director, announced kept; "
+          "state_dir from the supervisor config",
+          r11.returncode == 0 and os.path.realpath(p11.get("path", "")) == os.path.realpath(str(f11))
+          and p11.get("by") == "fable-director" and p11.get("announced") == ["sA"]
+          and abs(p11.get("at", 0) - time.time()) < 60 and p11b.is_file(),
+          json.dumps(p11) + r11.stdout + r11.stderr)
+    (h11 / ".config" / "cc-supervisor" / "config.json").unlink()
+
+    # H12 — resume line: a newer handoff of supervisor's → silence; ours or older → the line.
+    other = h11 / "sup-handoff.md"
+    other.write_text("# supervisor\n")
+    past = time.time() - 600
+    os.utime(f11, (past, past))
+    ptr.write_text(json.dumps({"path": str(other), "at": int(time.time()), "by": "supervisor"}))
+    ra = run([sys.executable, HANDOFF, "--resume-line"], h11, stdin=json.dumps({"cwd": str(proj)}))
+    ptr.write_text(json.dumps({"path": str(other), "at": int(past) - 3600, "by": "supervisor"}))
+    rb = run([sys.executable, HANDOFF, "--resume-line"], h11, stdin=json.dumps({"cwd": str(proj)}))
+    ptr.write_text(json.dumps({"path": str(f11), "at": int(time.time()), "by": "fable-director"}))
+    rc2 = run([sys.executable, HANDOFF, "--resume-line"], h11, stdin=json.dumps({"cwd": str(proj)}))
+    check("H12 resume-line: newer supervisor handoff → silence; older → line; pointer to ours → line",
+          ra.stdout == "" and rb.stdout.startswith(f"Handoff {today}:")
+          and rc2.stdout.startswith(f"Handoff {today}:"), ra.stdout + "|" + rb.stdout + "|" + rc2.stdout)
+
+    # H13 — DETAIL: supervisor's autoclear on (features.json < 24 h) → no «close the session».
+    feat = h11 / ".claude" / "supervisor" / "features.json"
+    feat.parent.mkdir(parents=True)
+    feat.write_text(json.dumps({"autoclear_after_handoff": True, "updated_at": int(time.time())}))
+    ron = run([sys.executable, HANDOFF, "--written", str(f11)], h11, cwd=proj)
+    feat.write_text(json.dumps({"autoclear_after_handoff": True, "updated_at": int(time.time()) - 2 * 86400}))
+    rold = run([sys.executable, HANDOFF, "--written", str(f11)], h11, cwd=proj)
+    check("H13 written: autoclear on → «supervisor sends /clear»; stale features.json → close and reopen",
+          "supervisor sends /clear" in ron.stdout and "Close this session" not in ron.stdout
+          and "Close this session" in rold.stdout, ron.stdout + rold.stdout)
 
     print(f"\n{len(passed)} passed, {len(failed)} failed")
     if failed:
