@@ -68,6 +68,19 @@ wording, production writes without a backup.
   `git -C <dir>` also loads the TARGET project's config. Known limit: a `cd`
   persisted in the Bash shell is invisible to the hook. A perimeter config
   that stops parsing warns instead of going silent (throttled per mtime).
+  Same file, `stakes` key (1.64.0): `"stakes": "alta"` (or `{"level": "alta",
+  "why": "pratica legale"}`) declares the folder and everything below it high
+  stakes for the model advice; the global `perimeter.json` takes
+  `"stakes": {"/path": "alta"}`. Read by `advice.py`, never by the gates.
+- 🧭 **Model advice (`advice.py`, from the statusline)** — proposes model and
+  effort per session for the claude-master relay. Quota rules first (5 hours,
+  week, pace, Fable window), then the importance of the work (axis 2): the
+  active task's importance from supervisor's
+  `~/.claude/supervisor/task-importance.json` (nearest folder wins, ignored when
+  older than 24 h), otherwise the declared `stakes` of the folder. High → Fable
+  5.1 at least `high`, `xhigh` with the week under 50%; medium → Opus 5.5 at
+  least `high`; low → the current choice. `max` is never proposed. The reason
+  says why in plain words.
 - ⚖️ **`PostToolUse` (MCP meter)** — measures context weight along two distinct
   axes: *flow* (bytes each MCP server pushes into context, paid once per call)
   and *stock* (schema bytes a `ToolSearch` load injects into the prefix, re-paid

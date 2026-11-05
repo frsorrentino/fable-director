@@ -2,6 +2,16 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.64.x
+
+- **1.64.0 — the model advice follows the importance of the work, not only the quota.**
+  - **Before:** `advice.py` applied only quota rules (five hours, week, pace, Fable window), the main session on a non-top model and the effort warning; otherwise it kept the current choice. A criminal-law session on Opus 5.5 medium got «fine as it is».
+  - **Now:** after the quota rules comes the importance of the work (axis 2, cost of error). **High** proposes Fable 5.1 at least `high`, `xhigh` with the week under 50%. **Medium** proposes Opus 5.5 at least `high`. **Low** keeps the current choice. An effort chosen above the proposal stays, unless the quota is at 70% or more (then `high`). `max` is never proposed: it stays the person's call, for final documents.
+  - **Where the importance comes from:** the active task of the folder, written by supervisor in `~/.claude/supervisor/task-importance.json` (the nearest folder wins, ignored when older than 24 hours); without a task, the folder declared with `"stakes"` in `.fd-perimeter.json` (in the folder or one above) or in the global `perimeter.json`.
+  - **The reason says it in plain words:** «pratica legale (posta alta, dichiarata): Fable 5.1 xhigh, settimana al 32%».
+  - **Unchanged:** quota rules win; with the Fable window at 80% or more a high-importance session gets Opus 5.5 + `/advisor fable`. The advice never applies itself. Snapshot keys stay the same.
+  - `tests/advice-verify.py` A12-A23. Task: fable-director-consiglio-posta-05-11.
+
 ## 1.63.x
 
 - **1.63.1 — the statusline no longer disappears: one render at a time, the last line at once, and it runs on Windows again.**

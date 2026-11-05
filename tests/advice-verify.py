@@ -13,6 +13,11 @@ contratto claude-master 1.37 parte A).
   A9 quota assente → nessun numero inventato, xhigh resta
   A10 CLI --session riscrive l'advice nello snapshot (scrittura atomica, altre chiavi intatte)
   A11 statusline reale: lo snapshot porta account, cwd e advice
+  A12-A18 importanza del lavoro (1.64.0): alta → Fable 5.1 high/xhigh, media →
+      Opus 5.5 high, bassa → scelta attuale; quota e finestra Fable restano sopra
+  A19-A22 fonti: registro di supervisor (cartella piu vicina, 24 h), poi
+      «stakes» in .fd-perimeter.json o nel perimeter.json globale
+  A23 statusline reale: importanza dal registro nello snapshot
 
 Usage: python3 tests/advice-verify.py   (exit 0 = all green)
 """
@@ -20,14 +25,18 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 SCRIPTS = HERE.parent / "fable-director" / "scripts"
 ADV = SCRIPTS / "advice.py"
+# su Windows subprocess cerca prima in System32, dove bash.exe e quello di WSL
+BASH = shutil.which("bash") or "bash"
 passed, failed = [], []
 
 
@@ -98,7 +107,7 @@ acct = hashlib.sha256(str(home / ".claude").encode()).hexdigest()[:8]
 (base / f"quota-{acct}.json").write_text(json.dumps(q(w=90)))
 sf = base / "sessions" / "s1.json"
 sf.write_text(json.dumps(dict(snap(), ts=NOW, account=acct, cwd=str(home), extra=1)))
-env = dict(os.environ, HOME=str(home))
+env = dict(os.environ, HOME=str(home), USERPROFILE=str(home))   # Windows: Path.home() = USERPROFILE
 env.pop("CLAUDE_CONFIG_DIR", None)
 r = subprocess.run([sys.executable, str(ADV), "--session", "s1"], capture_output=True,
                    text=True, env=env, timeout=30)
@@ -115,13 +124,119 @@ payload = {"session_id": "s2", "cwd": str(home), "workspace": {"current_dir": st
                                                 "cache_read_input_tokens": 20000}},
            "rate_limits": {"five_hour": {"used_percentage": 12, "resets_at": NOW + 3600},
                            "seven_day": {"used_percentage": 30, "resets_at": NOW + 86400}}}
-r = subprocess.run(["bash", str(SCRIPTS / "statusline-ctx.sh")], input=json.dumps(payload),
+r = subprocess.run([BASH, str(SCRIPTS / "statusline-ctx.sh")], input=json.dumps(payload),
                    capture_output=True, text=True, env=env, timeout=60)
 f2 = base / "sessions" / "s2.json"
 d2 = json.loads(f2.read_text()) if f2.is_file() else {}
 check("A11 statusline: account, cwd, advice", d2.get("account") == acct
       and d2.get("cwd") == str(home) and (d2.get("advice") or {}).get("effort") == "max"
       and (d2.get("advice") or {}).get("when") == "now", r.stderr[-300:] + str(d2))
+
+# --- 1.64.0: importanza del lavoro (asse 2) ---------------------------------
+ALTA = {"level": "alta", "why": "ricorso in appello", "source": "task", "task": "acme-ricorso-05-11"}
+MEDIA = {"level": "media", "why": None, "source": "task", "task": "t-media"}
+BASSA = {"level": "bassa", "why": None, "source": "task", "task": "t-bassa"}
+
+a = adv.compute(snap(model=OPUS, effort="medium"), q(r=10, w=30), {}, False, NOW, importance=ALTA)
+check("A12 importanza alta, settimana 30% → Fable 5.1 xhigh, motivo in chiaro",
+      a["model"] == FABLE and a["effort"] == "xhigh" and a["differs"] is True
+      and "ricorso in appello" in a["reason"] and "importanza alta" in a["reason"]
+      and "Fable 5.1 xhigh" in a["reason"], str(a))
+
+a = adv.compute(snap(model=OPUS, effort="medium"), q(r=10, w=60), {}, False, NOW, importance=ALTA)
+check("A13 alta, settimana 60% → Fable 5.1 high", a["model"] == FABLE and a["effort"] == "high", str(a))
+
+a = adv.compute(snap(model=OPUS, effort="medium"), q(r=92, w=30), {}, False, NOW, importance=ALTA)
+b = adv.compute(snap(model=OPUS, effort="medium"), q(r=10, w=88), {}, False, NOW, importance=ALTA)
+check("A14 alta ma quota 5h 92% o settimana 88% → vincono le regole di quota",
+      a["model"] == OPUS and a["effort"] == "medium" and b["model"] == OPUS
+      and b["effort"] == "medium", f"{a} {b}")
+
+a = adv.compute(snap(effort="max"), q(r=10, w=30), {}, False, NOW, importance=ALTA)
+b = adv.compute(snap(effort="max"), q(r=10, w=72), {}, False, NOW, importance=ALTA)
+c = adv.compute(snap(effort="xhigh"), q(r=10, w=60), {}, False, NOW, importance=ALTA)
+check("A15 alta: max scelto resta sotto il 70%, a 72% → high; xhigh al 60% resta (almeno high)",
+      a["effort"] == "max" and a["differs"] is False and b["effort"] == "high"
+      and c["effort"] == "xhigh", f"{a['effort']} {b['effort']} {c['effort']}")
+
+a = adv.compute(snap(model=FABLE, effort="high"), q(), {}, False, NOW, importance=MEDIA)
+b = adv.compute(snap(model=OPUS, effort="low"), q(), {}, False, NOW, importance=MEDIA)
+check("A16 media → Opus 5.5 high (da Fable high e da Opus low)",
+      a["model"] == OPUS and a["effort"] == "high" and b["model"] == OPUS
+      and b["effort"] == "high" and "importanza media" in a["reason"], f"{a} {b}")
+
+a = adv.compute(snap(model=OPUS, effort="medium"), q(), {}, False, NOW, importance=BASSA)
+check("A17 bassa → la scelta attuale, il motivo lo dice",
+      a["model"] == OPUS and a["effort"] == "medium" and a["differs"] is False
+      and "importanza bassa" in a["reason"], str(a))
+
+a = adv.compute(snap(model=OPUS, effort="medium"), q(r=10, w=42),
+                {"premium_weekly_fraction": 0.5}, False, NOW, importance=ALTA)
+check("A18 alta ma finestra Fable ≥80% → Opus (effort al massimo high) + /advisor fable",
+      a["model"] == OPUS and a["effort"] == "medium" and "/advisor fable" in a["reason"]
+      and "ricorso in appello" in a["reason"], str(a))
+
+# A19-A22: le fonti dell'importanza
+t = Path(tempfile.mkdtemp(prefix="fd-imp"))
+os.environ["HOME"] = str(t)
+adv.BASE = t / ".claude" / "fable-director"
+adv.BASE.mkdir(parents=True)
+reg = t / "task-importance.json"
+os.environ["CM_IMPORTANCE_FILE"] = str(reg)
+work = t / "clienti" / "acme" / "contenzioso" / "atto"
+work.mkdir(parents=True)
+reg.write_text(json.dumps({"version": 1, "updated_at": NOW, "dirs": {
+    str(t / "clienti" / "acme"): {"importance": "media", "task": "acme-generale", "why": "generale",
+                                     "source": "declared", "state": "open", "last_step_at": NOW},
+    str(t / "clienti" / "acme" / "contenzioso").replace("/", "\\").upper():
+        {"importance": "alta", "task": "acme-ricorso", "why": "ricorso in appello",
+         "source": "declared", "state": "running", "last_step_at": NOW}}}))
+i = adv.importance_for(str(work), NOW)
+check("A19 compito attivo: vince la cartella piu vicina, \\ e maiuscole indifferenti",
+      i and i["level"] == "alta" and i["task"] == "acme-ricorso" and i["source"] == "task", str(i))
+
+reg.write_text(json.dumps({"version": 1, "updated_at": NOW - 2 * 86400, "dirs": {
+    str(t / "privato"): {"importance": "bassa", "task": "x"}}}))
+(t / "clienti" / "acme" / ".fd-perimeter.json").write_text(json.dumps(
+    {"never_write": [], "stakes": {"level": "alta", "why": "pratica legale"}}))
+i = adv.importance_for(str(work), NOW)
+check("A20 registro vecchio di 2 giorni ignorato; cartella dichiarata sopra → alta",
+      i and i["level"] == "alta" and i["source"] == "folder" and i["why"] == "pratica legale", str(i))
+a = adv.compute(snap(model=OPUS, effort="medium"), q(r=10, w=30), {}, False, NOW, importance=i)
+check("A20b motivo in chiaro: «pratica legale ... Fable 5.1 xhigh»",
+      a["reason"].startswith("pratica legale") and "Fable 5.1 xhigh" in a["reason"], a["reason"])
+
+reg.write_text(json.dumps({"version": 1, "updated_at": NOW, "dirs": {
+    str(t / "clienti" / "acme" / "contenzioso"): {"importance": "bassa", "task": "fattura"}}}))
+i = adv.importance_for(str(work), NOW)
+check("A21 il compito batte la cartella dichiarata (bassa su cartella alta)",
+      i and i["level"] == "bassa" and i["source"] == "task", str(i))
+
+reg.unlink()
+(t / "clienti" / "acme" / ".fd-perimeter.json").unlink()
+(adv.BASE / "perimeter.json").write_text(json.dumps(
+    {"stakes": {str(t / "fornitori" / "beta"): "alta"}}))
+(t / "fornitori" / "beta" / "prod").mkdir(parents=True)
+i1 = adv.importance_for(str(t / "fornitori" / "beta" / "prod"), NOW)
+i2 = adv.importance_for(str(t / "privato"), NOW)
+check("A22 senza registro: «stakes» nel perimeter.json globale; altrove nessuna importanza",
+      i1 and i1["level"] == "alta" and i1["source"] == "folder" and i2 is None, f"{i1} {i2}")
+
+# A23 statusline reale: lo snapshot porta il consiglio di importanza
+reg.write_text(json.dumps({"version": 1, "updated_at": int(time.time()), "dirs": {
+    str(home): {"importance": "alta", "task": "acme-ricorso", "why": "ricorso in appello"}}}))
+payload3 = dict(payload, session_id="s3", model={"id": OPUS, "display_name": "Opus 5.5"},
+                effort={"level": "medium"})
+env3 = dict(env, USERPROFILE=str(home), CM_IMPORTANCE_FILE=str(reg), FD_SL_HEAVY_S="0")
+r = subprocess.run([BASH, str(SCRIPTS / "statusline-ctx.sh")], input=json.dumps(payload3),
+                   capture_output=True, text=True, encoding="utf-8", errors="replace",
+                   env=env3, timeout=60)
+f3 = base / "sessions" / "s3.json"
+d3 = json.loads(f3.read_text()) if f3.is_file() else {}
+ad = d3.get("advice") or {}
+check("A23 statusline: importanza alta dal registro → Fable 5.1 nello snapshot",
+      ad.get("model") == FABLE and ad.get("effort") in ("high", "xhigh")
+      and "ricorso in appello" in (ad.get("reason") or ""), r.stderr[-300:] + str(d3))
 
 print(f"\n{len(passed)} passed, {len(failed)} failed")
 sys.exit(1 if failed else 0)
