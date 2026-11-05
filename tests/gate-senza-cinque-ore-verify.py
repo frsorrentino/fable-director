@@ -37,6 +37,11 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+# Questi casi cambiano lo stato tra due render della stessa sessione a pochi
+# secondi: verificano il calcolo, non la cadenza delle parti pesanti (1.63.1,
+# statusline-cadence-verify.py), quindi la cadenza qui e zero.
+os.environ["FD_SL_HEAVY_S"] = "0"
+
 HERE = Path(__file__).resolve().parent
 SCRIPTS = HERE.parent / "fable-director" / "scripts"
 FDT, GATE = str(SCRIPTS / "fd-telemetry.py"), str(SCRIPTS / "pre-delegation-gate.py")

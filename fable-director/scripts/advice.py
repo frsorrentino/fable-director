@@ -10,9 +10,26 @@ Regole (la prima che scatta vince; deterministiche, zero token):
   3. su Fable, finestra premium -> Opus 5.5 high + /advisor fable: Opus esegue,
      (7D / premium_weekly_fraction  Fable giudica (bound dichiarato in
      di plan-<acct>.json) >= 80%   plan-<acct>.json, mai una misura)
-  4. sessione principale non di punta -> Opus 5.5: la principale pianifica e
+     (anche fuori da Fable quando l'importanza alta proporrebbe Fable)
+  4. importanza del lavoro (1.64.0), asse 2 della policy (costo dell'errore):
+       alta  -> Fable 5.1 almeno high; xhigh se la settimana e sotto il 50%
+       media -> Opus 5.5 almeno high
+       bassa -> nessuna proposta da qui (le regole sotto)
+     L'effort scelto sopra la proposta resta, salvo quota >= 70% (-> high);
+     max non si propone mai: e una scelta della persona, per gli atti finali.
+     Fonte, la piu vicina vince:
+       a) il compito attivo della cartella, dichiarato da supervisor in
+          ~/.claude/supervisor/task-importance.json (CM_IMPORTANCE_FILE per i
+          test): {"dirs": {"/cartella": {"importance": "alta"|"media"|"bassa",
+          "task", "why", ...}}}, cartella della sessione o una sopra;
+          file piu vecchio di 24 h = supervisor fermo, si ignora;
+       b) senza compito, la cartella dichiarata: "stakes" in .fd-perimeter.json
+          della cartella o di una sopra ("alta" oppure {"level": "alta",
+          "why": "pratica legale"}), poi "stakes": {"/cartella": ...} nel
+          globale ~/.claude/fable-director/perimeter.json.
+  5. sessione principale non di punta -> Opus 5.5: la principale pianifica e
      verifica, l'esecuzione va agli agenti
-  5. effort xhigh/max, con 5h o settimana >= 70% -> high: consuma quota in
+  6. effort xhigh/max, con 5h o settimana >= 70% -> high: consuma quota in
      silenzio. Sotto il 70% (o senza dati di quota) il max scelto apposta resta.
   altrimenti la scelta attuale.
 
@@ -62,7 +79,14 @@ def _pct(v):
         return None
 
 
-def compute(snap, quota, plan, budget_open, now, burn=None):
+def _at_least(effort, target, hot):
+    """Almeno `target`; sopra resta la scelta della persona, salvo quota calda."""
+    if effort in EFFORTS and EFFORTS.index(effort) > EFFORTS.index(target):
+        return "high" if hot else effort
+    return target
+
+
+def compute(snap, quota, plan, budget_open, now, burn=None, importance=None):
     model = snap.get("model") or ""
     effort = snap.get("effort")
     ctx = int(snap.get("ctx_tokens") or 0)
@@ -73,6 +97,9 @@ def compute(snap, quota, plan, budget_open, now, burn=None):
     frac = _pct(plan.get("premium_weekly_fraction"))
     base = model.split("[")[0]
     is_fable = base.startswith(FABLE)
+    imp = importance or {}
+    level = imp.get("level")
+    hot = max(r or 0, w or 0) >= 70
 
     if r is not None and r >= 90:
         m, e = OPUS, _cap(effort, "medium")
@@ -87,10 +114,20 @@ def compute(snap, quota, plan, budget_open, now, burn=None):
         m, e = OPUS, _cap(effort, "medium")
         why = (f"consumo {burn:.1f}%/h, sopra il ritmo settimanale: Opus 5.5 a effort {e} "
                f"per i lavori nuovi")
-    elif is_fable and w is not None and frac and w / frac >= 80:
+    elif (is_fable or level == "alta") and w is not None and frac and w / frac >= 80:
         m, e = OPUS, _cap(effort, "high")
         why = (f"finestra Fable ≤{min(100, w / frac):.0f}%: Opus 5.5 esegue, "
                f"/advisor fable per i giudizi")
+        if level == "alta":
+            why = f"{_imp_label(imp)}, ma {why}"
+    elif level == "alta":
+        m = FABLE
+        e = _at_least(effort, "xhigh" if w is not None and w < 50 else "high", hot)
+        quota_s = f", settimana al {w:.0f}%" if w is not None else ""
+        why = f"{_imp_label(imp)}: Fable 5.1 {e}{quota_s}"
+    elif level == "media":
+        m, e = OPUS, _at_least(effort, "high", hot)
+        why = f"{_imp_label(imp)}: Opus 5.5 {e}"
     elif base and not any(base.startswith(t) for t in TOP):
         m, e = OPUS, _cap(effort, "high")
         why = "la sessione principale pianifica e verifica: Opus 5.5; l'esecuzione va agli agenti"
@@ -107,6 +144,8 @@ def compute(snap, quota, plan, budget_open, now, burn=None):
             why = f"quota ok (settimana {w:.0f}%, ritmo {res[0]:.1f}%/g): {_name(m)} {e} va bene"
         else:
             why = f"{_name(m)} {e} va bene"
+        if level == "bassa":
+            why = f"{_imp_label(imp)}: {why}"
 
     differs = (m.split("[")[0] != base) or (e != effort)
     when = "now" if ctx < FRESH_CTX and not budget_open else "next_task"
@@ -146,12 +185,100 @@ def budget_is_open(cwd):
     return bool(b) and b.get("status") == "open"
 
 
+LEVELS = {"alta": "alta", "media": "media", "bassa": "bassa",
+          "high": "alta", "medium": "media", "low": "bassa"}
+IMPORTANCE_STALE_S = 24 * 3600
+
+
+def _norm_dir(p):
+    """Confronto cartelle: / e \\ uguali, niente / finale, senza maiuscole."""
+    s = str(p or "").replace("\\", "/").rstrip("/")
+    return s.casefold()
+
+
+def _nearest(cwd, mapping):
+    """Voce della cartella piu vicina: cwd stessa o la prima sopra."""
+    c, best, blen = _norm_dir(cwd), None, -1
+    if not c or not isinstance(mapping, dict):
+        return None
+    for k, v in mapping.items():
+        d = _norm_dir(k)
+        if d and (c == d or c.startswith(d + "/")) and len(d) > blen:
+            best, blen = v, len(d)
+    return best
+
+
+def _level_of(v):
+    """"alta" oppure {"level"|"importance": "alta", "why": ...} -> (livello, why)."""
+    if isinstance(v, str):
+        return LEVELS.get(v.strip().lower()), None
+    if isinstance(v, dict):
+        lv = v.get("importance") or v.get("level")
+        return (LEVELS.get(str(lv).strip().lower()) if lv else None), v.get("why")
+    return None, None
+
+
+def importance_file():
+    return Path(os.environ.get("CM_IMPORTANCE_FILE")
+                or Path.home() / ".claude" / "supervisor" / "task-importance.json")
+
+
+def importance_for(cwd, now=None):
+    """Importanza del lavoro nella cartella: compito attivo, poi cartella dichiarata.
+
+    -> {"level", "why", "source": "task"|"folder", "task", "dir"} oppure None."""
+    if not cwd:
+        return None
+    now = now or time.time()
+    # a) compito attivo, da supervisor
+    reg = _load(importance_file())
+    if isinstance(reg, dict):
+        try:
+            fresh = now - float(reg.get("updated_at") or 0) <= IMPORTANCE_STALE_S
+        except (TypeError, ValueError):
+            fresh = False
+        e = _nearest(cwd, reg.get("dirs")) if fresh else None
+        if isinstance(e, dict):
+            lv, why = _level_of(e)
+            if lv:
+                return {"level": lv, "why": why, "source": "task", "task": e.get("task")}
+    # b) cartella dichiarata: .fd-perimeter.json qui o sopra, poi il globale
+    p = Path(str(cwd))
+    for d in [p, *p.parents]:
+        cfg = _load(d / ".fd-perimeter.json")
+        if isinstance(cfg, dict) and "stakes" in cfg:
+            lv, why = _level_of(cfg.get("stakes"))
+            if lv:
+                return {"level": lv, "why": why, "source": "folder", "dir": d.name or str(d)}
+    g = _load(BASE / "perimeter.json")
+    if isinstance(g, dict):
+        v = _nearest(cwd, g.get("stakes"))
+        lv, why = _level_of(v)
+        if lv:
+            return {"level": lv, "why": why, "source": "folder",
+                    "dir": Path(str(cwd)).name}
+    return None
+
+
+def _imp_label(imp):
+    lv, why = imp.get("level"), imp.get("why")
+    if imp.get("source") == "task":
+        what = why or f"compito {imp.get('task') or '?'}"
+        return f"{what} (importanza {lv})"
+    what = why or f"cartella {imp.get('dir') or '?'}"
+    return f"{what} (posta {lv}, dichiarata)"
+
+
 def for_snapshot(snap, now=None):
     acct = snap.get("account") or default_account()
+    try:
+        imp = importance_for(snap.get("cwd"), now)
+    except Exception:
+        imp = None
     return compute(snap, _load(BASE / f"quota-{acct}.json"),
                    _load(BASE / f"plan-{acct}.json"),
                    budget_is_open(snap.get("cwd")), now or time.time(),
-                   burn=quota_pace.burn_pct_h(now, acct))
+                   burn=quota_pace.burn_pct_h(now, acct), importance=imp)
 
 
 def rewrite(sf):

@@ -68,10 +68,12 @@ marker  = "statusline-ctx.sh"   # firma per riconoscere una NOSTRA statusLine
 # background". È esattamente il momento in cui questa statusline serve: budget
 # che sale, deleghe in volo, quota che scende. Senza timer l'HUD resta congelato
 # per tutta la durata di un workflow. Override: FD_STATUSLINE_REFRESH (0 = mai).
+# 30 e non 5 (1.63.1): su una macchina carica un giro durava piu di 5 s e i
+# giri si accavallavano; a 30 s il timer tiene viva la riga senza rincorrersi.
 try:
-    refresh = int(os.environ.get("FD_STATUSLINE_REFRESH", "5"))
+    refresh = int(os.environ.get("FD_STATUSLINE_REFRESH", "30"))
 except ValueError:
-    refresh = 5
+    refresh = 30
 refresh = 0 if refresh <= 0 else max(1, refresh)
 
 # Carica settings esistenti (o oggetto vuoto).

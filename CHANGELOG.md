@@ -2,7 +2,24 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.64.x
+
+- **1.64.0 — the model advice follows the importance of the work, not only the quota.**
+  - **Before:** `advice.py` applied only quota rules (five hours, week, pace, Fable window), the main session on a non-top model and the effort warning; otherwise it kept the current choice. A criminal-law session on Opus 5.5 medium got «fine as it is».
+  - **Now:** after the quota rules comes the importance of the work (axis 2, cost of error). **High** proposes Fable 5.1 at least `high`, `xhigh` with the week under 50%. **Medium** proposes Opus 5.5 at least `high`. **Low** keeps the current choice. An effort chosen above the proposal stays, unless the quota is at 70% or more (then `high`). `max` is never proposed: it stays the person's call, for final documents.
+  - **Where the importance comes from:** the active task of the folder, written by supervisor in `~/.claude/supervisor/task-importance.json` (the nearest folder wins, ignored when older than 24 hours); without a task, the folder declared with `"stakes"` in `.fd-perimeter.json` (in the folder or one above) or in the global `perimeter.json`.
+  - **The reason says it in plain words:** «pratica legale (posta alta, dichiarata): Fable 5.1 xhigh, settimana al 32%».
+  - **Unchanged:** quota rules win; with the Fable window at 80% or more a high-importance session gets Opus 5.5 + `/advisor fable`. The advice never applies itself. Snapshot keys stay the same.
+  - `tests/advice-verify.py` A12-A23. Task: fable-director-consiglio-posta-05-11.
+
 ## 1.63.x
+
+- **1.63.1 — the statusline no longer disappears: one render at a time, the last line at once, and it runs on Windows again.**
+  - **Before:** on a loaded machine one render took 10-14 s. With `refreshInterval` 5 the renders piled up (38 starts in 20 s across four sessions), Claude Code cancelled the one in progress at every update and the line went blank. On Windows the inline `python -c` block had grown past the 32,767-character command-line limit, so Python never started and the line showed only «Claude».
+  - **Now:** the computation lives in `statusline-core.py`, and the plain line renders in that same process. One render runs per session, under a lock (`statusline-cache/<sid>.lock`). A refresh that finds one in progress prints the last line at once. A render that takes more than 2 s (`FD_SL_WAIT_S`) leaves the last line on screen and finishes in the background for the next refresh. The heavy parts (transcript scan, delegations in flight, external calls, session snapshot with the advice, weekly pace) run at most every 30 s (`FD_SL_HEAVY_S`), and at once when model, effort, folder or budget change. The installer writes `refreshInterval` 30; existing installs get it at the next session start.
+  - **Measured** (4 sessions, one refresh per second each for 20 s, CPU saturated): on Linux the median render went from 22.5 s to 0.45 s and Python starts from 137 to 34 for 80 renders; on Windows the p90 went from 22.9 s to 5.4 s and Python starts from 160 to 67. Not a single blank line.
+  - **Unchanged:** segments, colours, plain and expert modes, the quota bridge to the gate.
+  - `tests/statusline-cadence-verify.py` C1-C7. Task: fable-director-statusline-05-11.
 
 - **1.63.0 — after a handoff and /clear, the session opens with a recap of the work and picks up where it stopped.**
   - **Before:** the startup line only pointed at the handoff file. The next session read it, or not, and waited.

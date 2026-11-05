@@ -9,7 +9,7 @@ momento in cui restava congelata. Il timer va scritto in settings.json, quindi
 il contratto è dell'installer.
 
 Contratto:
-- install scrive refreshInterval (default 5s, minimo 1 come da doc);
+- install scrive refreshInterval (default 30s dalla 1.63.1, prima 5; minimo 1 come da doc);
 - FD_STATUSLINE_REFRESH lo cambia; 0 (o negativo) lo omette del tutto;
 - l'installazione è idempotente sul valore, non solo sul comando: una
   statusline vecchia SENZA timer viene aggiornata, una identica no;
@@ -59,8 +59,8 @@ cfg = tmp / "c1"
 cfg.mkdir()
 run(cfg)
 sl = settings(cfg).get("statusLine") or {}
-check("S1 install → refreshInterval 5s di default",
-      sl.get("refreshInterval") == 5 and "statusline-ctx.sh" in sl.get("command", ""),
+check("S1 install → refreshInterval 30s di default",
+      sl.get("refreshInterval") == 30 and "statusline-ctx.sh" in sl.get("command", ""),
       str(sl))
 
 # S2: idempotenza sul VALORE (non solo sul comando)
@@ -88,8 +88,8 @@ check("S4 FD_STATUSLINE_REFRESH=0 → chiave assente (solo eventi)",
 cfg4 = tmp / "c4"
 cfg4.mkdir()
 run(cfg4, refresh="ciao")
-check("S5 valore non numerico → default 5, nessun crash",
-      (settings(cfg4).get("statusLine") or {}).get("refreshInterval") == 5,
+check("S5 valore non numerico → default 30, nessun crash",
+      (settings(cfg4).get("statusLine") or {}).get("refreshInterval") == 30,
       str(settings(cfg4)))
 
 # S6: upgrade di un'installazione vecchia (senza timer)
@@ -102,7 +102,7 @@ cfg5.mkdir()
 r5 = run(cfg5)
 s5 = settings(cfg5)
 check("S6 installazione 1.28.x senza timer → aggiornata, altre chiavi intatte",
-      (s5.get("statusLine") or {}).get("refreshInterval") == 5
+      (s5.get("statusLine") or {}).get("refreshInterval") == 30
       and s5.get("altro") == {"preservare": True}
       and "AGGIORNATA" in r5.stdout, r5.stdout.strip())
 
@@ -129,9 +129,9 @@ cfg7 = tmp / "c7"
 cfg7.mkdir()
 r7 = run(cfg7, "--auto")
 s7 = settings(cfg7).get("statusLine") or {}
-check("A1 --auto su settings vuoto → installa, una riga, refresh 5",
+check("A1 --auto su settings vuoto → installa, una riga, refresh 30",
       r7.returncode == 0 and r7.stdout.strip() == "installed in settings.json" and "statusline-ctx.sh" in s7.get("command", "")
-      and s7.get("refreshInterval") == 5, f"rc={r7.returncode} {r7.stdout.strip()} {s7}")
+      and s7.get("refreshInterval") == 30, f"rc={r7.returncode} {r7.stdout.strip()} {s7}")
 r7b = run(cfg7, "--auto")
 check("A2 --auto una seconda volta → muto, exit 0",
       r7b.returncode == 0 and r7b.stdout.strip() == "" and r7b.stderr.strip() == "",

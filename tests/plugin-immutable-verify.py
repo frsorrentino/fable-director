@@ -88,8 +88,12 @@ check("I4 venv media: versioni esatte", pk and all(re.fullmatch(r"[\w.-]+==[\w.]
 
 # I5: no `bash "$X"` / `. "$X"` on a path that is not ours
 sl = (ROOT / "scripts/statusline-ctx.sh").read_text(encoding="utf-8")
+# $SL_DIR (1.63.1) = la cartella dello script stesso, da $0 senza processo
 ext = [l for l in sl.splitlines()
-       if re.search(r'(^|[|;&(]\s*)(bash|sh|\.|source)\s+"?\$(?!\(dirname)', l.strip())]
+       if re.search(r'(^|[|;&(]\s*)(bash|sh|\.|source)\s+"?\$(?!\(dirname|SL_DIR/)', l.strip())]
+check("I5b statusline: SL_DIR viene solo da $0",
+      all(l.strip().startswith(("case \"$0\" in", "SL_DIR=")) or "SL_DIR=" not in l
+          for l in sl.splitlines()), [l for l in sl.splitlines() if "SL_DIR=" in l])
 check("I5 statusline: nessuno script esterno eseguito", not ext, ext)
 
 shutil.rmtree(tmp, ignore_errors=True)
