@@ -10,6 +10,7 @@ Full release history. The README shows only the latest few entries.
   - **Where the importance comes from:** the active task of the folder, written by supervisor in `~/.claude/supervisor/task-importance.json` (the nearest folder wins, ignored when older than 24 hours); without a task, the folder declared with `"stakes"` in `.fd-perimeter.json` (in the folder or one above) or in the global `perimeter.json`.
   - **The reason says it in plain words:** «pratica legale (posta alta, dichiarata): Fable 5.1 xhigh, settimana al 32%».
   - **Unchanged:** quota rules win; with the Fable window at 80% or more a high-importance session gets Opus 5.5 + `/advisor fable`. The advice never applies itself. Snapshot keys stay the same.
+  - **Task contract:** the shared `schemas/task-contract.v1.json` takes supervisor 0.8.128's optional `task.importance` (`alta`, `media`, `bassa`); the copy is byte-identical again, so contracts that use it are no longer refused.
   - `tests/advice-verify.py` A12-A23. Task: fable-director-consiglio-posta-05-11.
   - Also ships 1.63.1, never released on its own: one statusline render at a time, the last line at once, Windows again. Task: fable-director-statusline-05-11.
 
