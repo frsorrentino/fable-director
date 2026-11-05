@@ -11,6 +11,7 @@ Full release history. The README shows only the latest few entries.
   - **The reason says it in plain words:** «pratica legale (posta alta, dichiarata): Fable 5.1 xhigh, settimana al 32%».
   - **Unchanged:** quota rules win; with the Fable window at 80% or more a high-importance session gets Opus 5.5 + `/advisor fable`. The advice never applies itself. Snapshot keys stay the same.
   - `tests/advice-verify.py` A12-A23. Task: fable-director-consiglio-posta-05-11.
+  - Also ships 1.63.1, never released on its own: one statusline render at a time, the last line at once, Windows again. Task: fable-director-statusline-05-11.
 
 ## 1.63.x
 
