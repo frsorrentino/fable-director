@@ -12,7 +12,8 @@ Regole (la prima che scatta vince; deterministiche, zero token):
      di plan-<acct>.json) >= 80%   plan-<acct>.json, mai una misura)
      (anche fuori da Fable quando l'importanza alta proporrebbe Fable)
   4. importanza del lavoro (1.64.0), asse 2 della policy (costo dell'errore):
-       alta  -> Fable 5.1 almeno high; xhigh se la settimana e sotto il 50%
+       alta  -> Fable 5.2 almeno high; xhigh se la settimana e sotto il 50%
+                (anche da Fable 5.1: la 5.2 costa meno e ne legge i thinking block)
        media -> Opus 5.5 almeno high
        bassa -> nessuna proposta da qui (le regole sotto)
      L'effort scelto sopra la proposta resta, salvo quota >= 70% (-> high);
@@ -28,7 +29,8 @@ Regole (la prima che scatta vince; deterministiche, zero token):
           "why": "pratica legale"}), poi "stakes": {"/cartella": ...} nel
           globale ~/.claude/fable-director/perimeter.json.
   5. sessione principale non di punta -> Opus 5.5: la principale pianifica e
-     verifica, l'esecuzione va agli agenti
+     verifica, l'esecuzione va agli agenti. Di punta: Opus 5.5 e ogni Fable 5.x
+     (claude-fable-5-1, claude-fable-5-2, ...), dalla 1.64.5
   6. effort xhigh/max, con 5h o settimana >= 70% -> high: consuma quota in
      silenzio. Sotto il 70% (o senza dati di quota) il max scelto apposta resta.
   altrimenti la scelta attuale.
@@ -53,9 +55,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import quota_pace  # noqa: E402
 
-FABLE, OPUS = "claude-fable-5-1", "claude-opus-5-5"
-TOP = (FABLE, OPUS)
-NAMES = {FABLE: "Fable 5.1", OPUS: "Opus 5.5"}
+# FABLE e il Fable che si propone: Fable 5.2, predefinito da Claude Code 2.1.321
+# (8/40 $ per Mtok contro i 10/50 della 5.1). Fino alla 1.64.4 qui c'era solo
+# claude-fable-5-1, e una sessione su claude-fable-5-2 risultava «non di punta».
+FABLE, OPUS = "claude-fable-5-2", "claude-opus-5-5"
+FABLE_FAMILY = "claude-fable-5-"          # ogni Fable 5.x e di punta
+TOP = (FABLE_FAMILY, OPUS)
+NAMES = {FABLE: "Fable 5.2", "claude-fable-5-1": "Fable 5.1", OPUS: "Opus 5.5"}
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
 FRESH_CTX = 50_000
 LIVE_S = 6 * 3600
@@ -96,7 +102,7 @@ def compute(snap, quota, plan, budget_open, now, burn=None, importance=None):
     res = quota_pace.residue_pct(w, quota.get("weekly_resets_at"), now) if r is None else None
     frac = _pct(plan.get("premium_weekly_fraction"))
     base = model.split("[")[0]
-    is_fable = base.startswith(FABLE)
+    is_fable = base.startswith(FABLE_FAMILY)
     imp = importance or {}
     level = imp.get("level")
     hot = max(r or 0, w or 0) >= 70
@@ -124,7 +130,7 @@ def compute(snap, quota, plan, budget_open, now, burn=None, importance=None):
         m = FABLE
         e = _at_least(effort, "xhigh" if w is not None and w < 50 else "high", hot)
         quota_s = f", settimana al {w:.0f}%" if w is not None else ""
-        why = f"{_imp_label(imp)}: Fable 5.1 {e}{quota_s}"
+        why = f"{_imp_label(imp)}: {_name(FABLE)} {e}{quota_s}"
     elif level == "media":
         m, e = OPUS, _at_least(effort, "high", hot)
         why = f"{_imp_label(imp)}: Opus 5.5 {e}"

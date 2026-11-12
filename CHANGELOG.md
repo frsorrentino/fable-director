@@ -4,6 +4,12 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.64.x
 
+- **1.64.5 — the model advice counts Claude Fable 5.2 as a top model and proposes it for important work.**
+  - **Before:** `advice.py` knew only `claude-fable-5-1` as Fable. A session on `claude-fable-5-2` (the default Fable since Claude Code 2.1.321) counted as not a top model: with no importance it was told «la sessione principale pianifica e verifica: Opus 5.5»; with high importance it was sent to Fable 5.1 ($10/$50 per MTok) instead of Fable 5.2 ($8/$40); the Fable-window rule never fired for it. `model-switch.py` warned about dropped thinking blocks only when leaving Fable 5.1, and did so even towards Fable 5.2, which reads them.
+  - **Now:** every `claude-fable-5-x` is a top model. High importance proposes Fable 5.2 (`claude-fable-5-2`, at least `high`), also to a Fable 5.1 session. The switch warning follows which models read whose thinking blocks (Claude API model-migration guide): leaving Fable 5.2 it warns towards every model except Mythos 5.2; leaving Fable 5.1 it no longer warns towards Fable 5.2 or Mythos 5.1/5.2.
+  - **Unchanged:** the quota rules and the Fable window still win; a Fable 5.1 session with no importance keeps Fable 5.1.
+  - `tests/advice-verify.py` A24-A27 (the suite now runs on Fable 5.2), `tests/model-switch-verify.py` S17-S18. Task: fd-advice-fable52-13-11.
+
 - **1.64.4 — Claude Fable 5.2 reads its cache at its own rate.**
   - **Before:** `model-economics.json` listed only `claude-fable-5-1` among the Fable models. `eq_mult` matches the longest prefix, and `claude-fable-5-2` does not start with `claude-fable-5-1`, so Fable 5.2 (the default Fable model since Claude Code 2.1.321) took the default cache-read rate of 0.1× input instead of 0.025×. Its cache reads, the largest part of a session's cost, counted four times their weight, and the fork parity point the kernel reads from the same file was off by the same factor.
   - **Now:** `claude-fable-5-2` has `cache_read` 0.025 ($0.20/MTok on $8 input, Claude Code 2.1.321 release notes). Output stays 5× and cache writes stay at the defaults (1.25× and 2×).

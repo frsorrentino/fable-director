@@ -2,7 +2,7 @@
 """Verifica deterministica — hook PreModelSwitch/PostModelSwitch (1.39.0).
 
   S1 Pre, cache calda, contesto grande: exit 1 (avviso, mai blocco), stderr
-     con from→to, token re-cached e (da Fable 5.1) i thinking block persi
+     con from→to, token re-cached e (da Fable 5.1 e 5.2) i thinking block persi
   S2 Pre, stesso modello: exit 0, silenzio
   S3 Pre, cache fredda e contesto piccolo: exit 0, silenzio, ma evento loggato
   S4 telemetria: evento `reversal` {kind: model_switch, from, to}
@@ -10,6 +10,9 @@
   S6 Post (source resume): exit 0, stdout per Claude con la tariffa nuova
   S7 hooks.json registra entrambi gli eventi sullo script
   S8 stdin illeggibile: exit 0, nessun crash
+  S17 da Fable 5.2 (anche [1m]) a Opus 5.5: i thinking block di Fable 5.2 si perdono
+  S18 da Fable 5.1 a Fable 5.2: avviso di re-cache, ma niente thinking block persi
+      (Fable 5.2 li legge; model-migration.md della skill claude-api) (1.64.5)
 
 Usage: python3 tests/model-switch-verify.py   (exit 0 = all green)
 """
@@ -237,6 +240,18 @@ check("S7 hooks.json: Pre e Post registrati via py.sh", ok7)
 # S8
 r = run([str(HOOK)], home, "{not json")
 check("S8 stdin illeggibile: exit 0", r.returncode == 0 and not r.stderr, r.stderr)
+
+# S17-S18 (1.64.5): chi legge i thinking block di chi
+r = run([str(HOOK)], home, payload(from_model="claude-fable-5-2[1m]",
+                                   to_model="claude-opus-5-5[1m]"))
+check("S17 da Fable 5.2 [1m] a Opus 5.5: avviso con i thinking block di Fable 5.2 persi",
+      r.returncode == 1 and "fable-5-2[1m] → opus-5-5[1m]" in r.stderr
+      and "Fable 5.2 thinking blocks" in r.stderr, f"rc={r.returncode} err={r.stderr!r}")
+
+r = run([str(HOOK)], home, payload(from_model="claude-fable-5-1", to_model="claude-fable-5-2"))
+check("S18 da Fable 5.1 a Fable 5.2: re-cache avvisato, thinking block no (la 5.2 li legge)",
+      r.returncode == 1 and "fable-5-1 → fable-5-2" in r.stderr and "280.000" in r.stderr
+      and "thinking blocks" not in r.stderr, f"rc={r.returncode} err={r.stderr!r}")
 
 print(f"\n{len(passed)} passed, {len(failed)} failed")
 sys.exit(1 if failed else 0)

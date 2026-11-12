@@ -13,11 +13,17 @@ contratto claude-master 1.37 parte A).
   A9 quota assente → nessun numero inventato, xhigh resta
   A10 CLI --session riscrive l'advice nello snapshot (scrittura atomica, altre chiavi intatte)
   A11 statusline reale: lo snapshot porta account, cwd e advice
-  A12-A18 importanza del lavoro (1.64.0): alta → Fable 5.1 high/xhigh, media →
-      Opus 5.5 high, bassa → scelta attuale; quota e finestra Fable restano sopra
+  A12-A18 importanza del lavoro (1.64.0): alta → Fable 5.2 high/xhigh (5.1 fino
+      alla 1.64.4), media → Opus 5.5 high, bassa → scelta attuale; quota e
+      finestra Fable restano sopra
   A19-A22 fonti: registro di supervisor (cartella piu vicina, 24 h), poi
       «stakes» in .fd-perimeter.json o nel perimeter.json globale
   A23 statusline reale: importanza dal registro nello snapshot
+  A24-A27 Fable 5.2 (1.64.5): ogni claude-fable-5-x e di punta; una sessione 5.2
+      senza importanza resta su Fable 5.2 (anche [1m]); alta propone Fable 5.2 da
+      Opus, da 5.2 e da 5.1; la finestra Fable vale anche da Fable 5.1
+
+Dalla 1.64.5 le sessioni di prova girano su Fable 5.2, il Fable predefinito.
 
 Usage: python3 tests/advice-verify.py   (exit 0 = all green)
 """
@@ -49,7 +55,7 @@ spec = importlib.util.spec_from_file_location("advice", ADV)
 adv = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(adv)
 
-FABLE, OPUS = "claude-fable-5-1", "claude-opus-5-5"
+FABLE51, FABLE, OPUS = "claude-fable-5-1", "claude-fable-5-2", "claude-opus-5-5"
 NOW = 1_791_223_253
 
 
@@ -118,7 +124,7 @@ check("A10 CLI --session scrive advice", r.returncode == 0 and d.get("extra") ==
 
 # A11 statusline reale
 payload = {"session_id": "s2", "cwd": str(home), "workspace": {"current_dir": str(home)},
-           "model": {"id": FABLE, "display_name": "Fable 5.1"}, "effort": {"level": "max"},
+           "model": {"id": FABLE, "display_name": "Fable 5.2"}, "effort": {"level": "max"},
            "context_window": {"context_window_size": 1_000_000,
                               "current_usage": {"input_tokens": 1000,
                                                 "cache_read_input_tokens": 20000}},
@@ -138,13 +144,13 @@ MEDIA = {"level": "media", "why": None, "source": "task", "task": "t-media"}
 BASSA = {"level": "bassa", "why": None, "source": "task", "task": "t-bassa"}
 
 a = adv.compute(snap(model=OPUS, effort="medium"), q(r=10, w=30), {}, False, NOW, importance=ALTA)
-check("A12 importanza alta, settimana 30% → Fable 5.1 xhigh, motivo in chiaro",
+check("A12 importanza alta, settimana 30% → Fable 5.2 xhigh, motivo in chiaro",
       a["model"] == FABLE and a["effort"] == "xhigh" and a["differs"] is True
       and "ricorso in appello" in a["reason"] and "importanza alta" in a["reason"]
-      and "Fable 5.1 xhigh" in a["reason"], str(a))
+      and "Fable 5.2 xhigh" in a["reason"], str(a))
 
 a = adv.compute(snap(model=OPUS, effort="medium"), q(r=10, w=60), {}, False, NOW, importance=ALTA)
-check("A13 alta, settimana 60% → Fable 5.1 high", a["model"] == FABLE and a["effort"] == "high", str(a))
+check("A13 alta, settimana 60% → Fable 5.2 high", a["model"] == FABLE and a["effort"] == "high", str(a))
 
 a = adv.compute(snap(model=OPUS, effort="medium"), q(r=92, w=30), {}, False, NOW, importance=ALTA)
 b = adv.compute(snap(model=OPUS, effort="medium"), q(r=10, w=88), {}, False, NOW, importance=ALTA)
@@ -176,6 +182,33 @@ check("A18 alta ma finestra Fable ≥80% → Opus (effort al massimo high) + /ad
       a["model"] == OPUS and a["effort"] == "medium" and "/advisor fable" in a["reason"]
       and "ricorso in appello" in a["reason"], str(a))
 
+# --- 1.64.5: Fable 5.2 (claude-fable-5-2) e di punta -------------------------
+# Riprodotto il 13/11 sulla 1.64.4: senza importanza «pianifica e verifica: Opus 5.5»,
+# con importanza alta Fable 5.1 (10/50 $ per Mtok) invece di Fable 5.2 (8/40 $).
+a = adv.compute(snap(model=FABLE, effort="high", ctx=120_000), {"weekly_used_pct": 30}, {},
+                False, NOW)
+b = adv.compute(snap(model=FABLE + "[1m]", effort="xhigh"), q(), {}, False, NOW)
+check("A24 Fable 5.2 senza importanza → resta Fable 5.2 (anche [1m]), niente Opus 5.5",
+      a["model"] == FABLE and a["differs"] is False and "Opus" not in a["reason"]
+      and "Fable 5.2 high" in a["reason"] and b["model"] == FABLE + "[1m]"
+      and b["differs"] is False, f"{a} {b}")
+
+a = adv.compute(snap(model=FABLE, effort="high"), q(r=10, w=30), {}, False, NOW, importance=ALTA)
+b = adv.compute(snap(model=OPUS, effort="high"), q(r=10, w=30), {}, False, NOW, importance=ALTA)
+check("A25 alta da Fable 5.2 e da Opus → Fable 5.2 xhigh, mai Fable 5.1",
+      a["model"] == FABLE and a["effort"] == "xhigh" and "Fable 5.2 xhigh" in a["reason"]
+      and "5.1" not in a["reason"] and b["model"] == FABLE and b["differs"] is True, f"{a} {b}")
+
+a = adv.compute(snap(model=FABLE51, effort="high"), q(), {}, False, NOW)
+b = adv.compute(snap(model=FABLE51, effort="high"), q(r=10, w=30), {}, False, NOW, importance=ALTA)
+check("A26 Fable 5.1 resta di punta (niente Opus); con importanza alta → Fable 5.2",
+      a["model"] == FABLE51 and a["differs"] is False and "Opus" not in a["reason"]
+      and b["model"] == FABLE and b["differs"] is True and "Fable 5.2" in b["reason"], f"{a} {b}")
+
+a = adv.compute(snap(model=FABLE51), q(w=42), {"premium_weekly_fraction": 0.5}, False, NOW)
+check("A27 finestra Fable ≥80% anche da Fable 5.1 → Opus high + /advisor fable",
+      a["model"] == OPUS and a["effort"] == "high" and "/advisor fable" in a["reason"], str(a))
+
 # A19-A22: le fonti dell'importanza
 t = Path(tempfile.mkdtemp(prefix="fd-imp"))
 os.environ["HOME"] = str(t)
@@ -203,8 +236,8 @@ i = adv.importance_for(str(work), NOW)
 check("A20 registro vecchio di 2 giorni ignorato; cartella dichiarata sopra → alta",
       i and i["level"] == "alta" and i["source"] == "folder" and i["why"] == "pratica legale", str(i))
 a = adv.compute(snap(model=OPUS, effort="medium"), q(r=10, w=30), {}, False, NOW, importance=i)
-check("A20b motivo in chiaro: «pratica legale ... Fable 5.1 xhigh»",
-      a["reason"].startswith("pratica legale") and "Fable 5.1 xhigh" in a["reason"], a["reason"])
+check("A20b motivo in chiaro: «pratica legale ... Fable 5.2 xhigh»",
+      a["reason"].startswith("pratica legale") and "Fable 5.2 xhigh" in a["reason"], a["reason"])
 
 reg.write_text(json.dumps({"version": 1, "updated_at": NOW, "dirs": {
     str(t / "clienti" / "acme" / "contenzioso"): {"importance": "bassa", "task": "fattura"}}}))
@@ -234,7 +267,7 @@ r = subprocess.run([BASH, str(SCRIPTS / "statusline-ctx.sh")], input=json.dumps(
 f3 = base / "sessions" / "s3.json"
 d3 = json.loads(f3.read_text()) if f3.is_file() else {}
 ad = d3.get("advice") or {}
-check("A23 statusline: importanza alta dal registro → Fable 5.1 nello snapshot",
+check("A23 statusline: importanza alta dal registro → Fable 5.2 nello snapshot",
       ad.get("model") == FABLE and ad.get("effort") in ("high", "xhigh")
       and "ricorso in appello" in (ad.get("reason") or ""), r.stderr[-300:] + str(d3))
 

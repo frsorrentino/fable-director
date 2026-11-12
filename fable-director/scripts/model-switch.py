@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Hook PreModelSwitch / PostModelSwitch (Claude Code >= 2.1.251): un cambio di
 modello a meta' sessione invalida il prompt cache (il contesto viene riscritto
-in cache al prossimo turno) e, partendo da Claude Fable 5.1, fa cadere i suoi
-thinking block sul modello di destinazione. Misurato (reset-cause.py,
+in cache al prossimo turno) e, partendo da Claude Fable 5.1 o 5.2, fa cadere i
+suoi thinking block quando il modello di destinazione non li legge
+(THINKING_READERS). Misurato (reset-cause.py,
 2026-08-11..09-01): 31 reset su 207 vengono da un cambio modello, re-cache
 mediano 280k token.
 
@@ -77,6 +78,26 @@ def fmt(n):
 
 FALLBACK_WAIT_S = 2.0   # la riga di sistema puo' arrivare nel jsonl dopo l'hook
 TAIL_BYTES = 256 * 1024
+
+
+# Chi legge i thinking block di un Fable (skill claude-api, model-migration.md,
+# 11/2026): quelli di Fable 5.1 solo Mythos 5.1 e i due 5.2; quelli di Fable 5.2
+# solo Mythos 5.2, nessun modello uscito prima. Ogni altro modello li scarta e
+# riparte da zero. Prefisso dell'id base → (nome a schermo, prefissi dei lettori).
+THINKING_READERS = {
+    "claude-fable-5-1": ("Fable 5.1", ("claude-mythos-5-1", "claude-fable-5-2",
+                                       "claude-mythos-5-2")),
+    "claude-fable-5-2": ("Fable 5.2", ("claude-mythos-5-2",)),
+}
+
+
+def thinking_lost(from_m, to_m):
+    """Nome del Fable i cui thinking block si perdono passando a to_m, o None."""
+    src, dst = base_id(from_m), base_id(to_m)
+    for prefix, (name, readers) in THINKING_READERS.items():
+        if src.startswith(prefix):
+            return None if dst.startswith(readers) else name
+    return None
 
 
 def base_id(model):
@@ -308,8 +329,9 @@ def main():
     if isinstance(ctx, (int, float)) and ctx > 0:
         cost = f" (~${usd:.2f} at list price)" if isinstance(usd, (int, float)) else ""
         parts.append(f"~{fmt(ctx)} tokens re-cached on the next turn{cost}")
-    if str(from_m).startswith("claude-fable-5-1"):
-        parts.append("Fable 5.1 thinking blocks are dropped on the new model "
+    lost = thinking_lost(from_m, to_m)
+    if lost:
+        parts.append(f"{lost} thinking blocks are dropped on the new model "
                      "(it re-plans from scratch)")
     msg = " — ".join([parts[0] + " " + parts[1]] + parts[2:]) if len(parts) > 1 else parts[0]
     print(msg + ". Switch proceeds; logged as a reversal.", file=sys.stderr)
