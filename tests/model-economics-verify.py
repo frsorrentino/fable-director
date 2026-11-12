@@ -18,6 +18,7 @@ per record (message.model), mai cachato a inizio sessione.
      eq nel budget = somma per tariffa, budget-close scrive cache_read_by_model
   M7 session-cost-report: colonna eq per modello e totale = somma righe
   M1c shipped: claude-sonnet-5-5 0.05 (listino Claude Code 2.1.296), sonnet-5 0.1
+  M1d shipped: claude-fable-5-2 0.025 (listino Claude Code 2.1.321), fable-5 0.1
   M8 session-cost-report: scritture in cache da un'ora a 2× nella riga del modello
 
 Usage: python3 tests/model-economics-verify.py   (exit 0 = all green)
@@ -92,6 +93,18 @@ check("M1c shipped: sonnet-5-5 0.05 ([1m] e datato inclusi), sonnet-5 0.1",
       and fdt.eq_mult("claude-sonnet-5-5-20261001")["cache_read"] == 0.05
       and fdt.eq_mult("claude-sonnet-5")["cache_read"] == 0.1,
       f"{fdt.eq_mult('claude-sonnet-5-5')} / {fdt.eq_mult('claude-sonnet-5')}")
+
+# M1d — Fable 5.2 (Claude Code 2.1.321: $8 input, $0.20/MTok cache reads) non
+# comincia con 'claude-fable-5-1': senza la sua riga prenderebbe il default 0.1.
+check("M1d shipped: fable-5-2 0.025 ([1m] e datato inclusi), output 5×, scritture ai default",
+      fdt.eq_mult("claude-fable-5-2")["cache_read"] == 0.025
+      and fdt.eq_mult("claude-fable-5-2[1m]")["cache_read"] == 0.025
+      and fdt.eq_mult("claude-fable-5-2-20261109")["cache_read"] == 0.025
+      and fdt.eq_mult("claude-fable-5-2")["output"] == 5.0
+      and fdt.eq_mult("claude-fable-5-2")["cache_create"] == 1.25
+      and fdt.eq_mult("claude-fable-5-2")["cache_create_1h"] == 2.0
+      and fdt.eq_mult("claude-fable-5")["cache_read"] == 0.1,
+      f"{fdt.eq_mult('claude-fable-5-2')} / {fdt.eq_mult('claude-fable-5')}")
 
 # M2 — prefisso più lungo
 check("M2 prefisso: variante datata ricade su fable 0.025, fable-5 resta 0.1",

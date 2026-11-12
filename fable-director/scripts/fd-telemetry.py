@@ -126,8 +126,8 @@ EQ_MULT = {"input": 1.0, "output": 5.0, "cache_read": 0.1, "cache_create": 1.25,
 # 1.844.114 in 745 turni della master): a 1,25× la componente era sottostimata
 # del 37,5%.
 # I moltiplicatori sopra sono il DEFAULT universale; le parti che cambiano
-# col listino di un modello (oggi: cache_read 0.025x su claude-fable-5-1,
-# 0.05x su claude-opus-5-5 e claude-sonnet-5-5)
+# col listino di un modello (oggi: cache_read 0.025x su claude-fable-5-1 e
+# claude-fable-5-2, 0.05x su claude-opus-5-5 e claude-sonnet-5-5)
 # vivono in model-economics.json — shipped con il plugin, override utente in
 # ~/.claude/fable-director/model-economics.json. Un modello nuovo e' una
 # riga in 'models', mai un cambio di policy. Il modello va letto dal record

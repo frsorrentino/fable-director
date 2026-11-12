@@ -4,6 +4,11 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.64.x
 
+- **1.64.4 — Claude Fable 5.2 reads its cache at its own rate.**
+  - **Before:** `model-economics.json` listed only `claude-fable-5-1` among the Fable models. `eq_mult` matches the longest prefix, and `claude-fable-5-2` does not start with `claude-fable-5-1`, so Fable 5.2 (the default Fable model since Claude Code 2.1.321) took the default cache-read rate of 0.1× input instead of 0.025×. Its cache reads, the largest part of a session's cost, counted four times their weight, and the fork parity point the kernel reads from the same file was off by the same factor.
+  - **Now:** `claude-fable-5-2` has `cache_read` 0.025 ($0.20/MTok on $8 input, Claude Code 2.1.321 release notes). Output stays 5× and cache writes stay at the defaults (1.25× and 2×).
+  - `tests/model-economics-verify.py` M1d. Task: fd-economia-fable52-12-11.
+
 - **1.64.3 — the shared task contract takes supervisor 0.8.129's `task.follows`.**
   - **Before:** the copy of `schemas/task-contract.v1.json` (additionalProperties false) refused the contracts that use the optional `task.follows` (the id of the task this one follows).
   - **Now:** the copy is byte-identical to supervisor 0.8.129 again, so those contracts pass.
