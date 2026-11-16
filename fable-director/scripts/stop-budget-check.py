@@ -50,6 +50,7 @@ import os
 import shutil
 import re
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -260,6 +261,9 @@ VERIFY_RUNNERS = ("python3", "python", "pytest", "bash", "sh", "npm", "npx",
                   "node", "make", "cargo", "go", "php", "composer", "phpunit")
 VERIFY_TIMEOUT_S = int(os.environ.get("FD_VERIFY_TIMEOUT_S") or 60)
 VERIFY_MIN_GAP_S = int(os.environ.get("FD_VERIFY_MIN_GAP_S") or 300)
+# fd-hook-lenti-16-11: quanto lo Stop aspetta il --verify prima di chiudere il turno
+# e lasciarlo in sottofondo (lo Stop ha un timeout di 30 s in hooks.json).
+VERIFY_INLINE_S = float(os.environ.get("FD_VERIFY_INLINE_S") or 2)
 
 
 def verify_command(budget):
@@ -282,49 +286,26 @@ def verify_command(budget):
         return v if first in VERIFY_RUNNERS else None
 
 
-def run_verify(budget, state, cwd, rw_stats):
-    """C1.6 / E7 (1.39): il done dichiarato diventa un comando. Eseguito dallo
-    Stop hook con timeout, SOLO quando qualcosa e' cambiato (nuove scritture
-    dal run precedente) e non piu' di una volta ogni VERIFY_MIN_GAP_S — mai
-    una suite intera a ogni turno di lettura. Esito in state['verify_rc']
-    (0, N, 'timeout'), ora e comando; budget-close lo copia nella ricevuta.
-    Ritorna il messaggio da mostrare (solo al PASSAGGIO a fail, o da fail a
-    pass), altrimenti None. Mai bloccante."""
-    cmd = verify_command(budget)
-    if not cmd:
-        return None
-    touches = int((rw_stats or {}).get("write_touches") or 0)
-    prev_rc = state.get("verify_rc")
-    prev_touch = state.get("verify_touches")
-    last_at = state.get("verify_at")
-    now = datetime.now(timezone.utc)
-    if prev_touch is not None and touches == prev_touch and prev_rc is not None:
-        return None  # niente di nuovo da verificare
-    # Dopo un PASS le scritture nuove rilanciano al piu' ogni VERIFY_MIN_GAP_S
-    # (una suite lunga non gira a ogni turno); dopo un FAIL la correzione
-    # merita il ricontrollo subito. L'intervallo segue l'affidabilita' del tipo
-    # di compito (budget-open, dalla telemetria): un tipo fragile si ricontrolla
-    # a ogni scrittura, uno affidabile al piu' ogni 3 intervalli.
-    tier = ((budget or {}).get("reliability") or {}).get("tier")
-    gap = {"fragile": 0, "reliable": VERIFY_MIN_GAP_S * 3}.get(tier, VERIFY_MIN_GAP_S)
-    try:
-        if prev_rc == 0 and last_at and \
-                (now - datetime.fromisoformat(last_at)).total_seconds() < gap:
-            return None
-    except (ValueError, TypeError):
-        pass
-    import subprocess
-    # Windows: shell=True e' cmd.exe (quoting POSIX rotto, `python3` = alias dello
-    # Store). Il comando va a bash di Git — which(), non "bash" nudo: CreateProcess
-    # cerca prima System32, dove bash.exe e' il lanciatore WSL — con python3/python
-    # che puntano all'interprete di questo hook.
-    argv, env = cmd, None
+def _verify_argv(cmd):
+    """Windows: shell=True e' cmd.exe (quoting POSIX rotto, `python3` = alias dello
+    Store). Il comando va a bash di Git — which(), non "bash" nudo: CreateProcess
+    cerca prima System32, dove bash.exe e' il lanciatore WSL — con python3/python
+    che puntano all'interprete di questo hook. Ritorna (argv, env, shell)."""
     bash = shutil.which("bash") if os.name == "nt" else None
     if bash:
         argv = [bash, "-c", 'python3() { "$FD_PY_EXE" "$@"; }; python() { "$FD_PY_EXE" "$@"; }; ' + cmd]
-        env = dict(os.environ, FD_PY_EXE=sys.executable)
+        return argv, dict(os.environ, FD_PY_EXE=sys.executable), False
+    return cmd, None, True
+
+
+def verify_worker(result_file, job_id, cwd, cmd):
+    """Processo staccato dallo Stop (fd-hook-lenti-16-11): esegue il --verify con
+    VERIFY_TIMEOUT_S e scrive l'esito in result_file; lo raccoglie lo Stop che
+    lo aspetta (FD_VERIFY_INLINE_S) o quello del turno dopo."""
+    import subprocess
+    argv, env, shell = _verify_argv(cmd)
     try:
-        r = subprocess.run(argv, shell=not bash, cwd=str(cwd), capture_output=True, env=env,
+        r = subprocess.run(argv, shell=shell, cwd=str(cwd), capture_output=True, env=env,
                            text=True, encoding="utf-8", errors="replace", timeout=VERIFY_TIMEOUT_S)
         rc = r.returncode
         tail = (r.stderr or r.stdout or "").strip().splitlines()[-1:] or [""]
@@ -332,11 +313,50 @@ def run_verify(budget, state, cwd, rw_stats):
         rc, tail = "timeout", [""]
     except Exception as e:
         rc, tail = "error", [str(e)[:120]]
+    try:
+        write_json_atomic(Path(result_file), {"id": job_id, "rc": rc, "tail": tail[0][:160]})
+    except OSError:
+        pass
+
+
+def _read_result(job):
+    try:
+        res = json.loads(Path(job["result"]).read_text(encoding="utf-8"))
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    if res.get("id") != job.get("id"):
+        return None  # esito di un lavoro precedente: non e' il nostro
+    try:
+        Path(job["result"]).unlink()
+    except OSError:
+        pass
+    return res
+
+
+def _spawn_verify(job, cwd):
+    import subprocess
+    kw = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+              cwd=str(cwd), close_fds=True)
+    if os.name == "nt":
+        kw["creationflags"] = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+    else:
+        kw["start_new_session"] = True
+    subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "--verify-worker",
+                      job["result"], job["id"], str(cwd), job["cmd"]], **kw)
+
+
+def _apply_verify(state, job, res, cwd):
+    """L'esito di un verify finito entra nello state; ritorna il messaggio solo
+    al PASSAGGIO a fail, o da fail a pass."""
+    prev_rc = state.get("verify_rc")
+    rc = res.get("rc")
+    tail = str(res.get("tail") or "")
+    cmd = job.get("cmd")
     state["verify_rc"] = rc
-    state["verify_at"] = now.isoformat()
+    state["verify_at"] = job.get("at")
     state["verify_cmd"] = cmd
-    state["verify_touches"] = touches
-    state["verify_tail"] = tail[0][:160]
+    state["verify_touches"] = job.get("touches")
+    state["verify_tail"] = tail[:160]
     # Il done dichiarato e' stato ESEGUITO: l'esito e' un fatto oggettivo e lo
     # scrive l'hook, non il modello. Misurato il 14/09/2026 su 30 giorni e 161
     # sessioni: 5 `verification` registrate su 53 task chiusi (9 %), mentre
@@ -352,11 +372,90 @@ def run_verify(budget, state, cwd, rw_stats):
     if rc == 0 and prev_rc not in (None, 0):
         return f"FD ✓ verification passed again: {cmd}"
     if rc != 0 and prev_rc in (None, 0):
-        what = ("timed out (60 s)" if rc == "timeout" else f"exit {rc}")
+        what = (f"timed out ({VERIFY_TIMEOUT_S} s)" if rc == "timeout" else f"exit {rc}")
         return (f"FD ✗ verification failed: {cmd} ({what})"
-                + (f" — {tail[0]}" if tail[0] else "")
+                + (f" — {tail}" if tail else "")
                 + ". The declared done does not hold yet; do not report the task as finished.")
     return None
+
+
+def run_verify(budget, state, cwd, rw_stats, result_file=None):
+    """C1.6 / E7 (1.39): il done dichiarato diventa un comando, eseguito SOLO
+    quando qualcosa e' cambiato (nuove scritture dal run precedente) e non piu'
+    di una volta ogni VERIFY_MIN_GAP_S — mai una suite intera a ogni turno di
+    lettura. Esito in state['verify_rc'] (0, N, 'timeout'), ora e comando;
+    budget-close lo copia nella ricevuta.
+    (fd-hook-lenti-16-11) Il comando gira in un processo staccato: lo Stop lo
+    aspetta al piu' VERIFY_INLINE_S, poi chiude il turno e lascia il lavoro in
+    state['verify_job']; lo Stop dopo ne raccoglie l'esito. Un verify veloce
+    resta nello stesso turno, come prima; mai due verify insieme.
+    Ritorna il messaggio da mostrare (solo al PASSAGGIO a fail, o da fail a
+    pass), altrimenti None. Mai bloccante."""
+    cmd = verify_command(budget)
+    if not cmd:
+        return None
+    msgs = []
+    now = datetime.now(timezone.utc)
+    job = state.get("verify_job")
+    if job:
+        res = _read_result(job)
+        if res is None:
+            try:
+                age = (now - datetime.fromisoformat(job.get("at"))).total_seconds()
+            except (TypeError, ValueError):
+                age = None
+            if age is not None and age < VERIFY_TIMEOUT_S + 60:
+                return None  # ancora in corso: il prossimo Stop lo raccoglie
+            state.pop("verify_job", None)  # processo perso senza esito: si rilancia
+        else:
+            state.pop("verify_job", None)
+            m = _apply_verify(state, job, res, cwd)
+            if m:
+                msgs.append(m)
+    touches = int((rw_stats or {}).get("write_touches") or 0)
+    prev_rc = state.get("verify_rc")
+    prev_touch = state.get("verify_touches")
+    last_at = state.get("verify_at")
+    if prev_touch is not None and touches == prev_touch and prev_rc is not None:
+        return "\n".join(msgs) or None  # niente di nuovo da verificare
+    # Dopo un PASS le scritture nuove rilanciano al piu' ogni VERIFY_MIN_GAP_S
+    # (una suite lunga non gira a ogni turno); dopo un FAIL la correzione
+    # merita il ricontrollo subito. L'intervallo segue l'affidabilita' del tipo
+    # di compito (budget-open, dalla telemetria): un tipo fragile si ricontrolla
+    # a ogni scrittura, uno affidabile al piu' ogni 3 intervalli.
+    tier = ((budget or {}).get("reliability") or {}).get("tier")
+    gap = {"fragile": 0, "reliable": VERIFY_MIN_GAP_S * 3}.get(tier, VERIFY_MIN_GAP_S)
+    try:
+        if prev_rc == 0 and last_at and \
+                (now - datetime.fromisoformat(last_at)).total_seconds() < gap:
+            return "\n".join(msgs) or None
+    except (ValueError, TypeError):
+        pass
+    import tempfile
+    import uuid
+    jid = uuid.uuid4().hex[:12]
+    result = str(result_file) if result_file else \
+        os.path.join(tempfile.gettempdir(), f"fd-verify-{jid}.json")
+    job = {"id": jid, "at": now.isoformat(), "cmd": cmd, "touches": touches, "result": result}
+    try:
+        _spawn_verify(job, cwd)
+    except Exception as e:
+        res = {"id": jid, "rc": "error", "tail": str(e)[:120]}
+    else:
+        res = None
+        deadline = time.monotonic() + VERIFY_INLINE_S
+        while True:
+            res = _read_result(job)
+            if res is not None or time.monotonic() >= deadline:
+                break
+            time.sleep(0.05)
+    if res is None:
+        state["verify_job"] = job
+    else:
+        m = _apply_verify(state, job, res, cwd)
+        if m:
+            msgs.append(m)
+    return "\n".join(msgs) or None
 
 
 def _merge_cr_by_model(state):
@@ -699,11 +798,13 @@ def _main():
     mod = _fdt()
     rw_stats = mod.rework_stats(state.get("rw")) if mod else None
     # Verify eseguibile (C1.6/E7): dopo scritture nuove, con timeout; lo
-    # state viene riscritto qui sotto con l'esito.
+    # state viene riscritto qui sotto con l'esito o con il lavoro in corso.
     verify_msg = None
     try:
-        verify_msg = run_verify(budget, state, budget.get("cwd") or cwd, rw_stats)
-        if verify_msg or state.get("verify_rc") is not None:
+        had_job = "verify_job" in state
+        verify_msg = run_verify(budget, state, budget.get("cwd") or cwd, rw_stats,
+                                result_file=bfile.with_name(bfile.stem + ".verify-result.json"))
+        if verify_msg or state.get("verify_rc") is not None or had_job or "verify_job" in state:
             write_json_atomic(state_file, state)
     except Exception:
         verify_msg = None
@@ -835,4 +936,7 @@ def _main():
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) == 6 and sys.argv[1] == "--verify-worker":
+        verify_worker(*sys.argv[2:6])
+    else:
+        main()
