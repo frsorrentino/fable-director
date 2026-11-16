@@ -8,6 +8,13 @@ quota-history oscillano (58 → 61 → 62 → 58...). Dentro una finestra la quo
 non scende mai: a pari resets_at il massimo e il dato piu recente; un resets_at
 piu avanti e una finestra nuova e vince; uno piu indietro e una lettura vecchia
 e si ignora. Deterministica, HOME usa-e-getta, nessuna rete.
+
+Deterministica davvero (fd-hook-lenti-16-11): la release 1.64.6 si e' fermata qui
+alle 13:15 del 16/11 con FileNotFoundError e M7/M10 rossi. Causa: dalla 1.63.1 la
+statusline calcola in sottofondo e aspetta al piu' 2 s (8 s al primo giro); sotto
+carico il quota file non c'era ancora, o il giro dopo trovava il lock e saltava.
+Ora ogni giro aspetta la fine del calcolo (FD_SL_WAIT_S / FD_SL_FIRST_WAIT_S) e
+l'adesso e' fisso (FD_NOW), mai l'orologio vero.
 """
 import hashlib
 import json
@@ -15,7 +22,6 @@ import os
 import subprocess
 import sys
 import tempfile
-import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent / "fable-director" / "scripts"
@@ -35,7 +41,7 @@ qf = fd / f"quota-{acct}.json"
 us = fd / f"usage-snapshot-{acct}.json"
 hf = fd / f"quota-history-{acct}.jsonl"
 
-NOW = int(time.time())
+NOW = 1_900_000_000          # adesso fisso (17/03/2030), passato al nucleo con FD_NOW
 WK = NOW + 3 * 86400        # reset settimanale corrente
 FH = NOW + 3 * 3600         # reset 5h corrente
 
@@ -50,7 +56,9 @@ def render(weekly=None, wreset=WK, five=None, freset=FH):
                           "session_id": "quotamerge", "cwd": str(home),
                           "context_window": {"used_percentage": 10.0},
                           "rate_limits": rl})
-    e = dict(os.environ, HOME=str(home))
+    # FD_SL_*_WAIT_S: il giro aspetta la fine del calcolo staccato, mai la cache
+    e = dict(os.environ, HOME=str(home), FD_NOW=str(NOW),
+             FD_SL_WAIT_S="120", FD_SL_FIRST_WAIT_S="120")
     e.pop("CLAUDE_CONFIG_DIR", None)
     subprocess.run(["bash", str(ROOT / "statusline-ctx.sh")], input=payload,
                    capture_output=True, text=True, env=e, timeout=120)

@@ -29,6 +29,15 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 os.environ.setdefault("FD_SL_SCRIPTS", HERE)
 
 
+def _now():
+    """Adesso, per le scadenze delle finestre di quota. FD_NOW (epoch) lo fissa:
+    serve ai test, che altrimenti dipendono dall orologio vero."""
+    try:
+        return float(os.environ.get("FD_NOW") or 0) or time.time()
+    except ValueError:
+        return time.time()
+
+
 def _heavy_s():
     try:
         return max(0.0, float(os.environ.get("FD_SL_HEAVY_S", "30")))
@@ -84,7 +93,7 @@ def compute(raw):
         fh=rlim.get("five_hour") or {}
         r=fh.get("used_percentage")
         try:
-            if fh.get("resets_at") is not None and float(fh.get("resets_at"))<=time.time(): r=None
+            if fh.get("resets_at") is not None and float(fh.get("resets_at"))<=_now(): r=None
         except (TypeError,ValueError): pass
         if r is not None: rl=f"{r:.0f}"
         rlt=(fmt_reset(fh.get("resets_at")) or "-") if r is not None else "-"
@@ -142,7 +151,7 @@ def compute(raw):
                     nv,nr=q.get(pk),_rs(q.get(rk))
                     if ov is None: continue
                     if nv is None:
-                        if orr is None or orr>time.time():
+                        if orr is None or orr>_now():
                             mq[pk]=ov
                             if old_d.get(rk) is not None: mq[rk]=old_d.get(rk)
                         continue
