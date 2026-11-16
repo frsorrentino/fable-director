@@ -204,6 +204,62 @@ def rare_terms(text):
     return out
 
 
+RECEIPT_INDEX = "receipts-index.json"
+RECEIPT_INDEX_V = 1
+
+
+def receipt_index(rdir):
+    """(fd-hook-lenti-16-11) Le ricevute in forma corta, (nome, campi) in ordine
+    di nome. Rileggere 200-400 ricevute a ogni prompt costava 0,4 s di CPU sul
+    Chromebook: l'indice tiene per file mtime e dimensione e rilegge solo le
+    ricevute nuove o cambiate; quelle sparite escono. Indice illeggibile → si
+    ricostruisce; non scrivibile → si lavora senza."""
+    import os
+    ipath = rdir.parent / RECEIPT_INDEX
+    try:
+        doc = json.loads(ipath.read_text(encoding="utf-8"))
+        # v: versione di rare_terms/STOP; cambiano → si ricalcolano i termini
+        old = (doc.get("files") or {}) if doc.get("v") == RECEIPT_INDEX_V else {}
+    except (OSError, ValueError, AttributeError):
+        old = {}
+    files, changed = {}, False
+    try:
+        entries = sorted((e.name, e.stat()) for e in os.scandir(rdir)
+                         if e.name.endswith(".json") and e.is_file())
+    except OSError:
+        return []
+    for name, st in entries:
+        sig = [st.st_mtime_ns, st.st_size]
+        prev = old.get(name)
+        if isinstance(prev, dict) and prev.get("sig") == sig:
+            files[name] = prev
+            continue
+        changed = True
+        try:
+            r = json.loads((rdir / name).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            files[name] = {"sig": sig}
+            continue
+        if not isinstance(r, dict):
+            files[name] = {"sig": sig}
+            continue
+        files[name] = {"sig": sig, "outcome": r.get("outcome"), "task": r.get("task"),
+                       "cwd": r.get("cwd"), "closed_at": r.get("closed_at"),
+                       "terms": sorted(rare_terms(" ".join(str(r.get(k) or "")
+                                                           for k in ("task", "verify", "type"))))}
+    if changed or len(files) != len(old):
+        tmp = ipath.with_name(f"{ipath.name}.{os.getpid()}.tmp")
+        try:
+            tmp.write_text(json.dumps({"v": RECEIPT_INDEX_V, "files": files}, ensure_ascii=False), encoding="utf-8")
+            os.replace(tmp, ipath)
+        except OSError:
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+    return sorted(files.items())
+
+
 def solved_elsewhere(prompt_lower, cwd):
     """D.3.2 (1.39): memoria cross-progetto delle soluzioni VERIFICATE. Cerca
     nelle ricevute (budget-close) di ALTRE cartelle, solo esito ok, ≥2 termini
@@ -216,22 +272,17 @@ def solved_elsewhere(prompt_lower, cwd):
     if not rdir.is_dir():
         return None
     best = None
-    for f in sorted(rdir.glob("*.json")):
-        try:
-            r = json.loads(f.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
+    for name, r in receipt_index(rdir):
         if r.get("outcome") != "ok" or not r.get("task"):
             continue
         if cwd and str(r.get("cwd") or "") == str(cwd):
             continue
-        shared = terms & rare_terms(" ".join(str(r.get(k) or "")
-                                             for k in ("task", "verify", "type")))
+        shared = terms & set(r.get("terms") or ())
         if len(shared) < 2:
             continue
-        key = (len(shared), f.name)
+        key = (len(shared), name)
         if best is None or key > best[0]:
-            best = (key, f, r)
+            best = (key, rdir / name, r)
     if not best:
         return None
     _, f, r = best
