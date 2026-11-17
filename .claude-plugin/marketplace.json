@@ -17,8 +17,8 @@
         "source": "git-subdir",
         "url": "https://github.com/frsorrentino/supervisor.git",
         "path": "supervisor",
-        "ref": "v0.8.180",
-        "sha": "eed4f8dcb7baf2ebee1d1b9adc00a7f68dff95e8"
+        "ref": "v0.8.181",
+        "sha": "4c8df1c6377ec57b69a7364657878903e191063a"
       },
       "description": "Supervisor for Claude Code. Run many Claude Code sessions on one machine: launch them in the right folder and account, in tmux, with a terminal window whose tab tells you which is which; list, close, restart, talk to them and restore them after a reboot. Configurable per machine, generic across terminals."
     }
