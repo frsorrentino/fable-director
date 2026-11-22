@@ -4,6 +4,10 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.64.x
 
+- **1.64.8 — an observe draft whose error spans several lines is no longer refused by the anonymous service: every text goes out on one line.**
+  - **Before:** the claude-observe copy (64aef81) put each recorded text into the draft as it was. A newline inside an error broke the list: on 20/11 a chrome-bridge draft carried the CSP message of `execute_js`, whose second line starts neither with `- ` nor with `  - note: `, and the anonymous service refused the whole draft with HTTP 400 "the body is not the one of a claude-observe draft". fable-director's copy had the same `draft()`.
+  - **Now:** `observe/` is synced from claude-observe 29459e7 (fix b67380b): every text the draft writes (call, error, note, workaround) is joined on one line; the local file keeps the message as it was. supervisor and chrome-bridge already ship this copy.
+  - Task: fable-director-observe-a-capo-22-11.
 - **1.64.7 — every claude-observe hook entry now names fable-director, so Claude Code no longer merges them with other plugins'.**
   - **Before:** 1.64.6 made only the observe `stop` command unique. The `session-start` and PostToolUseFailure `hook` entries kept the same command as supervisor's and chrome-bridge's, so Claude Code ran one merged copy, which reads only its own `tool.json`: the other plugins' send proposals never fired from those events.
   - **Now:** `hooks.json` is regenerated with claude-observe `sync.py` (64aef81). All three observe commands end with `fable-director`, and the Stop stays synchronous with a 15 s timeout: in Claude Code 2.1.325 an async hook's `systemMessage` reaches the model as a meta message, not the screen.
