@@ -29,6 +29,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -45,6 +46,8 @@ os.environ["FD_SL_HEAVY_S"] = "0"
 HERE = Path(__file__).resolve().parent
 SCRIPTS = HERE.parent / "fable-director" / "scripts"
 FDT, GATE = str(SCRIPTS / "fd-telemetry.py"), str(SCRIPTS / "pre-delegation-gate.py")
+# Windows: "bash" nudo cerca prima in System32 e trova il bash.exe di WSL.
+BASH = shutil.which("bash") or "bash"
 passed, failed = [], []
 
 
@@ -56,6 +59,9 @@ def check(name, ok, evidence=""):
 home = Path(tempfile.mkdtemp(prefix="fd-p-home-"))
 proj = tempfile.mkdtemp(prefix="fd-p-proj-")
 os.environ["HOME"] = str(home)
+# Windows: Path.home() legge USERPROFILE; senza, P18 (fd-telemetry in processo)
+# leggerebbe e scriverebbe il telemetry.db della home vera.
+os.environ["USERPROFILE"] = str(home)
 os.environ.pop("CLAUDE_CONFIG_DIR", None)
 BASE = home / ".claude" / "fable-director"
 BASE.mkdir(parents=True)
@@ -234,16 +240,26 @@ def plain(s):
     return re.sub(r"\x1b\][^\x07\x1b]*(\x07|\x1b\\)|\x1b\[[0-9;]*m", "", s)
 
 
+_sl_n = [0]
+
+
+# Ogni render ha la sua sessione, quindi cache e lock suoi, e aspetta la fine del
+# calcolo: con un session_id solo, un giro oltre FD_SL_WAIT_S (2 s, macchina carica)
+# stampava la riga in cache del caso prima e il caso dopo trovava il lock ancora
+# preso (1.63.1), quindi di nuovo la riga vecchia. La cadenza si prova in
+# statusline-cadence-verify.py, qui si prova il calcolo.
 def render(limits, expert=False):
+    _sl_n[0] += 1
     cfg = BASE / "statusline.json"
     if expert:
         cfg.write_text(json.dumps({"mode": "expert"}))
     elif cfg.exists():
         cfg.unlink()
-    d = {"model": {"display_name": "Fable 5.1"}, "session_id": "s-sl", "cwd": proj,
+    d = {"model": {"display_name": "Fable 5.1"}, "session_id": f"s-sl-{_sl_n[0]}", "cwd": proj,
          "context_window": {"used_percentage": 26, "context_window_size": 200000}, "rate_limits": limits}
-    r = subprocess.run(["bash", str(SCRIPTS / "statusline-ctx.sh")], input=json.dumps(d), capture_output=True,
-                       text=True, env=env_(), timeout=120)
+    r = subprocess.run([BASH, str(SCRIPTS / "statusline-ctx.sh")], input=json.dumps(d), capture_output=True,
+                       text=True, encoding="utf-8", errors="replace", env=dict(env_(), FD_SL_WAIT_S="110", FD_SL_FIRST_WAIT_S="110"),
+                       timeout=120)
     if cfg.exists():
         cfg.unlink()
     return plain(r.stdout), r.stderr
