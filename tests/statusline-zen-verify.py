@@ -24,10 +24,19 @@ approvata 2026-07-23):
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+# Render della statusline: BASH risolto (su Windows "bash" nudo trova il bash.exe di
+# WSL in System32) e SL_WAIT, attesa fino alla fine del calcolo. Con l'attesa di
+# default (2 s, 8 s al primo giro) un calcolo lento su macchina carica usciva come
+# riga in cache o nome del modello, e il giro dopo della stessa sessione trovava il
+# lock ancora preso (P14, A11). La cadenza si prova in statusline-cadence-verify.py.
+BASH = shutil.which("bash") or "bash"
+SL_WAIT = {"FD_SL_WAIT_S": "110", "FD_SL_FIRST_WAIT_S": "110"}
 
 ROOT = Path(__file__).resolve().parent.parent / "fable-director" / "scripts"
 FAILS = []
@@ -69,10 +78,11 @@ def payload(ctx_pct=12, ctx_size=1_000_000, five=10, seven=10, effort="max",
 
 
 def render(home, stdin, **env):
-    e = dict(os.environ, HOME=str(home), **{k: str(v) for k, v in env.items()})
+    e = dict(os.environ, HOME=str(home), USERPROFILE=str(home), **SL_WAIT)
+    e.update({k: str(v) for k, v in env.items()})
     e.pop("CLAUDE_CONFIG_DIR", None)
     e.setdefault("FD_STATUSLINE_MODE", "expert")  # questi check descrivono la riga storica
-    return subprocess.run(["bash", str(ROOT / "statusline-ctx.sh")],
+    return subprocess.run([BASH, str(ROOT / "statusline-ctx.sh")],
                           input=stdin, capture_output=True, text=True,
                           env=e, timeout=120).stdout
 

@@ -38,6 +38,13 @@ import tempfile
 import time
 from pathlib import Path
 
+# Render della statusline: BASH risolto (su Windows "bash" nudo trova il bash.exe di
+# WSL in System32) e SL_WAIT, attesa fino alla fine del calcolo. Con l'attesa di
+# default (2 s, 8 s al primo giro) un calcolo lento su macchina carica usciva come
+# riga in cache o nome del modello, e il giro dopo della stessa sessione trovava il
+# lock ancora preso (P14, A11). La cadenza si prova in statusline-cadence-verify.py.
+SL_WAIT = {"FD_SL_WAIT_S": "110", "FD_SL_FIRST_WAIT_S": "110"}
+
 HERE = Path(__file__).resolve().parent
 SCRIPTS = HERE.parent / "fable-director" / "scripts"
 ADV = SCRIPTS / "advice.py"
@@ -113,7 +120,7 @@ acct = hashlib.sha256(str(home / ".claude").encode()).hexdigest()[:8]
 (base / f"quota-{acct}.json").write_text(json.dumps(q(w=90)))
 sf = base / "sessions" / "s1.json"
 sf.write_text(json.dumps(dict(snap(), ts=NOW, account=acct, cwd=str(home), extra=1)))
-env = dict(os.environ, HOME=str(home), USERPROFILE=str(home))   # Windows: Path.home() = USERPROFILE
+env = dict(os.environ, HOME=str(home), USERPROFILE=str(home), **SL_WAIT)   # Windows: Path.home() = USERPROFILE
 env.pop("CLAUDE_CONFIG_DIR", None)
 r = subprocess.run([sys.executable, str(ADV), "--session", "s1"], capture_output=True,
                    text=True, env=env, timeout=30)

@@ -16,6 +16,14 @@ import sys
 import tempfile
 from pathlib import Path
 
+# Render della statusline: BASH risolto (su Windows "bash" nudo trova il bash.exe di
+# WSL in System32) e SL_WAIT, attesa fino alla fine del calcolo. Con l'attesa di
+# default (2 s, 8 s al primo giro) un calcolo lento su macchina carica usciva come
+# riga in cache o nome del modello, e il giro dopo della stessa sessione trovava il
+# lock ancora preso (P14, A11). La cadenza si prova in statusline-cadence-verify.py.
+BASH = shutil.which("bash") or "bash"
+SL_WAIT = {"FD_SL_WAIT_S": "110", "FD_SL_FIRST_WAIT_S": "110"}
+
 ROOT = Path(__file__).resolve().parents[1] / "fable-director"
 fails = []
 
@@ -47,8 +55,8 @@ hook_in = json.dumps({"session_id": "imm", "cwd": str(tmp), "prompt": "ciao",
 for script in ("route-hint.py", "family-prefix.py"):
     subprocess.run(["bash", str(plugin / "scripts/py.sh"), str(plugin / "scripts" / script)],
                    input=hook_in, capture_output=True, text=True, env=env, timeout=120)
-subprocess.run(["bash", str(plugin / "scripts/statusline-ctx.sh")], input="{}",
-               capture_output=True, text=True, env=env, timeout=120)
+subprocess.run([BASH, str(plugin / "scripts/statusline-ctx.sh")], input="{}",
+               capture_output=True, text=True, env=dict(env, **SL_WAIT), timeout=120)
 after = tree(plugin)
 check("I1 hooks via py.sh → nessun file nuovo nel plugin", after == before,
       sorted(set(after) - set(before))[:5])

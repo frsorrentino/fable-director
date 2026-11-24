@@ -23,9 +23,17 @@ Criterio: ogni segmento dice cosa fare, in parole; a riposo la riga tace.
 
 Usage: python3 tests/statusline-plain-verify.py
 """
-import json, os, re, subprocess, sys, tempfile, time
+import json, os, re, shutil, subprocess, sys, tempfile, time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+# Render della statusline: BASH risolto (su Windows "bash" nudo trova il bash.exe di
+# WSL in System32) e SL_WAIT, attesa fino alla fine del calcolo. Con l'attesa di
+# default (2 s, 8 s al primo giro) un calcolo lento su macchina carica usciva come
+# riga in cache o nome del modello, e il giro dopo della stessa sessione trovava il
+# lock ancora preso (P14, A11). La cadenza si prova in statusline-cadence-verify.py.
+BASH = shutil.which("bash") or "bash"
+SL_WAIT = {"FD_SL_WAIT_S": "110", "FD_SL_FIRST_WAIT_S": "110"}
 
 # Questi casi cambiano lo stato tra due render della stessa sessione a pochi
 # secondi: verificano il calcolo, non la cadenza delle parti pesanti (1.63.1,
@@ -66,10 +74,10 @@ def stdin(pct=26, rl=40, wk=46, effort=None, reset_in=2400, transcript=None):
 
 
 def render(s, **env):
-    e = dict(os.environ, HOME=str(home), COLUMNS="140")
+    e = dict(os.environ, HOME=str(home), USERPROFILE=str(home), COLUMNS="140", **SL_WAIT)
     e.pop("CLAUDE_CONFIG_DIR", None); e.pop("FD_STATUSLINE_MODE", None)
     e.update({k: str(v) for k, v in env.items()})
-    return plain(subprocess.run(["bash", str(ROOT / "statusline-ctx.sh")], input=s, capture_output=True,
+    return plain(subprocess.run([BASH, str(ROOT / "statusline-ctx.sh")], input=s, capture_output=True,
                                 text=True, env=e, timeout=120).stdout)
 
 
@@ -117,19 +125,19 @@ check("T4 contesto: percentuale sempre in riga 1 (anche a 65% su 90 colonne), fr
 
 # T5 budget 2× e 3×
 FDT = str(ROOT / "fd-telemetry.py")
-env = dict(os.environ, HOME=str(home), CLAUDE_CODE_SESSION_ID=SID); env.pop("CLAUDE_CONFIG_DIR", None)
+env = dict(os.environ, HOME=str(home), USERPROFILE=str(home), CLAUDE_CODE_SESSION_ID=SID); env.pop("CLAUDE_CONFIG_DIR", None)
 subprocess.run([sys.executable, FDT, "budget-open", "--task", "t", "--expected-output", "100", "--cwd", cwd],
                env=env, capture_output=True)
 import importlib.util
-spec = importlib.util.spec_from_file_location("fdt", FDT); os.environ["HOME"] = str(home)
+spec = importlib.util.spec_from_file_location("fdt", FDT); os.environ["HOME"] = os.environ["USERPROFILE"] = str(home)
 fdt = importlib.util.module_from_spec(spec); spec.loader.exec_module(fdt)
 bfile = base / "budgets" / f"{fdt.cwd_slug(cwd)}.json"
 b = json.loads(bfile.read_text()); b["warned"] = True; bfile.write_text(json.dumps(b))
 out2 = render(stdin())
 b["status"] = "flagged"; bfile.write_text(json.dumps(b))
 out3 = render(stdin())
-raw3 = subprocess.run(["bash", str(ROOT / "statusline-ctx.sh")], input=stdin(), capture_output=True, text=True,
-                      env=dict(os.environ, HOME=str(home), COLUMNS="140"),
+raw3 = subprocess.run([BASH, str(ROOT / "statusline-ctx.sh")], input=stdin(), capture_output=True, text=True,
+                      env=dict(os.environ, HOME=str(home), USERPROFILE=str(home), COLUMNS="140", **SL_WAIT),
                       timeout=120).stdout
 check("T5 budget 2× in parole; 3× testo rosso senza sfondo",
       "budget over 2× — reconsider the route" in out2 and "budget over 3× — post-mortem before closing" in out3
@@ -207,10 +215,10 @@ check("T12 expert via statusline.json: riga storica",
 (base / "statusline.json").unlink()
 
 # T13 install --expert / --plain
-env2 = dict(os.environ, HOME=str(home)); env2.pop("CLAUDE_CONFIG_DIR", None)
-r = subprocess.run(["bash", str(ROOT / "statusline-install.sh"), "--expert"], env=env2, capture_output=True, text=True)
+env2 = dict(os.environ, HOME=str(home), USERPROFILE=str(home)); env2.pop("CLAUDE_CONFIG_DIR", None)
+r = subprocess.run([BASH, str(ROOT / "statusline-install.sh"), "--expert"], env=env2, capture_output=True, text=True)
 m1 = json.loads((base / "statusline.json").read_text()).get("mode")
-subprocess.run(["bash", str(ROOT / "statusline-install.sh"), "--plain"], env=env2, capture_output=True, text=True)
+subprocess.run([BASH, str(ROOT / "statusline-install.sh"), "--plain"], env=env2, capture_output=True, text=True)
 m2 = json.loads((base / "statusline.json").read_text()).get("mode")
 check("T13 install --expert / --plain", m1 == "expert" and m2 == "plain" and "statusline mode" in r.stdout,
       r.stdout + r.stderr)

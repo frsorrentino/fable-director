@@ -27,11 +27,20 @@ import importlib.util
 import json
 import os
 import sqlite3
+import shutil
 import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
+
+# Render della statusline: BASH risolto (su Windows "bash" nudo trova il bash.exe di
+# WSL in System32) e SL_WAIT, attesa fino alla fine del calcolo. Con l'attesa di
+# default (2 s, 8 s al primo giro) un calcolo lento su macchina carica usciva come
+# riga in cache o nome del modello, e il giro dopo della stessa sessione trovava il
+# lock ancora preso (P14, A11). La cadenza si prova in statusline-cadence-verify.py.
+BASH = shutil.which("bash") or "bash"
+SL_WAIT = {"FD_SL_WAIT_S": "110", "FD_SL_FIRST_WAIT_S": "110"}
 
 HERE = Path(__file__).resolve().parent
 SCRIPTS = HERE.parent / "fable-director" / "scripts"
@@ -45,7 +54,7 @@ def check(name, ok, evidence=""):
 
 home = Path(tempfile.mkdtemp(prefix="fd-wf-home-"))
 proj = Path(tempfile.mkdtemp(prefix="fd-wf-proj-"))
-os.environ["HOME"] = str(home)
+os.environ["HOME"] = os.environ["USERPROFILE"] = str(home)  # Windows: Path.home() = USERPROFILE
 os.environ.pop("CLAUDE_CONFIG_DIR", None)
 spec = importlib.util.spec_from_file_location("fdt", SCRIPTS / "fd-telemetry.py")
 fdt = importlib.util.module_from_spec(spec); spec.loader.exec_module(fdt)
@@ -276,7 +285,7 @@ stdin = json.dumps({"model": {"display_name": "Fable 5.1", "id": "claude-fable-5
                     "rate_limits": {"five_hour": {"used_percentage": 22, "resets_at": RESET_AT},
                                     "seven_day": {"used_percentage": 10, "resets_at": RESET_AT + 300000}}})
 QUOTA.unlink(missing_ok=True)  # fusione a pari reset (1.52.3): il 75% di set_quota vincerebbe sul 22%
-r = run(["bash", str(SCRIPTS / "statusline-ctx.sh")], stdin)
+r = run([BASH, str(SCRIPTS / "statusline-ctx.sh")], stdin, extra=SL_WAIT)
 snap = json.loads((BASE / "sessions" / f"{SID}.json").read_text())
 q = json.loads(QUOTA.read_text())
 check("W11 statusline: sessions/<sid>.json con ctx_tokens 300100 e modello; quota con five_hour_resets_at",
