@@ -12,7 +12,8 @@ nominano file, e leggono la radice da CLAUDE_PLUGIN_ROOT.
   R4 senza CLAUDE_PLUGIN_ROOT, lanciato col percorso assoluto: stesso comando
   R5 senza CLAUDE_PLUGIN_ROOT, lanciato con un percorso relativo: percorso reso assoluto
   R6 session-kernel su Windows simulato: la riga FD Windows nomina py.sh e scripts/NAME.py
-  R7 session-kernel.sh: niente source di py.sh, nessun programma nominato da una variabile (1.65.2)
+  R7 niente here-document negli script degli hook, commenti compresi; la fusione della statusLine
+     e' un file (scripts/statusline-merge.py) lanciato per percorso letterale (1.65.3)
 
 Usage: python3 tests/plugin-root-args-verify.py   (exit 0 = all green)
 """
@@ -51,11 +52,14 @@ for name in ("session-kernel.sh", "detach.sh", "statusline-install.sh"):
         offenders[name] = hits
 check("R2 hook scripts compute no folder and pass none", not offenders, offenders)
 
-kcode = [l for l in (SCRIPTS / "session-kernel.sh").read_text(encoding="utf-8").splitlines()
-         if not l.lstrip().startswith("#")]
-kbad = [l for l in kcode if re.match(r"\s*(\.|source)\s", l) or '"$FD_PYTHON"' in l]
-check("R7 session-kernel.sh: no source of py.sh, no program named by a variable (1.65.2)",
-      not kbad, kbad)
+heredocs = {n: [i for i, l in enumerate((SCRIPTS / n).read_text(encoding="utf-8").splitlines(), 1)
+                 if "<<" in l]
+            for n in ("session-kernel.sh", "statusline-install.sh", "detach.sh")}
+inst = (SCRIPTS / "statusline-install.sh").read_text(encoding="utf-8")
+check("R7 no here-document in hook scripts, comments included; the statusLine merge is a file (1.65.3)",
+      not any(heredocs.values()) and (SCRIPTS / "statusline-merge.py").is_file()
+      and 'bash "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" "${CLAUDE_PLUGIN_ROOT}/scripts/statusline-merge.py"' in inst,
+      heredocs)
 
 
 def install(home, env_root, script_arg, cwd=None):
