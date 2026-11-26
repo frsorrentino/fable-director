@@ -33,6 +33,9 @@ print(sys.executable)' 2>/dev/null) || continue
     exe=${exe//\\//}   # C:\Program Files\… → C:/Program Files/… (Git Bash runs both, only this survives quoting)
     [ -n "$exe" ] || continue
     FD_PYTHON=$exe
+    case "${OSTYPE:-}" in
+      msys* | cygwin* | win*) mkdir -p "${cache%/*}" 2>/dev/null && printf '%s\n' "$exe" > "$cache" 2>/dev/null ;;
+    esac
     return 0
   done
   return 1
@@ -43,7 +46,6 @@ print(sys.executable)' 2>/dev/null) || continue
 # otherwise write __pycache__/ next to them. Same speed, the cache just lives elsewhere.
 if _fd_py_resolve; then
   export FD_PYTHON PYTHONUTF8=1 PYTHONIOENCODING=utf-8
-  export PYTHONPYCACHEPREFIX="${PYTHONPYCACHEPREFIX:-${XDG_CACHE_HOME:-$HOME/.cache}/fable-director/pycache}"
 else
   unset FD_PYTHON
 fi
