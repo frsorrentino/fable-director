@@ -20,10 +20,6 @@ _fd_py_resolve() {
     "" | *WindowsApps*) ;;
     *) FD_PYTHON=$p; return 0 ;;
   esac
-  if [ -r "$cache" ]; then
-    IFS= read -r p < "$cache" || true
-    [ -n "$p" ] && [ -x "$p" ] && { FD_PYTHON=$p; return 0; }
-  fi
   for c in python3 python "py -3"; do
     # $c unquoted on purpose: "py -3" is launcher + flag
     exe=$(PYTHONUTF8=1 $c -c 'import sys
@@ -46,6 +42,7 @@ print(sys.executable)' 2>/dev/null) || continue
 # otherwise write __pycache__/ next to them. Same speed, the cache just lives elsewhere.
 if _fd_py_resolve; then
   export FD_PYTHON PYTHONUTF8=1 PYTHONIOENCODING=utf-8
+  export PYTHONPYCACHEPREFIX="${PYTHONPYCACHEPREFIX:-${XDG_CACHE_HOME:-$HOME/.cache}/fable-director/pycache}"
 else
   unset FD_PYTHON
 fi
