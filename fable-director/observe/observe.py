@@ -1223,10 +1223,51 @@ def generalize(text, keep=None):
     return generalize_files(generalize_dirs(text, keep), keep)
 
 
+# 26/11/2026 (claude-observe-nomi-sessione-26-11): la #4 di supervisor, mandata da un collega, portava tre domini di
+# clienti presi dai nomi delle sessioni («pix-acme.it not closed»): normalize generalizza solo i testi fra «», e il nome
+# del progetto o della sessione, scritto nudo, usciva. Ora, oltre a generalizzare, nel testo che esce il nome del progetto di
+# ogni record (la cartella; per i componenti del plugin il nome della sessione, anche HOST:nome) e della cartella di
+# lavoro diventa <session>, anche dentro il nome di una sessione che lo contiene (pix-acme.it, acme.it-prova). Restano
+# i nomi del plugin stesso e quelli corti (meno di 4 caratteri: «app», «web» sono parole).
+SESSION_MARK = "<session>"
+NAME_TOKEN_RE = re.compile(r"[\w][\w.:-]*[\w]|[\w]")
+
+
+def session_names(recs, keep=None, cwd=None):
+    """I nomi da togliere: il progetto (o la sessione) dei record e la cartella di lavoro, anche la parte dopo «:»."""
+    keep = {k.lower() for k in (own_names() if keep is None else keep)} | {str(TOOL.get("name") or "").lower()}
+    raw = {str(r.get("project") or "") for r in recs}
+    here = os.path.realpath(cwd or os.getcwd())
+    if here != os.path.realpath(os.path.expanduser("~")):   # la home non e' un progetto (USER_SEG_RE ne toglie gia' il nome)
+        raw.add(os.path.basename(here))
+    names = set()
+    for s in raw:
+        s = s.strip().replace("\\", "/").rstrip("/")
+        s = s.rsplit("/", 1)[-1]
+        base = s.rsplit(":", 1)[-1]
+        # il nome di una sessione e' spesso prefisso-progetto (pix-acme.it): anche le code dopo un «-» con la forma di
+        # un dominio (un punto dentro), che sono i nomi dei clienti; le altre code (supervisor-app → app) restano
+        tails = [base.split("-", i)[-1] for i in range(1, base.count("-") + 1)]
+        for n in (s, base, *(x for x in tails if re.search(r"\w\.\w", x))):
+            n = n.lower()
+            if len(n) >= 4 and n not in keep and not n.startswith(("[progetto_", "<")):
+                names.add(n)
+    return sorted(names, key=len, reverse=True)
+
+
+def scrub_session(text, names):
+    """Ogni parola che e' un nome di `names`, o lo contiene unito con - _ : (pix-acme.it, win:acme.it), diventa <session>."""
+    if not names:
+        return str(text or "")
+    alt = "|".join(re.escape(n) for n in names)
+    whole = re.compile(rf"(?i)(?:[\w.]*[-_:])?(?:{alt})(?:[-_][\w.-]*)?")
+    return NAME_TOKEN_RE.sub(lambda m: SESSION_MARK if whole.fullmatch(m.group(0)) else m.group(0), str(text or ""))
+
+
 def existing_issue(repo, recs):
     """Una issue aperta sullo stesso errore: si cerca la chiamata e le parole dell'errore piu' frequente."""
     top = recs[0]
-    words = [w for w in re.findall(r"[A-Za-z][A-Za-z_]{3,}", generalize(view(top).get("error")))][:5]   # la ricerca esce anche lei
+    words = [w for w in re.findall(r"[A-Za-z][A-Za-z_]{3,}", scrub_session(generalize(view(top).get("error")), session_names(recs)))][:5]   # la ricerca esce anche lei
     q = " ".join([str(top.get("call") or "").split()[0]] + words) + " in:title,body"
     try:
         res = subprocess.run(["gh", "issue", "list", "-R", repo, "--state", "open", "--search", q, "--json", "number,title,url",
@@ -1245,7 +1286,8 @@ def draft(tool, recs, target=None, security=False, bare=False):
     keep = own_names()
     # ogni testo che esce, su una riga (20/11, claude-observe-righe-a-capo-20-11: un a capo nel messaggio CSP di execute_js
     # spezzava la lista e il servizio anonimo rifiutava la bozza con HTTP 400; il file locale resta com'e')
-    out = lambda x, n: " ".join(generalize(scrub(x, n), keep).split())  # noqa: E731
+    names = session_names(recs, keep)   # 26/11: i nomi di progetto e sessione (dopo generalize: i percorsi restano <dir>/<name>)
+    out = lambda x, n: " ".join(scrub_session(generalize(scrub(x, n), keep), names).split())  # noqa: E731
     rows = []
     for v in vs[:20]:
         c = (recs_by_id.get(v.get("id")) or {}).get("context") or {}

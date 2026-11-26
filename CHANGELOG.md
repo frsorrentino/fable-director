@@ -11,6 +11,7 @@ Full release history. The README shows only the latest few entries.
   - **Quota files from the statusline only.** Where no statusline runs (`claude -p`, phone, Remote Control) `quota-<account>.json` and its history are no longer refreshed; the gate's quota rules then skip (fail-open, as on a stale reading), as before 1.53.0.
   - **Credential finding unchanged in code.** The directory also asks for API keys through a `userConfig` option instead of the environment. Checked on Claude Code 2.1.332 with a probe plugin: a `userConfig` value reaches hooks (`CLAUDE_PLUGIN_OPTION_<KEY>`) but not Bash commands, where `external-exec.py`, `cross-verify.py` and `media-analyze.py` run, so that change would leave the scripts without their key. The opt-in external routes stay as documented.
   - Tests: new `tests/executor-pin-verify.py` (9 checks: the deny, the cases that pass, the telemetry event, no mod shipped).
+  - **`observe/` synced from claude-observe be00263.** Project and session names in an outgoing report are replaced by `<session>`, including a domain-like tail in a prefixed session name, so a session named after a client's site no longer leaves that name in a public report. Only `observe/observe.py` and `observe/SOURCE` change. Task: claude-observe-nomi-sessione-26-11.
   - Task: directory-fable-director-26-11.
 
 ## 1.64.x
