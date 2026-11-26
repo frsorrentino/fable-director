@@ -37,7 +37,7 @@ IFS= read -r -d '' input || true
 # dello Store; il percorso trovato e' in cache, niente probe a ogni refresh). Senza
 # Python la statusline lo dice, invece di restare vuota.
 case "$0" in */*|*\\*) SL_DIR="${0%[/\\]*}" ;; *) SL_DIR=. ;; esac   # dirname senza processo; \ = Windows
-. "$SL_DIR/py.sh" 2>/dev/null || { printf 'fable-director: no Python 3 found — install Python 3.8+\n'; exit 0; }
+source "$SL_DIR/py.sh" 2>/dev/null || { printf 'fable-director: no Python 3 found — install Python 3.8+\n'; exit 0; }
 
 # Diagnostica: se esiste il flag file, salva l'ultimo stdin ricevuto (per capire
 # quali campi il piano/account corrente espone). Attiva: touch <config>/fable-director/.statusline-debug
@@ -280,7 +280,7 @@ EOF
 # FD_SL_LOCK: il nucleo lascia il lock appena ha finito, anche se fallisce.
 render() {
   local res tmp
-  res=$(printf '%s' "$input" | FD_SL_BADGE="$badge" FD_SL_LOCK="$SC_LOCK" "$FD_PYTHON" "$SL_DIR/statusline-core.py" 2>/dev/null)
+  res=$(printf '%s' "$input" | FD_SL_BADGE="$badge" FD_SL_LOCK="$SC_LOCK" _fd_py_run "$SL_DIR/statusline-core.py" 2>/dev/null)
   case "$res" in
     FDTOK\ *) res=$(expert_render "${res#FDTOK }") ;;
   esac

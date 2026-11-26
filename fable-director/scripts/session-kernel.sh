@@ -14,8 +14,8 @@ FD_INPUT=""
 # Interprete Python risolto UNA volta (Windows: `python3` e' l'alias dello Store,
 # vedi py.sh). Senza Python il kernel esce lo stesso, con l'avviso che i gate
 # sono spenti: prima usciva vuoto (l'ultimo passo era un pipe in python3).
-. "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" 2>/dev/null || true
-fd_py() { [ -n "${FD_PYTHON:-}" ] && "$FD_PYTHON" "$@"; }
+source "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" 2>/dev/null || true
+fd_py() { [ -n "${FD_PY_NAME:-}" ] && _fd_py_run "$@"; }
 FD_SOURCE="$(printf '%s' "$FD_INPUT" | fd_py -c $'import json,sys\ntry:\n    d=json.load(sys.stdin)\n    print((d or {}).get("source") or "")\nexcept Exception:\n    print("")' 2>/dev/null || true)"
 
 # Cap dell'harness (Claude Code 2.1.260, letto dal binario): l'output di un
@@ -32,7 +32,7 @@ fd_core() {
   printf 'FABLE-DIRECTOR KERNEL (delegation policy — full body: skill fable-director:delega-efficiente):\n'
   cat "${CLAUDE_PLUGIN_ROOT}/kernel.md" 2>/dev/null || true
 
-  if [ -z "${FD_PYTHON:-}" ]; then
+  if [ -z "${FD_PY_NAME:-}" ]; then
     printf '\nFD ⚠ NO PYTHON 3 on this machine (tried python3, python, py -3): the gates, the perimeter, the Stop check, telemetry and the statusline are OFF, whatever the lines above say. Tell the user once: install Python 3.8+ (python.org) and restart Claude Code.\n'
   fi
   # Windows (Git Bash): `python3` e i path nudi degli script finiscono sull'alias
@@ -133,7 +133,7 @@ rm -f "$HOME/.claude/fable-director/xf-onboarding-shown" 2>/dev/null || true
 # ricomincia, e i 3 tentativi finivano bruciati senza che nessuno rispondesse.
 case "$FD_SOURCE" in compact|fork|clear) XF_SKIP=1;; *) XF_SKIP=0;; esac
 # Senza Python la domanda porterebbe a comandi che non partono: nessun tentativo.
-[ -n "${FD_PYTHON:-}" ] || XF_SKIP=1
+[ -n "${FD_PY_NAME:-}" ] || XF_SKIP=1
 if [ "$XF_SKIP" = "0" ] && [ ! -f "$XF_CFG" ] && [ ! -f "$XF_DONE" ]; then
   mkdir -p "$HOME/.claude/fable-director" 2>/dev/null || true
   N=$(cat "$XF_COUNT" 2>/dev/null || echo 0)
