@@ -76,7 +76,7 @@ time by a model rather than by code.
 
 **Reads:** what Claude Code hands its hooks (session id, model, tool names, the transcript path — from the transcript, token counts only), your `settings.json`, and the files you point the media tools or the anonymizer at.
 **Writes:** `~/.claude/fable-director/` (telemetry, budgets, handoffs, media cache, anonymizer maps at mode 0600), the `statusLine` and one `autoUpdate` key in `settings.json` (announced, backed up first), and a local error log of its own scripts.
-**Sends:** nothing off your machine by default. The external Gemini/Codex/xAI routes, the error report to GitHub and the Whisper model download run only after you set them up or say yes; `--data-class restricted` refuses the external routes.
+**Sends:** nothing off your machine until you set it up. Once you configure a free provider (Gemini, Codex, Antigravity), low-risk work goes to it without asking each time; paid providers such as xAI run only on your explicit consent, and `--data-class restricted` always refuses the external routes. The error report to GitHub runs only on your yes; the Whisper model is downloaded, with a notice, the first time you transcribe.
 **Keeps:** everything until you delete it. Full policy: **[privacy policy](https://github.com/frsorrentino/fable-director/blob/main/docs/privacy.md)**.
 
 ### No hooks module (since 1.65.0)

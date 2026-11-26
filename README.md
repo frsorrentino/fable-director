@@ -11,6 +11,17 @@ and quality is a constraint, never part of the trade.
 
 ![See the limit coming: plan quotas, live budget and burn-rate in your statusline on every turn. The rate limit stops being a surprise — it becomes a dashboard you glance at.](assets/readme/card4-gauge.png)
 
+## What's new
+
+- **1.65** — no hooks module: the directory review asked for it to go. The
+  cheap executor stays on sonnet through the delegation gate, and the plan
+  quotas come from the statusline.
+- **1.61** — once a free provider is configured, low-risk work goes to it by
+  default instead of being proposed each time; `--data-class restricted`
+  inputs never take that route.
+
+Full history: [CHANGELOG.md](CHANGELOG.md).
+
 ## Where your quota goes, and what this does about it
 
 ![Most of your AI bill is invisible: measured on 1,282 real sessions in September-October 2026, only 13% is the answers you read — 28% is new context being cached, and 59% is your context re-sent on every single turn. fable-director measures all of it.](assets/readme/card1-iceberg.png)
@@ -216,7 +227,7 @@ blocks the route outright. Setup and guarantees:
 
 **Reads:** what Claude Code hands its hooks (session id, model, tool names, the transcript path — from the transcript, token counts only), your `settings.json`, and the files you point the media tools or the anonymizer at.
 **Writes:** `~/.claude/fable-director/` (telemetry, budgets, handoffs, media cache, anonymizer maps at mode 0600), the `statusLine` and one `autoUpdate` key in `settings.json` (announced, backed up first), and a local error log of its own scripts.
-**Sends:** nothing off your machine until you set it up. The external Gemini/Codex/xAI routes, the error report to GitHub and the Whisper model download run only after you set them up or say yes; `--data-class restricted` refuses the external routes.
+**Sends:** nothing off your machine until you set it up. Once you configure a free provider (Gemini, Codex, Antigravity), low-risk work goes to it without asking each time; paid providers such as xAI run only on your explicit consent, and `--data-class restricted` always refuses the external routes. The error report to GitHub runs only on your yes; the Whisper model is downloaded, with a notice, the first time you transcribe.
 **Keeps:** everything until you delete it. Full policy: **[docs/privacy.md](docs/privacy.md)**.
 
 <details>
@@ -229,11 +240,10 @@ Up to 1.64.9 fable-director also loaded a hooks module (mod). 1.65.0 removes it,
 ### Error reports: local, and only on your yes
 
 The plugin notes the errors of **its own scripts** (a non-zero exit of
-`fd-telemetry.py`, `external-exec.py`, `anonymizer.py` and the rest of
-`scripts/`) in a **local** file,
+any script in `scripts/`) in a **local** file,
 `${XDG_STATE_HOME:-~/.local/state}/claude-observe/fable-director.jsonl` (mode
-0600). Exit codes that are documented outcomes, not defects (a `cache-get`
-miss, `anonymizer.py test --strict` below threshold), are skipped. Of each
+0600). Exit codes that are documented outcomes, not defects (a cache
+miss, an anonymizer test below its threshold), are skipped. Of each
 command only the script name, the subcommand and the option names are kept:
 every argument value becomes `<ARG>`, and the error text is scrubbed (home
 path, emails, URL queries, secrets). **Nothing leaves your computer** except
@@ -272,8 +282,8 @@ gracefully when absent.
 - **[`superpowers`](https://github.com/obra/superpowers-marketplace)** — process
   discipline: a well-framed task delegates better.
 
-Instructions you repeat in 3+ sessions (`fd-telemetry.py repeats`) become
-playbook candidates, on your yes.
+Instructions you repeat in 3+ sessions become playbook candidates, on your
+yes.
 
 ## Documentation
 
