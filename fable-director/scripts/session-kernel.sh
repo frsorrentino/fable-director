@@ -145,15 +145,11 @@ if [ "$XF_SKIP" = "0" ] && [ ! -f "$XF_CFG" ] && [ ! -f "$XF_DONE" ]; then
   N=$(cat "$XF_COUNT" 2>/dev/null || echo 0)
   case "$N" in (*[!0-9]*|"") N=0;; esac
   if [ "$N" -lt 3 ]; then
-    # Here-document letto da read (1.65.3): la riga che lo apre non lascia
-    # niente aperto e il delimitatore sta da solo, come chiede la directory;
-    # read lascia l'a capo finale che $(cat) toglieva, la riga dopo lo toglie.
-    FD_XF=""
-    IFS= read -r -d '' FD_XF <<EOF
-
-XF ONBOARDING — ASK THE USER NOW (attempt $((N + 1))/3): external free-tier executors are not configured. Before anything else, ask ONE multiple-choice question with the AskUserQuestion tool (plain question if unavailable): header "Executors"; question "fable-director can route non-quality-sensitive batch work and cross-family verification to free external models, at zero Claude tokens. Connect one now?"; options (1) "Gemini — free API key" (Google AI Studio, daily-reset limits), (2) "Codex CLI — ChatGPT plan" (usage included in the plan), (3) "Both", (4) "No — don't ask again". On 1-3: run bash "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" "${CLAUDE_PLUGIN_ROOT}/scripts/external-exec.py" --doctor and follow its guidance. On 4: run touch "$XF_DONE" so this never reappears. If the user skips it, do nothing — asked again next session (max 3, then silence).
-EOF
-    FD_XF="${FD_XF%$'\n'}"
+    # Testo su una riga con printf (1.65.3), niente here-document: i valori
+    # entrano come argomenti, il testo stampato resta lo stesso.
+    printf -v FD_XF '\nXF ONBOARDING — ASK THE USER NOW (attempt %s/3): external free-tier executors are not configured. Before anything else, ask ONE multiple-choice question with the AskUserQuestion tool (plain question if unavailable): header "Executors"; question "fable-director can route non-quality-sensitive batch work and cross-family verification to free external models, at zero Claude tokens. Connect one now?"; options (1) "Gemini — free API key" (Google AI Studio, daily-reset limits), (2) "Codex CLI — ChatGPT plan" (usage included in the plan), (3) "Both", (4) "No — don'\''t ask again". On 1-3: run bash "%s" "%s" --doctor and follow its guidance. On 4: run touch "%s" so this never reappears. If the user skips it, do nothing — asked again next session (max 3, then silence).' \
+      "$((N + 1))" "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" \
+      "${CLAUDE_PLUGIN_ROOT}/scripts/external-exec.py" "$XF_DONE"
     # Il blocco entra solo se resta sotto il cap: altrimenti verrebbe troncato
     # a meta' e la domanda non arriverebbe mai — e il tentativo NON si consuma.
     if [ $(( ${#FD_OUT} + ${#FD_XF} + 1 )) -le "$FD_CAP_CHARS" ]; then
