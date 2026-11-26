@@ -10,12 +10,12 @@
 # già visto nella stessa sessione. Il kernel invece va riemesso sempre —
 # dopo una compattazione il testo iniettato può non esserci più.
 FD_INPUT=""
-[ -t 0 ] || FD_INPUT="$(cat 2>/dev/null || true)"
+test -t 0 || FD_INPUT="$(cat 2>/dev/null || true)"
 # Interprete Python risolto UNA volta (Windows: `python3` e' l'alias dello Store,
 # vedi py.sh). Senza Python il kernel esce lo stesso, con l'avviso che i gate
 # sono spenti: prima usciva vuoto (l'ultimo passo era un pipe in python3).
-. "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" 2>/dev/null || true
-fd_py() { [ -n "${FD_PYTHON:-}" ] && "$FD_PYTHON" "$@"; }
+source "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" 2>/dev/null || true
+fd_py() { test -n "${FD_PYTHON:-}" && "$FD_PYTHON" "$@"; }
 FD_SOURCE="$(printf '%s' "$FD_INPUT" | fd_py -c $'import json,sys\ntry:\n    d=json.load(sys.stdin)\n    print((d or {}).get("source") or "")\nexcept Exception:\n    print("")' 2>/dev/null || true)"
 
 # Cap dell'harness (Claude Code 2.1.260, letto dal binario): l'output di un
@@ -32,7 +32,7 @@ fd_core() {
   printf 'FABLE-DIRECTOR KERNEL (delegation policy — full body: skill fable-director:delega-efficiente):\n'
   cat "${CLAUDE_PLUGIN_ROOT}/kernel.md" 2>/dev/null || true
 
-  if [ -z "${FD_PYTHON:-}" ]; then
+  if test -z "${FD_PYTHON:-}"; then
     printf '\nFD ⚠ NO PYTHON 3 on this machine (tried python3, python, py -3): the gates, the perimeter, the Stop check, telemetry and the statusline are OFF, whatever the lines above say. Tell the user once: install Python 3.8+ (python.org) and restart Claude Code.\n'
   fi
   # Windows (Git Bash): `python3` e i path nudi degli script finiscono sull'alias
@@ -54,7 +54,7 @@ fd_core() {
   # Sessione forkata: budget e telemetria sono per-cwd, non per-sessione. Padre e
   # fork condividono lo stesso file di budget — è un limite dichiarato nel README,
   # qui diventa un avviso nel momento esatto in cui morde.
-  if [ "$FD_SOURCE" = "fork" ]; then
+  if test "$FD_SOURCE" = "fork"; then
     printf '\nFD ⑂ forked session: the open pre-budget is ONE FILE PER CWD, shared with the parent session — parallel budgeted work needs separate worktrees, not a fork.\n'
   fi
 
@@ -71,21 +71,21 @@ fd_core() {
   # vale solo prima della 2.1.251). `inherit` vale come assente (docs). Gli
   # effort pinnati non hanno una regola documentata sotto FORCE: niente riga.
   SM="${CLAUDE_CODE_SUBAGENT_MODEL:-}"
-  [ "$SM" = "inherit" ] && SM=""
+  test "$SM" = "inherit" && SM=""
   SMF="${CLAUDE_CODE_SUBAGENT_MODEL_FORCE:-}"
   case "$(printf '%s' "$SMF" | tr '[:upper:]' '[:lower:]')" in ""|0|false|no|off) SMF="";; esac
-  if [ -n "$SMF" ] && [ -n "$SM" ]; then
+  if test -n "$SMF" && test -n "$SM"; then
     printf '\nFD ⚠ CLAUDE_CODE_SUBAGENT_MODEL_FORCE with CLAUDE_CODE_SUBAGENT_MODEL=%s: Claude Code ignores the model in agent files and in Agent/workflow calls — fd-executor (sonnet), fd-verifier (inherit) and every workflow stage run on %s. Unset it (settings.json env) or route knowing the cheap executor and the fresh verifier sit on %s.\n' "$SM" "$SM" "$SM"
-  elif [ -n "$SMF" ]; then
+  elif test -n "$SMF"; then
     printf '\nFD ⚠ CLAUDE_CODE_SUBAGENT_MODEL_FORCE is on without CLAUDE_CODE_SUBAGENT_MODEL: Claude Code ignores the model in agent files and in Agent/workflow calls — fd-executor leaves sonnet for the session model (measured: same correctness, 5.5× the USD on Fable 5.1); fd-verifier (inherit) unchanged.\n'
-  elif [ -n "$SM" ]; then
+  elif test -n "$SM"; then
     printf '\nFD: CLAUDE_CODE_SUBAGENT_MODEL=%s is a default (Claude Code ≥ 2.1.251): fd-executor stays on sonnet, fd-verifier on the session model; subagents with no model of their own run on %s (Explore and Plan excepted). Only CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1 overrides the pins.\n' "$SM" "$SM"
   fi
 
   # Righe corte e sempre volute PRIMA dei blocchi lunghi: se il cap taglia,
   # taglia in fondo.
   PB="$HOME/.claude/delega-playbook.md"
-  if [ -f "$PB" ]; then
+  if test -f "$PB"; then
     printf '\nHeuristics playbook: %s — consult it before orchestrating batch/workflow/multi-agent work.\n' "$PB"
   else
     printf '\nPlaybook not initialized: copy %s to %s (only if missing, never overwrite).\n' "${CLAUDE_PLUGIN_ROOT}/playbook-template.md" "$PB"
@@ -102,7 +102,7 @@ fd_core() {
   # Hint legenda one-shot: la statusline usa sigle compatte — una volta sola,
   # suggerisci al modello di indicare il comando che le spiega.
   HELP_MARK="$HOME/.claude/fable-director/help-hint-shown"
-  if [ ! -f "$HELP_MARK" ]; then
+  if test ! -f "$HELP_MARK"; then
     mkdir -p "$HOME/.claude/fable-director" 2>/dev/null || true
     printf '\nSTATUSLINE LEGEND (mention to the user ONCE, then never again): /fable-director:help explains every statusline segment, symbol and color.\n'
     : > "$HELP_MARK" 2>/dev/null || true
@@ -111,7 +111,7 @@ fd_core() {
   # Hindsight: ripesca gli sfondamenti già auto-registrati su QUESTO cwd. Muto
   # dove non c'è evidenza (zero token), tetto 5 righe dove c'è. Saltato dopo una
   # compattazione: stessa sessione, avviso già dato, ripeterlo è solo costo.
-  if [ "$FD_SOURCE" != "compact" ]; then
+  if test "$FD_SOURCE" != "compact"; then
     printf '%s' "$FD_INPUT" | fd_py "${CLAUDE_PLUGIN_ROOT}/scripts/session-hindsight.py" 2>/dev/null || true
   fi
 }
@@ -133,12 +133,12 @@ rm -f "$HOME/.claude/fable-director/xf-onboarding-shown" 2>/dev/null || true
 # ricomincia, e i 3 tentativi finivano bruciati senza che nessuno rispondesse.
 case "$FD_SOURCE" in compact|fork|clear) XF_SKIP=1;; *) XF_SKIP=0;; esac
 # Senza Python la domanda porterebbe a comandi che non partono: nessun tentativo.
-[ -n "${FD_PYTHON:-}" ] || XF_SKIP=1
-if [ "$XF_SKIP" = "0" ] && [ ! -f "$XF_CFG" ] && [ ! -f "$XF_DONE" ]; then
+test -n "${FD_PYTHON:-}" || XF_SKIP=1
+if test "$XF_SKIP" = "0" && test ! -f "$XF_CFG" && test ! -f "$XF_DONE"; then
   mkdir -p "$HOME/.claude/fable-director" 2>/dev/null || true
   N=$(cat "$XF_COUNT" 2>/dev/null || echo 0)
   case "$N" in (*[!0-9]*|"") N=0;; esac
-  if [ "$N" -lt 3 ]; then
+  if test "$N" -lt 3; then
     # Testo su una riga con printf (1.65.3), niente here-document: i valori
     # entrano come argomenti, il testo stampato resta lo stesso.
     printf -v FD_XF '\nXF ONBOARDING — ASK THE USER NOW (attempt %s/3): external free-tier executors are not configured. Before anything else, ask ONE multiple-choice question with the AskUserQuestion tool (plain question if unavailable): header "Executors"; question "fable-director can route non-quality-sensitive batch work and cross-family verification to free external models, at zero Claude tokens. Connect one now?"; options (1) "Gemini — free API key" (Google AI Studio, daily-reset limits), (2) "Codex CLI — ChatGPT plan" (usage included in the plan), (3) "Both", (4) "No — don'\''t ask again". On 1-3: run bash "%s" "%s" --doctor and follow its guidance. On 4: run touch "%s" so this never reappears. If the user skips it, do nothing — asked again next session (max 3, then silence).' \
@@ -146,7 +146,7 @@ if [ "$XF_SKIP" = "0" ] && [ ! -f "$XF_CFG" ] && [ ! -f "$XF_DONE" ]; then
       "${CLAUDE_PLUGIN_ROOT}/scripts/external-exec.py" "$XF_DONE"
     # Il blocco entra solo se resta sotto il cap: altrimenti verrebbe troncato
     # a meta' e la domanda non arriverebbe mai — e il tentativo NON si consuma.
-    if [ $(( ${#FD_OUT} + ${#FD_XF} + 1 )) -le "$FD_CAP_CHARS" ]; then
+    if test $(( ${#FD_OUT} + ${#FD_XF} + 1 )) -le "$FD_CAP_CHARS"; then
       FD_OUT="${FD_OUT}"$'\n'"${FD_XF}"
       XF_NEXT=$((N + 1))   # scritto solo dopo che il testo e' uscito davvero (sotto)
     fi
@@ -163,7 +163,7 @@ case "${OSTYPE:-}" in
   msys*|cygwin*|win*) ;;
   *)
     FD_SP="$(printf '\nFD scripts, not on PATH: python3 "%s"' "${CLAUDE_PLUGIN_ROOT}/scripts/fd-telemetry.py")"
-    if [ $(( ${#FD_OUT} + ${#FD_SP} + 1 )) -le "$FD_CAP_CHARS" ]; then
+    if test $(( ${#FD_OUT} + ${#FD_SP} + 1 )) -le "$FD_CAP_CHARS"; then
       FD_OUT="${FD_OUT}"$'\n'"${FD_SP}"
     fi ;;
 esac
@@ -175,11 +175,11 @@ esac
 # La riga al modello c'e' solo quando settings.json e' cambiato, DOPO il blocco
 # onboarding e solo se entra nel cap: la statusline compare comunque al
 # prossimo avvio, la domanda sugli executor no.
-if [ "$FD_SOURCE" != "compact" ]; then
+if test "$FD_SOURCE" != "compact"; then
   SL_LINE="$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/statusline-install.sh" --auto 2>/dev/null || true)"
-  if [ -n "$SL_LINE" ]; then
+  if test -n "$SL_LINE"; then
     FD_SL="$(printf '\nSTATUSLINE %s (auto): visible from the next start of Claude Code; tell the user once. Off: /fable-director:statusline --remove' "$SL_LINE")"
-    if [ $(( ${#FD_OUT} + ${#FD_SL} + 1 )) -le "$FD_CAP_CHARS" ]; then
+    if test $(( ${#FD_OUT} + ${#FD_SL} + 1 )) -le "$FD_CAP_CHARS"; then
       FD_OUT="${FD_OUT}"$'\n'"${FD_SL}"
     fi
   fi
@@ -205,9 +205,9 @@ if cut:
     t = t.rstrip() + "\n[fd: SessionStart output cut at the 8000-char/200-line hook cap]"
 sys.stdout.write(t if t.endswith("\n") else t + "\n")
 ' 2>/dev/null)"
-if [ -z "$FD_FINAL" ]; then
+if test -z "$FD_FINAL"; then
   FD_FINAL="${FD_OUT:0:$FD_CAP_CHARS}"
-  [ "${#FD_OUT}" -gt "$FD_CAP_CHARS" ] && FD_FINAL="${FD_FINAL}"$'\n''[fd: SessionStart output cut at the 8000-char/200-line hook cap]'
+  test "${#FD_OUT}" -gt "$FD_CAP_CHARS" && FD_FINAL="${FD_FINAL}"$'\n''[fd: SessionStart output cut at the 8000-char/200-line hook cap]'
 fi
-printf '%s\n' "$FD_FINAL" && [ -n "${XF_NEXT:-}" ] && { echo "$XF_NEXT" > "$XF_COUNT"; } 2>/dev/null
+printf '%s\n' "$FD_FINAL" && test -n "${XF_NEXT:-}" && { echo "$XF_NEXT" > "$XF_COUNT"; } 2>/dev/null
 exit 0
