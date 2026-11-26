@@ -12,6 +12,7 @@ nominano file, e leggono la radice da CLAUDE_PLUGIN_ROOT.
   R4 senza CLAUDE_PLUGIN_ROOT, lanciato col percorso assoluto: stesso comando
   R5 senza CLAUDE_PLUGIN_ROOT, lanciato con un percorso relativo: percorso reso assoluto
   R6 session-kernel su Windows simulato: la riga FD Windows nomina py.sh e scripts/NAME.py
+  R7 session-kernel.sh: niente source di py.sh, nessun programma nominato da una variabile (1.65.2)
 
 Usage: python3 tests/plugin-root-args-verify.py   (exit 0 = all green)
 """
@@ -49,6 +50,12 @@ for name in ("session-kernel.sh", "detach.sh", "statusline-install.sh"):
     if hits:
         offenders[name] = hits
 check("R2 hook scripts compute no folder and pass none", not offenders, offenders)
+
+kcode = [l for l in (SCRIPTS / "session-kernel.sh").read_text(encoding="utf-8").splitlines()
+         if not l.lstrip().startswith("#")]
+kbad = [l for l in kcode if re.match(r"\s*(\.|source)\s", l) or '"$FD_PYTHON"' in l]
+check("R7 session-kernel.sh: no source of py.sh, no program named by a variable (1.65.2)",
+      not kbad, kbad)
 
 
 def install(home, env_root, script_arg, cwd=None):

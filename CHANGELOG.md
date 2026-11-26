@@ -4,6 +4,14 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.65.x
 
+- **1.65.2 — the session kernel no longer sources py.sh or runs a program named by a variable.**
+  - **Why:** measured on 1.65.1, the directory's validation still blocks with `COMMAND_PATH_COMPUTED` at `.`, listed right after `scripts/py.sh`: `session-kernel.sh` loaded py.sh with the `.` builtin and then ran `"$FD_PYTHON"`, a program the validator cannot name.
+  - **`scripts/session-kernel.sh`.** Every Python call goes through `bash "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" …`, a literal path; the first call also says whether Python is there, so the `NO PYTHON 3` warning and the onboarding skip work as before. Windows Python writes `\r\n`: the probe strips `\r` (without it, a test run on Windows said NO PYTHON while Python was there). Measured on Windows (Git Bash, `source=startup`, 3×5 runs): about 0.3 s more per session start, from 1.86 s to 2.17 s on average; same output as 1.65.1.
+  - **`scripts/cross-verify.py`.** The Codex note links to the CLI's install instructions instead of `npm i -g`, as in `external-exec.py`.
+  - Tests: `plugin-root-args-verify` R7 (no `.`/`source`, no `"$FD_PYTHON"` in the kernel).
+  - The Windows statusLine change of 1.65.1 (`/c/…` → `C:/…`, rewritten once) stays as described there.
+  - Task: directory-fable-director-26-11.
+
 - **1.65.1 — no command hands a plugin folder to a program, and the manifest drops icon and privacyPolicyUrl.**
   - **Why:** measured on 1.65.0, the directory's validation blocks with `COMMAND_PATH_COMPUTED` and lists `.` and `scripts` among the files the commands run, that is folders handed to a program. The fix asked for: name files, and read the plugin root from `CLAUDE_PLUGIN_ROOT`.
   - **`scripts/session-kernel.sh`.** The `FD Windows` and `FD scripts, not on PATH` lines name `scripts/NAME.py` and `scripts/fd-telemetry.py` instead of printing the `scripts` folder: same text. The onboarding question tells Claude to run `bash "<root>/scripts/py.sh" "<root>/scripts/external-exec.py" --doctor` instead of `cd` into the folder; the aside on paid keys is gone from it, since the doctor prints the same rule, so the block stays within the kernel's 7,900-character cap.

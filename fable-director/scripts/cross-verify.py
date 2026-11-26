@@ -116,7 +116,7 @@ DEFAULT_CONFIG = {
             "timeout": 600,
             "auth_check": ["codex", "login", "status"],
             "billing": "free",
-            "note": "richiede Codex CLI >=0.154 (npm i -g @openai/codex@latest) + login "
+            "note": "richiede Codex CLI >=0.154 (installazione: https://github.com/openai/codex) + login "
                     "ChatGPT (quota finestra 5h; nessuna API di lettura quota; gpt-6-pro "
                     "non e' incluso nel piano ChatGPT). Alternative built-in: gpt-6-terra, "
                     "gpt-6-sol (detail), gpt-6-luna (repeatable). "
