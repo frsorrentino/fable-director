@@ -926,7 +926,7 @@ def log_gate_deny(data, kind, budget=None):
     try:
         ti = data.get("tool_input") or {}
         payload = {
-            "kind": kind,  # no_budget | stale_budget | flagged | quota_guard | verify_* | reservation
+            "kind": kind,  # no_budget | stale_budget | flagged | quota_guard | verify_* | reservation | executor_model
             "tool": data.get("tool_name"),
             "subagent_type": ti.get("subagent_type"),
             "model": ti.get("model") or "inherit",
@@ -1063,6 +1063,33 @@ def model_family(model):
         if fam in m:
             return fam
     return m
+
+
+EXECUTOR_PIN = {"fable-director:fd-executor": "sonnet"}
+
+
+def executor_model(data):
+    """1.65.0: fd-executor runs on sonnet. The agent file says `model: sonnet`,
+    but a model passed in the Agent call wins over the file. Until 1.64.9 the
+    hooks module rewrote that call's model; the directory review asks a mod to
+    leave agent.spawn unchanged, so the pin is now a deny here, and the caller
+    retries without the model. A resumed agent keeps the model it runs on.
+    Workflow agent() calls do not pass through this hook."""
+    if data.get("tool_name") not in ("Agent", "Task"):
+        return None
+    ti = data.get("tool_input") or {}
+    if ti.get("resume") is not None:
+        return None
+    st = str(ti.get("subagent_type") or "")
+    want = EXECUTOR_PIN.get(st)
+    asked = ti.get("model")
+    if not want or not asked or model_family(asked) == want:
+        return None
+    return (f"✕ FABLE-DIRECTOR delegation DENIED — {st} runs on {want}, the "
+            f"call asks model \"{asked}\".\n"
+            f"Retry the same call without the model parameter (the agent file "
+            f"pins {want}), or pass model \"{want}\". For work that needs a "
+            f"stronger model, use another agent type.")
 
 
 def session_model(data):
@@ -1438,6 +1465,11 @@ def main():
             return
         now = datetime.now(timezone.utc)
         if (now - declared).total_seconds() <= 86400:
+            pin = executor_model(data)
+            if pin:
+                log_gate_deny(data, "executor_model", budget)
+                deny(pin)
+                return
             # Quota guard PRIMA del registro [DLG]: un Workflow negato qui non
             # è una delega avvenuta, contarla gonfierebbe il segmento a ogni
             # retry post-reset.

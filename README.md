@@ -1,6 +1,6 @@
 # 🎬 fable-director
 
-![version](https://img.shields.io/badge/version-1.64.9-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
+![version](https://img.shields.io/badge/version-1.65.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A5CF6)
 
 **Keeps Claude Code from spending your top-model quota on work that doesn't
 need it.** Before your agent delegates, it declares what the job should cost
@@ -220,16 +220,11 @@ blocks the route outright. Setup and guarantees:
 **Keeps:** everything until you delete it. Full policy: **[docs/privacy.md](docs/privacy.md)**.
 
 <details>
-<summary><b>For reviewers: the hooks module (mod) and the local error reports</b></summary>
+<summary><b>For reviewers: no hooks module, and the local error reports</b></summary>
 
-### The hooks module (mod)
+### No hooks module (since 1.65.0)
 
-On Claude Code 2.1.287 and later, with Mods on, fable-director also loads a hooks module (`hooks/mods/index.ts`) next to its classic hooks. It does two things and nothing else:
-
-- **`session.measure` writes three data files, all under `~/.claude/fable-director/`:** `quota-<account>.json` (the plan quotas, merged as the statusline does), `usage-snapshot-<account>.json` (the same reading with its time) and `quota-history-<account>.jsonl` (the last 300 quota changes). `<account>` is a short hash of the Claude config folder, so two accounts on one machine keep separate files. Only fable-director's own statusline and scripts read them. They are not build, start-up, settings or instructions files: no tool runs them and no tool takes orders from them.
-- **`agent.spawn` fixes the model of fable-director's own executor, and nothing else.** When a call starts `fable-director:fd-executor` with a model other than sonnet, the module changes that call's model to sonnet. It never touches permissions: it does not allow, deny or ask on any tool call, and it leaves every other agent, and a resumed `fd-executor`, as the caller started it. The agent file already says `model: sonnet`, but a model passed in the Agent or workflow call takes precedence over the file; the pin keeps the cheap executor cheap in that case.
-
-Where the module does not load (older Claude Code, Mods off), nothing changes: the classic hooks do the rest.
+Up to 1.64.9 fable-director also loaded a hooks module (mod). 1.65.0 removes it, after the directory review: the plugin ships only classic hooks, scripts, skills, commands and agents. The quota files (`quota-<account>.json`, `usage-snapshot-<account>.json`, `quota-history-<account>.jsonl`) are written by the statusline alone, so where no statusline runs (`claude -p`, phone, Remote Control) they are not refreshed and the delegation gate skips its quota rules there. `fable-director:fd-executor` stays on sonnet through the delegation gate: an Agent call that asks it for another model is denied (rule `executor_model`) and is retried without the model; a workflow's `agent()` call does not pass through that hook.
 
 ### Error reports: local, and only on your yes
 
@@ -292,8 +287,7 @@ playbook candidates, on your yes.
 ## Requirements
 
 Claude Code ≥ 2.1.x (for the `context_window` / `rate_limits` statusline fields;
-older versions degrade silently; ≥ 2.1.287 with Mods on also loads the plugin's
-hooks module, which only adds), Python 3.8+ and `bash`; `ffmpeg`
+older versions degrade silently), Python 3.8+ and `bash`; `ffmpeg`
 and `ffprobe` only for the video and audio tools (`media-doctor.py` checks
 them). Keep
 `maxEffortLevel` at or above `high`, or set it per model: a lower cap silently

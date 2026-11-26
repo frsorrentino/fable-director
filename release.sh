@@ -42,12 +42,12 @@ python3 tests/transcript-contract/run.py
 for t in tests/*.py; do
   python3 "$t"
 done
-# hooks module (Claude Code >= 2.1.287): its tests run on the engine itself
+# plugin manifest and hooks, checked by Claude Code itself. No hooks module
+# since 1.65.0 (directory review): `claude plugin test` has nothing to load.
 if command -v claude >/dev/null 2>&1; then
   claude plugin validate fable-director
-  claude plugin test fable-director
 else
-  echo "WARN: claude not on PATH, hooks module tests skipped"
+  echo "WARN: claude not on PATH, plugin validation skipped"
 fi
 
 echo "== 3/6 zip =="

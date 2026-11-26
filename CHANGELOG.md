@@ -2,6 +2,17 @@
 
 Full release history. The README shows only the latest few entries.
 
+## 1.65.x
+
+- **1.65.0 — no hooks module: the plugin ships no mod, and the delegation gate keeps `fd-executor` on sonnet.**
+  - **Why:** the directory review refused 1.64.9 with three findings on the mod (`hooks/mods/index.ts`): it writes files other tools obey (line 36: the quota files, which the delegation gate reads before allowing a delegation), it changes an `agent.spawn` event (line 61: the executor's model), and the plugin includes a mod. The fix asked for is to remove the mod, and that is what this release does; nothing is renamed or moved.
+  - **Removed:** the `modules` entry in `hooks/hooks.json`, `hooks/mods/` (module, usage helpers and their three engine tests) and `tsconfig.json`. `release.sh` still runs `claude plugin validate`, no longer `claude plugin test` (nothing to load).
+  - **`fd-executor` on sonnet, now in the gate.** An Agent call that starts `fable-director:fd-executor` with a model of another family (`opus`, `claude-opus-5-5`) is denied by the delegation gate with rule `executor_model`, logged as `gate_deny`, and says to retry without the model. No model, `sonnet` or a sonnet id pass; other agents and a resumed executor are untouched. Before, the module rewrote the model in silence; now the caller pays one retry. A workflow's `agent()` call does not pass through this hook, so there the agent file's `model: sonnet` holds only when the script passes no model.
+  - **Quota files from the statusline only.** Where no statusline runs (`claude -p`, phone, Remote Control) `quota-<account>.json` and its history are no longer refreshed; the gate's quota rules then skip (fail-open, as on a stale reading), as before 1.53.0.
+  - **Credential finding unchanged in code.** The directory also asks for API keys through a `userConfig` option instead of the environment. Checked on Claude Code 2.1.332 with a probe plugin: a `userConfig` value reaches hooks (`CLAUDE_PLUGIN_OPTION_<KEY>`) but not Bash commands, where `external-exec.py`, `cross-verify.py` and `media-analyze.py` run, so that change would leave the scripts without their key. The opt-in external routes stay as documented.
+  - Tests: new `tests/executor-pin-verify.py` (9 checks: the deny, the cases that pass, the telemetry event, no mod shipped).
+  - Task: directory-fable-director-26-11.
+
 ## 1.64.x
 
 - **1.64.9 — /observe no longer pre-approves its own command: Claude Code asks permission for it like any other command.**

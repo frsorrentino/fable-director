@@ -215,8 +215,5 @@
         ]
       }
     ]
-  },
-  "modules": [
-    "./mods/index.ts"
-  ]
+  }
 }
