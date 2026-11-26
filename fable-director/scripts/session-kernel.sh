@@ -145,9 +145,9 @@ if [ "$XF_SKIP" = "0" ] && [ ! -f "$XF_CFG" ] && [ ! -f "$XF_DONE" ]; then
   N=$(cat "$XF_COUNT" 2>/dev/null || echo 0)
   case "$N" in (*[!0-9]*|"") N=0;; esac
   if [ "$N" -lt 3 ]; then
-    # Here-document letto da read (1.65.3): la riga del << resta chiusa e EOF
-    # sta da solo, come chiede la directory; read lascia l'a capo finale che
-    # $(cat) toglieva, e la riga dopo EOF lo toglie.
+    # Here-document letto da read (1.65.3): la riga che lo apre non lascia
+    # niente aperto e il delimitatore sta da solo, come chiede la directory;
+    # read lascia l'a capo finale che $(cat) toglieva, la riga dopo lo toglie.
     FD_XF=""
     IFS= read -r -d '' FD_XF <<EOF
 
