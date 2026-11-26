@@ -121,7 +121,7 @@ try:
                             'bash "${CLAUDE_PLUGIN_ROOT}/scripts/detach.sh" '))
               for c in cmds if ".py" in c), viapy)
     det = (PLUGIN / "scripts" / "detach.sh").read_text()
-    check("L6c detach.sh lancia lo script con bash py.sh", 'bash "$here/py.sh"' in det, det[:200])
+    check("L6c detach.sh lancia lo script con bash py.sh", 'bash "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh"' in det, det[:200])
 
     # L7
     offenders = []

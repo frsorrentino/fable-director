@@ -19,8 +19,21 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TARGET="$SCRIPT_DIR/statusline-ctx.sh"
+# File named from CLAUDE_PLUGIN_ROOT (set for hooks, so for the SessionStart
+# --auto run), never by handing a folder to cd (1.65.1). From the
+# /fable-director:statusline command the variable may be missing: the
+# installer's own absolute path, which the command spells out, stands in.
+# Backslashes turned into slashes as in session-kernel.sh (Windows).
+if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "${CLAUDE_PLUGIN_ROOT}/scripts/statusline-ctx.sh" ]; then
+  TARGET="$(printf '%s' "${CLAUDE_PLUGIN_ROOT}/scripts/statusline-ctx.sh" | tr '\\' '/')"
+  PY_SH="${CLAUDE_PLUGIN_ROOT}/scripts/py.sh"
+else
+  SELF="${BASH_SOURCE[0]}"
+  case "$SELF" in /*|[A-Za-z]:[/\\]*) ;; *) SELF="$PWD/$SELF" ;; esac
+  SELF="$(printf '%s' "$SELF" | tr '\\' '/')"
+  TARGET="${SELF%/*}/statusline-ctx.sh"
+  PY_SH="${SELF%/*}/py.sh"
+fi
 CFG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 SETTINGS="$CFG_DIR/settings.json"
 
@@ -48,7 +61,7 @@ fi
 
 # Tutta la logica di merge in python: parsing/scrittura JSON deterministici,
 # preserva le altre chiavi, non tocca una statusLine di terzi.
-CLAUDE_SETTINGS="$SETTINGS" FD_TARGET="$TARGET" FD_MODE="$MODE" FD_OPTOUT="$OPTOUT" bash "$SCRIPT_DIR/py.sh" - <<'PY'
+CLAUDE_SETTINGS="$SETTINGS" FD_TARGET="$TARGET" FD_MODE="$MODE" FD_OPTOUT="$OPTOUT" bash "$PY_SH" - <<'PY'
 import json, os, sys, shutil
 from pathlib import Path
 

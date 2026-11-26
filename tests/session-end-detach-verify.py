@@ -10,6 +10,8 @@ processo staccato (setsid) e rientra subito, senza aspettare l'avvio di Python.
   D2 il processo staccato scrive comunque la session_summary nel DB
   D3 senza detach.sh il comportamento resta sincrono (i test esistenti)
   D4 hooks.json passa il SessionEnd da detach.sh
+  D5 senza CLAUDE_PLUGIN_ROOT detach.sh esce 0 e non lancia niente (1.65.1)
+  D6 detach.sh non calcola cartelle (niente cd/dirname, 1.65.1)
 
 Usage: python3 tests/session-end-detach-verify.py   (exit 0 = all green)
 """
@@ -62,10 +64,13 @@ def summaries(home):
     return n
 
 
-def run(args, home, stdin, detach=False):
+def run(args, home, stdin, detach=False, root=True):
     env = dict(os.environ, HOME=str(home), USERPROFILE=str(home))
     env.pop("CLAUDE_CONFIG_DIR", None)
     env.pop("CLAUDE_CODE_SESSION_ID", None)
+    env.pop("CLAUDE_PLUGIN_ROOT", None)
+    if root:  # Claude Code sets it for every hook; detach.sh names py.sh from it (1.65.1)
+        env["CLAUDE_PLUGIN_ROOT"] = str(PLUGIN)
     cmd = (["bash", str(PLUGIN / "scripts" / "detach.sh"), str(SCRIPT)] if detach
            else [sys.executable, str(SCRIPT)]) + args
     t0 = time.monotonic()
@@ -96,6 +101,16 @@ while summaries(home) == 0 and time.monotonic() < deadline:
     time.sleep(0.2)
 check("D2 il figlio staccato scrive la session_summary",
       summaries(home) == 1, f"n={summaries(home)} dopo {t_sync:.2f}s di calcolo sincrono")
+
+home5 = Path(tempfile.mkdtemp(prefix="fd-detach-home-noroot-"))
+r5, _ = run(["session-summary"], home5, stdin, detach=True, root=False)
+time.sleep(3)
+check("D5 senza CLAUDE_PLUGIN_ROOT: exit 0, niente lanciato",
+      r5.returncode == 0 and summaries(home5) == 0,
+      f"rc={r5.returncode} n={summaries(home5)}")
+src = (PLUGIN / "scripts" / "detach.sh").read_text()
+check("D6 detach.sh non passa cartelle a un programma (niente cd/dirname)",
+      "dirname" not in src and "cd " not in src, "dirname/cd in detach.sh")
 
 hooks = json.loads((PLUGIN / "hooks" / "hooks.json").read_text())
 cmds = [h["command"] for g in hooks["hooks"]["SessionEnd"] for h in g["hooks"]]

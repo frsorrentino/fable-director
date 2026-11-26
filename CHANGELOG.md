@@ -4,6 +4,16 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.65.x
 
+- **1.65.1 — no command hands a plugin folder to a program, and the manifest drops icon and privacyPolicyUrl.**
+  - **Why:** measured on 1.65.0, the directory's validation blocks with `COMMAND_PATH_COMPUTED` and lists `.` and `scripts` among the files the commands run, that is folders handed to a program. The fix asked for: name files, and read the plugin root from `CLAUDE_PLUGIN_ROOT`.
+  - **`scripts/session-kernel.sh`.** The `FD Windows` and `FD scripts, not on PATH` lines name `scripts/NAME.py` and `scripts/fd-telemetry.py` instead of printing the `scripts` folder: same text. The onboarding question tells Claude to run `bash "<root>/scripts/py.sh" "<root>/scripts/external-exec.py" --doctor` instead of `cd` into the folder; the aside on paid keys is gone from it, since the doctor prints the same rule, so the block stays within the kernel's 7,900-character cap.
+  - **`scripts/detach.sh`.** Names `py.sh` from `CLAUDE_PLUGIN_ROOT`, which Claude Code sets for every hook, instead of `cd` into its own folder; without the variable it exits 0 and runs nothing.
+  - **`scripts/statusline-install.sh`.** Names `statusline-ctx.sh` and `py.sh` from `CLAUDE_PLUGIN_ROOT` (the SessionStart `--auto` run); from `/fable-director:statusline`, where the variable may be missing, from its own absolute path, made absolute if relative. Backslashes become slashes, as in the kernel. On Windows the statusLine written to settings.json now reads `C:/…` instead of `/c/…`: Git Bash runs both; it is rewritten once at the next session.
+  - **`scripts/external-exec.py` doctor.** The Codex CLI line links to the CLI's own install instructions instead of printing `npm install -g`, as the directory asks for documentation.
+  - **`.claude-plugin/plugin.json`.** No `icon` and no `privacyPolicyUrl` (directory warnings, as on Chrome Bridge). The icon file stays in `.claude-plugin/`; the privacy policy is still linked from both READMEs.
+  - Tests: new `tests/plugin-root-args-verify.py` (6 checks); `session-end-detach-verify` passes `CLAUDE_PLUGIN_ROOT` as the hook does and adds D5 (no variable, nothing runs) and D6 (no folder computed); `py-launcher-verify` L6c looks for the new `py.sh` path in `detach.sh`.
+  - Task: directory-fable-director-26-11.
+
 - **1.65.0 — no hooks module: the plugin ships no mod, and the delegation gate keeps `fd-executor` on sonnet.**
   - **Why:** the directory review refused 1.64.9 with three findings on the mod (`hooks/mods/index.ts`): it writes files other tools obey (line 36: the quota files, which the delegation gate reads before allowing a delegation), it changes an `agent.spawn` event (line 61: the executor's model), and the plugin includes a mod. The fix asked for is to remove the mod, and that is what this release does; nothing is renamed or moved.
   - **Removed:** the `modules` entry in `hooks/hooks.json`, `hooks/mods/` (module, usage helpers and their three engine tests) and `tsconfig.json`. `release.sh` still runs `claude plugin validate`, no longer `claude plugin test` (nothing to load).

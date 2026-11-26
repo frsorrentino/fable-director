@@ -416,7 +416,8 @@ External executors move NON-quality-sensitive batches off your Claude quota
      Free-tier limits RESET EVERY DAY: a day without calls is free
      capacity lost.
   2. Got a ChatGPT account? Codex CLI, usage included in your plan:
-     npm install -g @openai/codex   then   codex login
+     install it as its README says: https://github.com/openai/codex
+     then run   codex login
 
 Prefer paid models? Same config entries with your paid API key and
 "billing": "paid" — consent-gated (--paid-ok), never auto-proposed.

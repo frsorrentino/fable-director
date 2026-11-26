@@ -10,13 +10,16 @@
 # session (setsid where it exists) and this wrapper returns in milliseconds.
 # A process the hook let go of outlives the bound.
 
-here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# py.sh named from CLAUDE_PLUGIN_ROOT, which Claude Code sets for every hook
+# (1.65.1): no folder is handed to a program to compute it. Without the
+# variable the hook has nothing to run.
+[ -n "${CLAUDE_PLUGIN_ROOT:-}" ] || exit 0
 tmp=$(mktemp "${TMPDIR:-/tmp}/fd-detach.XXXXXX") || exit 0
 cat > "$tmp"
-run() { bash "$here/py.sh" "$@" < "$tmp" > /dev/null 2>&1; rm -f "$tmp"; }
+run() { bash "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" "$@" < "$tmp" > /dev/null 2>&1; rm -f "$tmp"; }
 if command -v setsid > /dev/null 2>&1; then
   export -f run 2> /dev/null
-  export here tmp
+  export CLAUDE_PLUGIN_ROOT tmp
   setsid bash -c 'run "$@"' _ "$@" < /dev/null > /dev/null 2>&1 &
 else
   ( run "$@" & ) < /dev/null > /dev/null 2>&1
