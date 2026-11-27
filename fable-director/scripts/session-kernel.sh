@@ -141,14 +141,15 @@ if [ "$XF_SKIP" = "0" ] && [ ! -f "$XF_CFG" ] && [ ! -f "$XF_DONE" ]; then
   if [ "$N" -lt 3 ]; then
     # Testo su una riga con printf (1.65.3), niente here-document: i valori
     # entrano come argomenti, il testo stampato resta lo stesso.
+    (( XF_ATT = N + 1 ))
     printf -v FD_XF '\nXF ONBOARDING — ASK THE USER NOW, attempt %s/3: external free-tier executors are not configured. Before anything else, ask ONE multiple-choice question with the AskUserQuestion tool, or a plain question if unavailable: header "Executors"; question "fable-director can route non-quality-sensitive batch work and cross-family verification to free external models, at zero Claude tokens. Connect one now?"; options (1) "Gemini — free API key" (Google AI Studio, daily-reset limits), (2) "Codex CLI — ChatGPT plan" (usage included in the plan), (3) "Both", (4) "No — don'\''t ask again". On 1-3: run bash "%s" "%s" --doctor and follow its guidance. On 4: run touch "%s" so this never reappears. If the user skips it, do nothing — asked again next session, 3 times at most.' \
-      "$((N + 1))" "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" \
+      "$XF_ATT" "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" \
       "${CLAUDE_PLUGIN_ROOT}/scripts/external-exec.py" "$XF_DONE"
     # Il blocco entra solo se resta sotto il cap: altrimenti verrebbe troncato
     # a meta' e la domanda non arriverebbe mai — e il tentativo NON si consuma.
-    if [ $(( ${#FD_OUT} + ${#FD_XF} + 1 )) -le "$FD_CAP_CHARS" ]; then
+    if (( ${#FD_OUT} + ${#FD_XF} + 1 <= FD_CAP_CHARS )); then
       FD_OUT="${FD_OUT}"$'\n'"${FD_XF}"
-      XF_NEXT=$((N + 1))   # scritto solo dopo che il testo e' uscito davvero (sotto)
+      (( XF_NEXT = N + 1 ))   # scritto solo dopo che il testo e' uscito davvero (sotto)
     fi
   else
     : > "$XF_DONE" 2>/dev/null || true
@@ -163,7 +164,7 @@ case "${OSTYPE:-}" in
   msys*|cygwin*|win*) ;;
   *)
     FD_SP="$(printf '\nFD scripts, not on PATH: python3 "%s"' "${CLAUDE_PLUGIN_ROOT}/scripts/fd-telemetry.py")"
-    if [ $(( ${#FD_OUT} + ${#FD_SP} + 1 )) -le "$FD_CAP_CHARS" ]; then
+    if (( ${#FD_OUT} + ${#FD_SP} + 1 <= FD_CAP_CHARS )); then
       FD_OUT="${FD_OUT}"$'\n'"${FD_SP}"
     fi ;;
 esac
@@ -179,7 +180,7 @@ if [ "$FD_SOURCE" != "compact" ]; then
   SL_LINE="$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/statusline-install.sh" --auto 2>/dev/null || true)"
   if [ -n "$SL_LINE" ]; then
     FD_SL="$(printf '\nSTATUSLINE %s (auto) — visible from the next start of Claude Code; tell the user once. Off: /fable-director:statusline --remove' "$SL_LINE")"
-    if [ $(( ${#FD_OUT} + ${#FD_SL} + 1 )) -le "$FD_CAP_CHARS" ]; then
+    if (( ${#FD_OUT} + ${#FD_SL} + 1 <= FD_CAP_CHARS )); then
       FD_OUT="${FD_OUT}"$'\n'"${FD_SL}"
     fi
   fi
