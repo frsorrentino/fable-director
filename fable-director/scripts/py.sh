@@ -58,7 +58,7 @@ if [ "${BASH_SOURCE[0]}" != "$0" ]; then
 fi
 
 [ -n "${FD_PYTHON:-}" ] || {
-  echo "fable-director: no Python 3 found (tried python3, python, py -3). Install Python 3.8+ (python.org); gates, telemetry and statusline stay off until then." >&2
+  echo "fable-director: no Python 3 found, tried python3, python and py -3: install Python 3.8+ from python.org, until then gates, telemetry and statusline stay off" >&2
   exit 0
 }
 exec "$FD_PYTHON" "$@"
