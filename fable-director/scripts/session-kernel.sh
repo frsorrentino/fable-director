@@ -168,15 +168,6 @@ fi
 # La riga al modello c'e' solo quando settings.json e' cambiato, DOPO il blocco
 # onboarding e solo se entra nel cap: la statusline compare comunque al
 # prossimo avvio, la domanda sugli executor no.
-if [ "$FD_SOURCE" != "compact" ]; then
-  SL_LINE="$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/statusline-install.sh" --auto 2>/dev/null || true)"
-  if [ -n "$SL_LINE" ]; then
-    FD_SL="$(printf '\nSTATUSLINE %s (auto) — visible from the next start of Claude Code; tell the user once. Off: /fable-director:statusline --remove' "$SL_LINE")"
-    if (( ${#FD_OUT} + ${#FD_SL} + 1 <= FD_CAP_CHARS )); then
-      FD_OUT="${FD_OUT}"$'\n'"${FD_SL}"
-    fi
-  fi
-fi
 
 # Taglio finale, marcato: meglio una riga che dice "tagliato" di una parola a meta'.
 # Fail-open: se Python manca o fallisce, taglio in bash — il kernel esce comunque.
