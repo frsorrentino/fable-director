@@ -103,7 +103,6 @@ fd_core() {
   # suggerisci al modello di indicare il comando che le spiega.
   HELP_MARK="$HOME/.claude/fable-director/help-hint-shown"
   if [ ! -f "$HELP_MARK" ]; then
-    mkdir -p "$HOME/.claude/fable-director" 2>/dev/null || true
     printf '\nSTATUSLINE LEGEND, mention to the user ONCE, never again: /fable-director:help explains every statusline segment, symbol and color.\n'
     : > "$HELP_MARK" 2>/dev/null || true
   fi
@@ -135,7 +134,6 @@ case "$FD_SOURCE" in compact|fork|clear) XF_SKIP=1;; *) XF_SKIP=0;; esac
 # Senza Python la domanda porterebbe a comandi che non partono: nessun tentativo.
 [ -n "${FD_PYTHON:-}" ] || XF_SKIP=1
 if [ "$XF_SKIP" = "0" ] && [ ! -f "$XF_CFG" ] && [ ! -f "$XF_DONE" ]; then
-  mkdir -p "$HOME/.claude/fable-director" 2>/dev/null || true
   N=$(cat "$XF_COUNT" 2>/dev/null || echo 0)
   case "$N" in (*[!0-9]*|"") N=0;; esac
   if [ "$N" -lt 3 ]; then

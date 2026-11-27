@@ -49,7 +49,6 @@ OPTOUT="$CFG_DIR/fable-director/statusline-optout"
 # <config>/fable-director/statusline.json e NON tocca settings.json.
 if [ "${1:-}" = "--expert" ] || [ "${1:-}" = "--plain" ]; then
   SL_DIR="$CFG_DIR/fable-director"
-  mkdir -p "$SL_DIR"
   printf '{"mode": "%s"}\n' "${1#--}" > "$SL_DIR/statusline.json"
   echo "statusline mode: ${1#--} ($SL_DIR/statusline.json) — takes effect at the next refresh"
   exit 0

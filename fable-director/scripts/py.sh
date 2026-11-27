@@ -34,7 +34,7 @@ print(sys.executable)' 2>/dev/null) || continue
     [ -n "$exe" ] || continue
     FD_PYTHON=$exe
     case "${OSTYPE:-}" in
-      msys* | cygwin* | win*) mkdir -p "${cache%/*}" 2>/dev/null && printf '%s\n' "$exe" > "$cache" 2>/dev/null ;;
+      msys* | cygwin* | win*) printf '%s\n' "$exe" > "$cache" 2>/dev/null ;;
     esac
     return 0
   done

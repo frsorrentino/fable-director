@@ -14,7 +14,7 @@ if [ -z "$py" ]; then
   for c in python3 python "py -3"; do
     if $c -c 'import sys; sys.exit(sys.version_info < (3, 8))' >/dev/null 2>&1; then
       py=$c
-      { mkdir -p "${cache%/*}" && printf '%s\n' "$py" > "$cache"; } 2>/dev/null
+      { printf '%s\n' "$py" > "$cache"; } 2>/dev/null
       break
     fi
   done
