@@ -29,11 +29,11 @@ FD_CAP_CHARS=7900
 FD_CAP_LINES=195
 
 fd_core() {
-  printf 'FABLE-DIRECTOR KERNEL (delegation policy — full body: skill fable-director:delega-efficiente):\n'
+  printf 'FABLE-DIRECTOR KERNEL, delegation policy — full body in skill fable-director:delega-efficiente\n'
   cat "${CLAUDE_PLUGIN_ROOT}/kernel.md" 2>/dev/null || true
 
   if [ -z "${FD_PYTHON:-}" ]; then
-    printf '\nFD ⚠ NO PYTHON 3 on this machine (tried python3, python, py -3): the gates, the perimeter, the Stop check, telemetry and the statusline are OFF, whatever the lines above say. Tell the user once: install Python 3.8+ (python.org) and restart Claude Code.\n'
+    printf '\nFD ⚠ NO PYTHON 3 on this machine, tried python3, python and py -3 — the gates, the perimeter, the Stop check, telemetry and the statusline are OFF, whatever the lines above say. Tell the user once: install Python 3.8+ from python.org and restart Claude Code.\n'
   fi
   # Windows (Git Bash): `python3` e i path nudi degli script finiscono sull'alias
   # dello Store — il modello deve lanciarli dal launcher. Le barre si girano
@@ -44,7 +44,7 @@ fd_core() {
       FD_WIN_PY="$(printf '%s' "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" | tr '\\' '/')"
       # Ogni argomento nomina un file, mai la cartella da sola (1.65.1).
       FD_WIN_NAME="$(printf '%s' "${CLAUDE_PLUGIN_ROOT}/scripts/NAME.py" | tr '\\' '/')"
-      printf '\nFD Windows: run every plugin script as bash "%s" "%s" ARGS — never python3 or the bare path (python3 here is the Microsoft Store alias).\n' "$FD_WIN_PY" "$FD_WIN_NAME" ;;
+      printf '\nFD Windows: run every plugin script as bash "%s" "%s" ARGS — never python3 or the bare path, since python3 here is the Microsoft Store alias.\n' "$FD_WIN_PY" "$FD_WIN_NAME" ;;
   esac
 
   # Sentinella versione: avvisa se la cache in esecuzione è più vecchia della
@@ -77,9 +77,9 @@ fd_core() {
   if [ -n "$SMF" ] && [ -n "$SM" ]; then
     printf '\nFD ⚠ CLAUDE_CODE_SUBAGENT_MODEL_FORCE with CLAUDE_CODE_SUBAGENT_MODEL=%s: Claude Code ignores the model in agent files and in Agent/workflow calls — fd-executor (sonnet), fd-verifier (inherit) and every workflow stage run on %s. Unset it (settings.json env) or route knowing the cheap executor and the fresh verifier sit on %s.\n' "$SM" "$SM" "$SM"
   elif [ -n "$SMF" ]; then
-    printf '\nFD ⚠ CLAUDE_CODE_SUBAGENT_MODEL_FORCE is on without CLAUDE_CODE_SUBAGENT_MODEL: Claude Code ignores the model in agent files and in Agent/workflow calls — fd-executor leaves sonnet for the session model (measured: same correctness, 5.5× the USD on Fable 5.1); fd-verifier (inherit) unchanged.\n'
+    printf '\nFD ⚠ CLAUDE_CODE_SUBAGENT_MODEL_FORCE is on without CLAUDE_CODE_SUBAGENT_MODEL: Claude Code ignores the model in agent files and in Agent/workflow calls — fd-executor leaves sonnet for the session model, measured at the same correctness and 5.5× the USD on Fable 5.1 — fd-verifier, set to inherit, is unchanged.\n'
   elif [ -n "$SM" ]; then
-    printf '\nFD: CLAUDE_CODE_SUBAGENT_MODEL=%s is a default (Claude Code ≥ 2.1.251): fd-executor stays on sonnet, fd-verifier on the session model; subagents with no model of their own run on %s (Explore and Plan excepted). Only CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1 overrides the pins.\n' "$SM" "$SM"
+    printf '\nFD: CLAUDE_CODE_SUBAGENT_MODEL=%s is a default since Claude Code 2.1.251: fd-executor stays on sonnet, fd-verifier on the session model; subagents with no model of their own run on %s, except Explore and Plan. Only CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1 overrides the pins.\n' "$SM" "$SM"
   fi
 
   # Righe corte e sempre volute PRIMA dei blocchi lunghi: se il cap taglia,
@@ -88,7 +88,7 @@ fd_core() {
   if [ -f "$PB" ]; then
     printf '\nHeuristics playbook: %s — consult it before orchestrating batch/workflow/multi-agent work.\n' "$PB"
   else
-    printf '\nPlaybook not initialized: copy %s to %s (only if missing, never overwrite).\n' "${CLAUDE_PLUGIN_ROOT}/playbook-template.md" "$PB"
+    printf '\nPlaybook not initialized: copy %s to %s if missing, never overwrite it.\n' "${CLAUDE_PLUGIN_ROOT}/playbook-template.md" "$PB"
   fi
 
   # Soft-deps shipped by the plugin (media-tools): added to the user's registry
@@ -104,7 +104,7 @@ fd_core() {
   HELP_MARK="$HOME/.claude/fable-director/help-hint-shown"
   if [ ! -f "$HELP_MARK" ]; then
     mkdir -p "$HOME/.claude/fable-director" 2>/dev/null || true
-    printf '\nSTATUSLINE LEGEND (mention to the user ONCE, then never again): /fable-director:help explains every statusline segment, symbol and color.\n'
+    printf '\nSTATUSLINE LEGEND, mention to the user ONCE, never again: /fable-director:help explains every statusline segment, symbol and color.\n'
     : > "$HELP_MARK" 2>/dev/null || true
   fi
 
@@ -141,7 +141,7 @@ if [ "$XF_SKIP" = "0" ] && [ ! -f "$XF_CFG" ] && [ ! -f "$XF_DONE" ]; then
   if [ "$N" -lt 3 ]; then
     # Testo su una riga con printf (1.65.3), niente here-document: i valori
     # entrano come argomenti, il testo stampato resta lo stesso.
-    printf -v FD_XF '\nXF ONBOARDING — ASK THE USER NOW (attempt %s/3): external free-tier executors are not configured. Before anything else, ask ONE multiple-choice question with the AskUserQuestion tool (plain question if unavailable): header "Executors"; question "fable-director can route non-quality-sensitive batch work and cross-family verification to free external models, at zero Claude tokens. Connect one now?"; options (1) "Gemini — free API key" (Google AI Studio, daily-reset limits), (2) "Codex CLI — ChatGPT plan" (usage included in the plan), (3) "Both", (4) "No — don'\''t ask again". On 1-3: run bash "%s" "%s" --doctor and follow its guidance. On 4: run touch "%s" so this never reappears. If the user skips it, do nothing — asked again next session (max 3, then silence).' \
+    printf -v FD_XF '\nXF ONBOARDING — ASK THE USER NOW, attempt %s/3: external free-tier executors are not configured. Before anything else, ask ONE multiple-choice question with the AskUserQuestion tool, or a plain question if unavailable: header "Executors"; question "fable-director can route non-quality-sensitive batch work and cross-family verification to free external models, at zero Claude tokens. Connect one now?"; options (1) "Gemini — free API key" (Google AI Studio, daily-reset limits), (2) "Codex CLI — ChatGPT plan" (usage included in the plan), (3) "Both", (4) "No — don'\''t ask again". On 1-3: run bash "%s" "%s" --doctor and follow its guidance. On 4: run touch "%s" so this never reappears. If the user skips it, do nothing — asked again next session, 3 times at most.' \
       "$((N + 1))" "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" \
       "${CLAUDE_PLUGIN_ROOT}/scripts/external-exec.py" "$XF_DONE"
     # Il blocco entra solo se resta sotto il cap: altrimenti verrebbe troncato
@@ -178,7 +178,7 @@ esac
 if [ "$FD_SOURCE" != "compact" ]; then
   SL_LINE="$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/statusline-install.sh" --auto 2>/dev/null || true)"
   if [ -n "$SL_LINE" ]; then
-    FD_SL="$(printf '\nSTATUSLINE %s (auto): visible from the next start of Claude Code; tell the user once. Off: /fable-director:statusline --remove' "$SL_LINE")"
+    FD_SL="$(printf '\nSTATUSLINE %s (auto) — visible from the next start of Claude Code; tell the user once. Off: /fable-director:statusline --remove' "$SL_LINE")"
     if [ $(( ${#FD_OUT} + ${#FD_SL} + 1 )) -le "$FD_CAP_CHARS" ]; then
       FD_OUT="${FD_OUT}"$'\n'"${FD_SL}"
     fi

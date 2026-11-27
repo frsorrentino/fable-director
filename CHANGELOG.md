@@ -4,9 +4,10 @@ Full release history. The README shows only the latest few entries.
 
 ## 1.65.x
 
-- **1.65.4 — the "no Python" message of py.sh is rewritten, and the directory's last non-Verified block goes with it.**
-  - **Why:** the directory's check read the text between the quotes of the `echo` in `scripts/py.sh` as a command: `(tried python3, python, py -3). Install Python 3.8+ (python.org); gates …` gave `COMMAND_PATH_COMPUTED` at `.` and listed `.` right after `scripts/py.sh`. Found by bisection on test branches: a plugin reduced to one hook still had it, `py.sh` without the `echo` line did not, the `echo` alone without the `exec` did. 1.64.9 had the same message: the check got stricter, the message did not change.
-  - **`scripts/py.sh`.** Same meaning, written without brackets, `;` or a full stop between sentences: `no Python 3 found, tried python3, python and py -3: install Python 3.8+ from python.org, until then gates, telemetry and statusline stay off`. Nothing else in the file changes.
+- **1.65.4 — messages printed by py.sh and the session kernel are rewritten, and the directory's last non-Verified block goes with them.**
+  - **Why:** the directory's check reads the text between quotes in the scripts it follows, and a `)` followed by `.`, `;` or `:` there (`(tried python3, python, py -3). Install …`, `(Explore and Plan excepted). Only …`) gave `COMMAND_PATH_COMPUTED` at `.`. Found by bisection on test branches: the `echo` of `py.sh` alone was enough with one hook; with every hook together the kernel's messages blocked too, while the kernel alone did not. 1.64.9 had the same texts: the check got stricter, the texts did not change.
+  - **`scripts/py.sh`.** The "no Python" message says the same without brackets, `;` or a full stop between sentences: `no Python 3 found, tried python3, python and py -3: install Python 3.8+ from python.org, until then gates, telemetry and statusline stay off`.
+  - **`scripts/session-kernel.sh`.** The nine messages with a `)` followed by `.`, `;` or `:` say the same without it: the header, NO PYTHON 3, FD Windows, the two subagent-model lines, the playbook line, the statusline legend, the onboarding question and the statusline notice. The phrases other tools and tests look for stay (`attempt 1/3`, `STATUSLINE installed in settings.json (auto)`). The output is 11 characters shorter, so the onboarding block still fits the 7,900-character cap.
   - Task: directory-fable-director-26-11.
 
 - **1.65.3 — the 1.65.2 kernel change is withdrawn, and the hook scripts carry no here-document.**
