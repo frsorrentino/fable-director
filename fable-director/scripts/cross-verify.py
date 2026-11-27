@@ -1,0 +1,536 @@
+#!/usr/bin/env python3
+"""Cross-family verifier — controllo avversariale da una famiglia di modelli diversa.
+
+Un ensemble tutto-Claude condivide errori CORRELATI by construction; un lineage
+diverso (Gemini, GPT/Codex) ha punti ciechi non sovrapposti. Questo script è il
+gradino opzionale in cima alla verification ladder (rung 3+): claim ad alta
+posta, raro, fuori dalla quota Claude.
+
+Principi (da fable-advisor, mantenuti):
+- NO SILENT FALLBACK: config assente, chiave assente, endpoint giù, rate limit
+  → STATUS: unavailable con istruzione esplicita di degradare al verifier
+  same-family a contesto fresco. MAI trattare unavailable come "verificato".
+- Il verifier vede SOLO artefatto + rubrica, mai il reasoning del maker
+  (maker ≠ grader è strutturale).
+- Prompt avversariale: prova a CONFUTARE; in dubbio → refuted.
+
+Config: ~/.claude/fable-director/cross-family.json (creala con --init).
+URL e modelli vivono nel config, non nel codice: i free tier cambiano senza
+preavviso — il punto di verità deve essere modificabile senza toccare lo script.
+Chiavi API: via env var (campo api_key_env) o campo api_key nel config.
+
+Provider: HTTP OpenAI-compatibile (gemini, grok) o "type": "cli"
+(codex: sottoprocesso Codex CLI, login ChatGPT — spec via stdin, output su
+file mktemp unico, preflight `command -v`). Grok (xAI) è FACOLTATIVO e a
+pagamento (nessun free tier documentato): si attiva solo con XAI_API_KEY.
+
+Uso:
+  cross-verify.py --init
+  cross-verify.py --usage        # contatore locale vs limiti dichiarati (i
+                                 # free tier non espongono la quota via API)
+  cross-verify.py --claim "..." --rubric "..." [--context-file F]
+                  [--provider gemini|gemini-stable|codex|grok] [--type SLUG]
+                  [--timeout N] [--paid-ok]   (default: campo "timeout" del provider, poi 60)
+
+--type = tipo di task (es. cross-lingua, security-review, spec-compliance):
+loggato nella telemetria così `fd-telemetry.py report` può dire EMPIRICAMENTE
+su quali tipi il cross-family refuta davvero (hit-rate per tipo) — quali tipi
+sono affini diventa una domanda di dati, non un'asserzione di bravura-modello.
+
+--paid-ok: obbligatorio per provider "billing" != "free" (assente = paid, fail-closed); solo dopo consenso esplicito dell'utente.
+
+Output (grep-abile):
+  STATUS: ok|unavailable|error
+  PROVIDER: <provider> (<model>)
+  VERDICT: refuted|supported|uncertain
+  REASONING: <breve>
+Exit code: 0 solo su STATUS ok. Zero dipendenze: solo stdlib.
+"""
+import json
+import os
+import shutil
+import sqlite3
+import subprocess
+import sys
+import tempfile
+import urllib.error
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+
+# Windows cp1252: output con caratteri non-Latin-1 crasherebbe (issue #1).
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
+CONFIG_PATH = Path.home() / ".claude" / "fable-director" / "cross-family.json"
+DB_PATH = Path.home() / ".claude" / "fable-director" / "telemetry.db"
+# Marker "chiamata cross-family in corso" per il segmento [XF] dello statusline
+ACTIVE_PATH = Path.home() / ".claude" / "fable-director" / "xfam-active.json"
+
+DEFAULT_CONFIG = {
+    "default": "gemini",
+    "providers": {
+        "gemini": {
+            "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+            "model": "gemini-3-flash-preview",
+            "api_key_env": "GEMINI_API_KEY",
+            "billing": "free",
+            # reset: finestra di azzeramento del free tier — AI Studio azzera
+            # a midnight Pacific; statusline e fd-status contano su questa
+            # finestra e mostrano l'orario locale del prossimo azzeramento.
+            # Senza il campo: conteggio giorno UTC, nessun orario (onesto).
+            "limits": {"rpd": 1500, "rpm": 10,
+                       "reset": {"period": "daily",
+                                 "tz": "America/Los_Angeles"}},
+            "note": "free tier AI Studio (verificato 2026-07-10) — 503 intermittenti da "
+                    "preview: unavailable → rotta same-family, MAI fallback silenzioso. "
+                    "La subscription consumer AI Pro NON alimenta l'API"
+        },
+        "gemini-stable": {
+            "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+            "model": "gemini-2.5-flash",
+            "api_key_env": "GEMINI_API_KEY",
+            "billing": "free",
+            "limits": {"rpd": 1500, "rpm": 10,
+                       "reset": {"period": "daily",
+                                 "tz": "America/Los_Angeles"}},
+            "note": "ripiego stabile ESPLICITO (--provider gemini-stable) quando la preview 503a"
+        },
+        "codex": {
+            "type": "cli",
+            "command": ["codex", "exec", "--model", "{model}",
+                        "-c", "model_reasoning_effort={effort}",
+                        "--sandbox", "read-only", "--skip-git-repo-check",
+                        "--output-last-message", "{output_file}"],
+            "resume_command": ["codex", "exec", "resume", "--last",
+                               "-c", "model_reasoning_effort={effort}",
+                               "-c", "sandbox_mode=\"read-only\"",
+                               "--skip-git-repo-check",
+                               "--output-last-message", "{output_file}"],
+            "schema_args": ["--output-schema", "{schema_file}"],
+            "model": "gpt-6-astra",
+            "effort": "high",
+            "timeout": 600,
+            "auth_check": ["codex", "login", "status"],
+            "billing": "free",
+            "note": "richiede Codex CLI >=0.154 (installazione: https://github.com/openai/codex) + login "
+                    "ChatGPT (quota finestra 5h; nessuna API di lettura quota; gpt-6-pro "
+                    "non e' incluso nel piano ChatGPT). Alternative built-in: gpt-6-terra, "
+                    "gpt-6-sol (detail), gpt-6-luna (repeatable). "
+                    "{model}/{effort} default dai campi omonimi; external-exec.py li "
+                    "sovrascrive con --model/--effort (batch massivi → low, verify resta "
+                    "high). resume_command/schema_args: --resume-last / --schema-file di "
+                    "external-exec.py (codex exec resume non accetta --sandbox: read-only "
+                    "via -c sandbox_mode). billing free = flat nel piano ChatGPT (nessun costo marginale per chiamata)"
+        },
+        "antigravity": {
+            "type": "cli",
+            "command": ["agy", "--sandbox", "--model", "{model}",
+                        "--effort", "{effort}", "--output-format", "text",
+                        "-p={prompt}"],
+            "model": "gemini-3.7-flash",
+            "effort": "high",
+            "timeout": 300,
+            "api_key_env": "GEMINI_API_KEY",
+            "isolated_cwd": True,
+            "billing": "free",
+            "limits": {"rpd": 1500, "rpm": 10,
+                       "reset": {"period": "daily",
+                                 "tz": "America/Los_Angeles"}},
+            "note": "Antigravity CLI (agy >=1.1.13; installer: curl -fsSL "
+                    "https://antigravity.google/cli/install.sh | bash), erede della "
+                    "Gemini CLI. Serve ~/.gemini/antigravity-cli/settings.json con "
+                    "{\"modelProvider\": \"gemini\"}: stessa GEMINI_API_KEY e stesso "
+                    "progetto free tier dei provider gemini (dati usati da Google per "
+                    "migliorare i prodotti). {prompt}: agy non legge stdin, la spec va "
+                    "come argomento (tetto ~128 KB). --model sempre esplicito (default "
+                    "agy gemini-3.1-pro, 429 sul free tier). isolated_cwd: cartella "
+                    "vuota, l'agente non vede il progetto. Niente schema_args ne' "
+                    "resume_command. Modello diverso da quello dei provider gemini: la quota "
+                    "free tier e' per modello e il ciclo agente di agy fa piu' richieste "
+                    "per compito; niente tetto di turni in agy, il limite e' il timeout"
+        },
+        "grok": {
+            "base_url": "https://api.x.ai/v1",
+            "model": "grok-4.3",
+            "api_key_env": "XAI_API_KEY",
+            "billing": "paid",
+            "cost_note": "~$0.003/verify",
+            "note": "xAI, terza famiglia (facoltativa). A PAGAMENTO — nessun free tier "
+                    "documentato (verificato 2026-07-13): ~$1.25/$2.50 per M token, "
+                    "~$0.003/verifica. Chiave da console.x.ai; senza XAI_API_KEY resta "
+                    "unavailable (mai fallback silenzioso)"
+        },
+        "gemini-image": {
+            "type": "image",
+            "base_url": "https://generativelanguage.googleapis.com/v1beta",
+            "model": "gemini-2.5-flash-image",
+            "api_key_env": "GEMINI_API_KEY",
+            "billing": "paid",
+            "cost_note": "~$0.04/image",
+            "note": "generazione immagini (external-exec.py --out img.png). "
+                    "A PAGAMENTO: il free tier AI Studio ha limit 0 sui "
+                    "modelli image (verificato 2026-07-22) — serve billing "
+                    "abilitato sul progetto Google. Solo su consenso "
+                    "esplicito (--paid-ok)"
+        },
+        "gemini-media": {
+            "type": "media",
+            "base_url": "https://generativelanguage.googleapis.com/v1beta",
+            "model": "gemini-3.6-flash",
+            "api_key_env": "GEMINI_API_KEY",
+            "billing": "free",
+            "inline_max_mb": 19,
+            "limits": {"rpd": 1500, "rpm": 10,
+                       "reset": {"period": "daily",
+                                 "tz": "America/Los_Angeles"}},
+            "note": "video/audio/immagini/pdf via generateContent nativo "
+                    "(media-analyze.py, rotta esterna con budget aperto); "
+                    "sopra inline_max_mb usa la Files API (upload resumable, "
+                    "poi file_data.file_uri). Misurato 2026-09-08: mp4 10 MB "
+                    "55 s -> 49 s, 3.7k token in / 1.2k out. L'audio lo dice "
+                    "ffprobe, mai il modello (falso positivo misurato)"
+        }
+    }
+}
+
+# Contratto a blocchi XML (tiene meglio della prosa sulla famiglia GPT/Codex)
+# + finding-bar e calibrazione distillate dal prompt adversarial-review di
+# openai/codex-plugin-cc (review 2026-07-13): stessa sostanza, più le regole
+# "un refuted forte batte tre dubbi deboli" e "inferenza dichiarata".
+VERIFIER_SYSTEM = (
+    "<role>You are an independent adversarial verifier from a different "
+    "model family. You see ONLY the artifact and the rubric below — you have "
+    "no access to the maker's reasoning and no stake in its conclusions."
+    "</role>\n"
+    "<operating_stance>Try to REFUTE the claim. If the evidence provided is "
+    "insufficient to support it, the verdict is 'refuted' or 'uncertain', "
+    "never 'supported'.</operating_stance>\n"
+    "<finding_bar>A refutation must say what is wrong, why that spot is "
+    "vulnerable, and the likely impact. One strong, defensible refutation "
+    "beats several weak doubts — do not dilute a serious flaw with filler "
+    "reservations.</finding_bar>\n"
+    "<grounding_rules>Ground every statement in the artifact provided. Do "
+    "not invent content, files, or behavior that is not in it. If your "
+    "conclusion depends on an inference rather than direct evidence, say so "
+    "in the reasoning and keep the verdict honest.</grounding_rules>\n"
+    "<structured_output_contract>Reply with STRICT JSON only: "
+    '{"verdict": "refuted|supported|uncertain", "reasoning": "<max 120 '
+    'words>"}</structured_output_contract>'
+)
+
+
+def out(status, provider="-", model="-", verdict="-", reasoning="-"):
+    print(f"STATUS: {status}")
+    print(f"PROVIDER: {provider} ({model})")
+    print(f"VERDICT: {verdict}")
+    print(f"REASONING: {reasoning}")
+
+
+def unavailable(reason):
+    out("unavailable", reasoning=(
+        f"{reason} — degrade to the same-family fresh-context verifier "
+        f"(verification ladder rung 3). NEVER treat 'unavailable' as verified."))
+    sys.exit(1)
+
+
+def billing_of(prov):
+    """Fail-closed: billing non dichiarato = paid — mai proposto né
+    eseguito senza consenso esplicito. La policy vive nel campo del
+    config, mai in euristiche sul nome del provider."""
+    return "free" if prov.get("billing") == "free" else "paid"
+
+
+def log_verification(payload):
+    """Best-effort: telemetria oggettiva, mai bloccante."""
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "fd_telemetry", Path(__file__).with_name("fd-telemetry.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        mod.log_event("verification", payload)
+    except Exception:
+        pass
+
+
+def cmd_usage():
+    """Contatore LOCALE per provider vs limiti dichiarati nel config.
+    I free tier non espongono la quota via API (né Gemini né Codex/ChatGPT):
+    questo conta le chiamate loggate in telemetria da QUESTA macchina — se la
+    chiave è usata anche altrove, sottostima. Il limite vero resta rumoroso
+    comunque: HTTP 429 → STATUS unavailable."""
+    if not CONFIG_PATH.is_file():
+        sys.exit(f"config missing: cross-verify.py --init")
+    cfg = json.loads(CONFIG_PATH.read_text())
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    counts = {}
+    if DB_PATH.is_file():
+        try:
+            con = sqlite3.connect(DB_PATH)
+            rows = con.execute(
+                "SELECT payload FROM events WHERE event='verification' AND ts >= ?",
+                (today,)).fetchall()
+            con.close()
+            for (payload,) in rows:
+                try:
+                    p = json.loads(payload or "{}")
+                except json.JSONDecodeError:
+                    continue
+                if p.get("kind") == "cross-family" and p.get("provider"):
+                    counts[p["provider"]] = counts.get(p["provider"], 0) + 1
+        except sqlite3.Error:
+            pass
+    print(f"# cross-family usage — today {today} UTC (LOCAL counter: "
+          f"cannot see key usage outside this machine)")
+    for name, prov in (cfg.get("providers") or {}).items():
+        n = counts.get(name, 0)
+        rpd = (prov.get("limits") or {}).get("rpd")
+        lim = f"/{rpd} declared rpd" if rpd else " (no limit declared in config)"
+        print(f"  {name}: {n}{lim}")
+        if rpd and n >= rpd * 0.8:
+            print(f"    ⚠ ALARM (not a target): ≥80% of the declared limit")
+
+
+def cmd_init():
+    if CONFIG_PATH.is_file():
+        print(f"config already present: {CONFIG_PATH} (not overwriting)")
+        return
+    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    CONFIG_PATH.write_text(json.dumps(DEFAULT_CONFIG, ensure_ascii=False, indent=2))
+    print(f"config created: {CONFIG_PATH}")
+    print("Next steps —")
+    for name, p in DEFAULT_CONFIG["providers"].items():
+        if p.get("api_key_env"):
+            print(f"  {name}: export {p['api_key_env']}=...  # {p.get('note', '')}")
+        else:
+            print(f"  {name}: {p.get('note', '')}")
+    print("Config URLs/models are a July 2026 snapshot: re-verify them, "
+          "free tiers change without notice.")
+
+
+def parse_args(argv):
+    opts = {"--claim": None, "--rubric": None, "--context-file": None,
+            "--provider": None, "--timeout": None, "--type": None,
+            "--allow-truncate": False, "--paid-ok": False}
+    i = 0
+    while i < len(argv):
+        if argv[i] == "--init":
+            cmd_init()
+            sys.exit(0)
+        if argv[i] == "--usage":
+            cmd_usage()
+            sys.exit(0)
+        if argv[i] == "--allow-truncate":
+            opts["--allow-truncate"] = True
+            i += 1
+        elif argv[i] == "--paid-ok":
+            opts["--paid-ok"] = True
+            i += 1
+        elif argv[i] in opts and i + 1 < len(argv):
+            opts[argv[i]] = argv[i + 1]
+            i += 2
+        else:
+            sys.exit(f"argomento non riconosciuto: {argv[i]}\n{__doc__}")
+    return opts
+
+
+def call_http(prov, name, api_key, user_msg, timeout):
+    body = json.dumps({
+        "model": prov["model"],
+        "messages": [{"role": "system", "content": VERIFIER_SYSTEM},
+                     {"role": "user", "content": user_msg}],
+        "temperature": 0,
+    }).encode()
+    req = urllib.request.Request(
+        prov["base_url"].rstrip("/") + "/chat/completions", data=body,
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {api_key}"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode(errors="replace"))
+    except urllib.error.HTTPError as e:
+        unavailable(f"HTTP {e.code} da {name} (rate limit/endpoint cambiato?)")
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        unavailable(f"rete/timeout verso {name}: {e}")
+    try:
+        return data["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError):
+        return None
+
+
+def load_ext():
+    """external-exec.py come modulo: un solo run_cli per tutti i chiamanti."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "external_exec", Path(__file__).with_name("external-exec.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def call_cli(prov, name, user_msg, timeout):
+    """Provider a sottoprocesso (es. Codex CLI). Disciplina Appendice C:
+    preflight esplicito, spec via STDIN (niente quoting hazard), output su
+    file mktemp unico (parallel-safe), timeout, mai fallback silenzioso."""
+    cmd_template = prov.get("command") or []
+    if not cmd_template or not shutil.which(cmd_template[0]):
+        unavailable(f"CLI '{cmd_template[0] if cmd_template else '?'}' non "
+                    f"installata per '{name}' ({prov.get('note', '')})")
+    # {model}/{effort}: default dai campi del provider (il verify resta effort
+    # high — qui nessun override runtime, la verifica pigra è il fallimento
+    # peggiore). No-op sui config legacy senza placeholder.
+    model = prov.get("model", "")
+    effort = prov.get("effort", "high")
+    if "{model}" in " ".join(cmd_template) and not model:
+        unavailable(f"il template di '{name}' usa {{model}} ma il provider "
+                    f"non ha il campo 'model' nel config")
+    fd, out_file = tempfile.mkstemp(prefix="cross-verify-", suffix=".txt")
+    os.close(fd)
+    cmd = [a.replace("{output_file}", out_file)
+            .replace("{model}", model)
+            .replace("{effort}", effort) for a in cmd_template]
+    spec = f"{VERIFIER_SYSTEM}\n\n{user_msg}"
+    try:
+        proc = load_ext().run_cli(prov, cmd, spec, timeout)
+        if proc.returncode != 0:
+            unavailable(f"CLI '{name}' exit {proc.returncode}: "
+                        f"{proc.stderr.decode(errors='replace')[:200]}")
+        content = Path(out_file).read_text(errors="replace")
+        return content if content.strip() else proc.stdout.decode(errors="replace")
+    except subprocess.TimeoutExpired:
+        unavailable(f"CLI '{name}' timeout ({timeout}s)")
+    except OSError as e:
+        unavailable(f"CLI '{name}' not runnable: {e}")
+    finally:
+        try:
+            os.unlink(out_file)
+        except OSError:
+            pass
+
+
+def main():
+    opts = parse_args(sys.argv[1:])
+    if not opts["--claim"]:
+        sys.exit(__doc__)
+
+    # data-class restricted sul budget del cwd → anche la VERIFICA esterna è
+    # disclosure (claim+rubrica+artifact vanno al provider): bloccata.
+    # Nessun budget aperto = nessun vincolo (rung 4 non richiede budget).
+    try:
+        import hashlib as _h
+        import re as _r
+        _s = str(os.getcwd()).replace("\\", "/")
+        _slug = (_r.sub(r"[^A-Za-z0-9]+", "-", _s).strip("-")
+                 + "-" + _h.sha256(_s.encode()).hexdigest()[:8])
+        _bf = (Path.home() / ".claude" / "fable-director" / "budgets"
+               / f"{_slug}.json")
+        if _bf.is_file():
+            _b = json.loads(_bf.read_text())
+            if (_b.get("status") == "open"
+                    and _b.get("data_class") == "restricted"):
+                unavailable("this cwd's budget declares --data-class restricted: "
+                            "external verification blocked, use rung 3 (fd-verifier)")
+    except (json.JSONDecodeError, OSError):
+        pass
+
+    # Preflight — ogni mancanza è rumorosa, mai fallback silenzioso.
+    if not CONFIG_PATH.is_file():
+        unavailable(f"config missing ({CONFIG_PATH}): run cross-verify.py --init")
+    try:
+        cfg = json.loads(CONFIG_PATH.read_text())
+    except (json.JSONDecodeError, OSError) as e:
+        unavailable(f"config unreadable: {e}")
+    name = opts["--provider"] or cfg.get("default")
+    prov = (cfg.get("providers") or {}).get(name)
+    if not prov:
+        unavailable(f"provider '{name}' not defined in config")
+    if billing_of(prov) != "free" and not opts["--paid-ok"]:
+        log_verification({"kind": "cross-family", "provider": name,
+                          "model": prov.get("model", "?"),
+                          "billing": "paid", "check": "paid-refused"})
+        unavailable(
+            f"provider '{name}' is billed"
+            + (f" ({prov['cost_note']})" if prov.get("cost_note") else "")
+            + " — requires explicit user consent in this conversation; "
+              "re-run with --paid-ok ONLY after the user agreed")
+    is_cli = prov.get("type") == "cli"
+    api_key = ""
+    if not is_cli:
+        api_key = prov.get("api_key") or os.environ.get(prov.get("api_key_env", ""), "")
+        if not api_key:
+            unavailable(f"chiave API assente per '{name}' "
+                        f"(export {prov.get('api_key_env')}=... o campo api_key nel config)")
+
+    context = ""
+    if opts["--context-file"]:
+        try:
+            context = Path(opts["--context-file"]).read_text(errors="replace")
+        except OSError as e:
+            unavailable(f"unreadable context-file: {e}")
+
+    # Fail-closed sul troncamento: un verdetto emesso su un artefatto tagliato
+    # in silenzio non è una verifica (review cross-family 2026-07-10).
+    if len(context) > 100_000 and not opts["--allow-truncate"]:
+        unavailable(f"artifact {len(context)} char > cap 100000 — spezza il "
+                    f"claim su porzioni o passa --allow-truncate (esplicito)")
+
+    user_msg = f"CLAIM TO VERIFY:\n{opts['--claim']}\n"
+    if opts["--rubric"]:
+        user_msg += f"\nRUBRIC:\n{opts['--rubric']}\n"
+    if context:
+        user_msg += f"\nARTIFACT:\n{context[:100_000]}\n"
+
+    # Risoluzione timeout: flag esplicita > campo del provider > default 60
+    # (codex effort high nel config di default dichiara 600: 60s troncava
+    # verifiche legittime ancora in reasoning).
+    timeout = int(opts["--timeout"] or prov.get("timeout") or 60)
+    # Marker per lo statusline: [XF <provider>▶] finché la chiamata è viva.
+    # finally garantisce la rimozione anche su unavailable (SystemExit).
+    try:
+        ACTIVE_PATH.write_text(json.dumps(
+            {"provider": name, "pid": os.getpid(),
+             "started": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}))
+    except OSError:
+        pass
+    try:
+        if is_cli:
+            content = call_cli(prov, name, user_msg, timeout)
+        else:
+            content = call_http(prov, name, api_key, user_msg, timeout)
+    finally:
+        try:
+            ACTIVE_PATH.unlink()
+        except OSError:
+            pass
+
+    try:
+        # tollera code fence attorno al JSON (```json / ```JSON / senza tag)
+        content = content.strip().strip("`").strip()
+        if content[:4].lower() == "json":
+            content = content[4:].strip()
+        verdict_obj = json.loads(content)
+        verdict = verdict_obj.get("verdict", "uncertain")
+        reasoning = verdict_obj.get("reasoning", "")
+    except (AttributeError, TypeError, json.JSONDecodeError):
+        # risposta fuori schema: NON è una verifica valida
+        out("error", name, prov["model"], "uncertain",
+            "risposta del provider fuori schema — trattala come NON verificata")
+        sys.exit(1)
+
+    if verdict not in ("refuted", "supported", "uncertain"):
+        verdict = "uncertain"
+    out("ok", name, prov["model"], verdict, reasoning)
+    log_verification({"kind": "cross-family", "provider": name,
+                      "model": prov["model"], "verdict": verdict,
+                      "billing": billing_of(prov),
+                      "type": opts.get("--type"),
+                      "found": verdict == "refuted"})
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()
