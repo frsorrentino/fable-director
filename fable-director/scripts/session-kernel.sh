@@ -14,7 +14,7 @@ FD_INPUT=""
 # Interprete Python risolto UNA volta (Windows: `python3` e' l'alias dello Store,
 # vedi py.sh). Senza Python il kernel esce lo stesso, con l'avviso che i gate
 # sono spenti: prima usciva vuoto (l'ultimo passo era un pipe in python3).
-. "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" 2>/dev/null || true
+FD_PYTHON=python3
 fd_py() { [ -n "${FD_PYTHON:-}" ] && "$FD_PYTHON" "$@"; }
 FD_SOURCE="$(printf '%s' "$FD_INPUT" | fd_py -c $'import json,sys\ntry:\n    d=json.load(sys.stdin)\n    print((d or {}).get("source") or "")\nexcept Exception:\n    print("")' 2>/dev/null || true)"
 
