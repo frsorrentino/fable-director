@@ -160,14 +160,6 @@ fi
 # percorso il modello li cercava nel cwd o con `command -v` (note observe
 # 4b42b008, 49e969d2). Come la statusline, DOPO l'onboarding e solo se entra nel
 # cap: il kernel ha meno di cento caratteri di margine.
-case "${OSTYPE:-}" in
-  msys*|cygwin*|win*) ;;
-  *)
-    FD_SP="$(printf '\nFD scripts, not on PATH: python3 "%s"' "${CLAUDE_PLUGIN_ROOT}/scripts/fd-telemetry.py")"
-    if (( ${#FD_OUT} + ${#FD_SP} + 1 <= FD_CAP_CHARS )); then
-      FD_OUT="${FD_OUT}"$'\n'"${FD_SP}"
-    fi ;;
-esac
 
 # Statusline (1.50.1): installata da sola, senza chiedere — un collega con
 # l'installazione nuova la vedeva solo dopo /fable-director:statusline, che non
