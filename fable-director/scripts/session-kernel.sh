@@ -16,7 +16,7 @@ FD_INPUT=""
 # sono spenti: prima usciva vuoto (l'ultimo passo era un pipe in python3).
 . "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" 2>/dev/null || true
 fd_py() { [ -n "${FD_PYTHON:-}" ] && "$FD_PYTHON" "$@"; }
-FD_SOURCE="$(printf '%s' "$FD_INPUT" | fd_py -c $'import json,sys\ntry:\n    d=json.load(sys.stdin)\n    print((d or {}).get("source") or "")\nexcept Exception:\n    print("")' 2>/dev/null || true)"
+FD_SOURCE="$(printf '%s' "$FD_INPUT" | fd_py "${CLAUDE_PLUGIN_ROOT}/scripts/kernel-source.py" 2>/dev/null || true)"
 
 # Cap dell'harness (Claude Code 2.1.260, letto dal binario): l'output di un
 # SessionStart vale come additionalContext, tetto 8000 caratteri / 200 righe,
@@ -187,24 +187,7 @@ fi
 
 # Taglio finale, marcato: meglio una riga che dice "tagliato" di una parola a meta'.
 # Fail-open: se Python manca o fallisce, taglio in bash — il kernel esce comunque.
-FD_FINAL="$(printf '%s\n' "$FD_OUT" | FD_CAP_CHARS="$FD_CAP_CHARS" FD_CAP_LINES="$FD_CAP_LINES" fd_py -c '
-import os, sys
-try:
-    sys.stdout.reconfigure(newline="\n")   # Windows: niente \r\n che consuma il cap
-except Exception:
-    pass
-t = sys.stdin.read().replace("\r\n", "\n")
-C, L = int(os.environ["FD_CAP_CHARS"]), int(os.environ["FD_CAP_LINES"])
-cut = False
-lines = t.split("\n")
-if len(lines) > L:
-    t = "\n".join(lines[:L]); cut = True
-if len(t) > C:
-    t = t[:C]; cut = True
-if cut:
-    t = t.rstrip() + "\n[fd: SessionStart output cut at the 8000-char/200-line hook cap]"
-sys.stdout.write(t if t.endswith("\n") else t + "\n")
-' 2>/dev/null)"
+FD_FINAL="$(printf '%s\n' "$FD_OUT" | FD_CAP_CHARS="$FD_CAP_CHARS" FD_CAP_LINES="$FD_CAP_LINES" fd_py "${CLAUDE_PLUGIN_ROOT}/scripts/kernel-cap.py" 2>/dev/null)"
 if [ -z "$FD_FINAL" ]; then
   FD_FINAL="${FD_OUT:0:$FD_CAP_CHARS}"
   [ "${#FD_OUT}" -gt "$FD_CAP_CHARS" ] && FD_FINAL="${FD_FINAL}"$'\n''[fd: SessionStart output cut at the 8000-char/200-line hook cap]'
