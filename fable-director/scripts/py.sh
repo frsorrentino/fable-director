@@ -11,4 +11,4 @@ fi
   echo "fable-director: no Python 3 found (tried python3, python, py -3). Install Python 3.8+ (python.org); gates, telemetry and statusline stay off until then." >&2
   exit 0
 }
-exec "$FD_PYTHON" "$@"
+exit 0
