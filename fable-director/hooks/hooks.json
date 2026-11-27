@@ -5,15 +5,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/session-kernel.sh\"",
-            "timeout": 60
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/observe/py.sh\" \"${CLAUDE_PLUGIN_ROOT}/observe/observe.py\" session-start fable-director",
             "timeout": 10
           }
