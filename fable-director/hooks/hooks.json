@@ -10,6 +10,18 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "mcp__.*|ToolSearch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/py.sh\" \"${CLAUDE_PLUGIN_ROOT}/scripts/mcp-meter.py\"",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }
