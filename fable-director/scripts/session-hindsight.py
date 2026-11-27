@@ -90,7 +90,7 @@ def fmt(ts, event, payload):
 def hook_cwd():
     """Il cwd arriva dal JSON su stdin, come per OGNI altro hook del plugin
     (perimeter-gate, stop-budget-check, pre-delegation-gate: `data["cwd"]`).
-    Nessuno legge stdin prima di noi in session-kernel.sh, quindi il payload
+    Il kernel (session-kernel.py) legge lo stdin e lo ripassa a noi, quindi il payload
     e' ancora integro.
 
     Guardia anti-blocco: stdin puo' essere un TTY (invocazione manuale) o

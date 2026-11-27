@@ -39,7 +39,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 ROOT = REPO / "fable-director"
-SCRIPT = ROOT / "scripts" / "session-kernel.sh"
+SCRIPT = ROOT / "scripts" / "session-kernel.py"
 SKILL = ROOT / "skills" / "delega-efficiente" / "SKILL.md"
 CHANGELOG = REPO / "CHANGELOG.md"
 VARS = ("CLAUDE_CODE_SUBAGENT_MODEL", "CLAUDE_CODE_SUBAGENT_MODEL_FORCE")
@@ -72,7 +72,7 @@ def run(env_extra=None):
     e.update(env_extra or {})
     payload = json.dumps({"hook_event_name": "SessionStart", "session_id": "s1",
                           "cwd": "/tmp/fd-startup-cwd", "source": "startup"})
-    p = subprocess.run(["bash", str(SCRIPT)], env=e, text=True, input=payload,
+    p = subprocess.run(["bash", str(ROOT / "scripts" / "py.sh"), str(SCRIPT)], env=e, text=True, input=payload,
                        capture_output=True, timeout=120)
     return p.stdout
 

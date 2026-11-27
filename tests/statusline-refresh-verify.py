@@ -124,7 +124,7 @@ check("S8 statusLine di terzi → non toccata, exit 2",
       f"rc={r6.returncode} {settings(cfg6)}")
 
 # --auto (1.50.1): dal SessionStart hook, muto salvo quando scrive
-KERNEL = ROOT / "scripts" / "session-kernel.sh"
+KERNEL = ROOT / "scripts" / "session-kernel.py"
 cfg7 = tmp / "c7"
 cfg7.mkdir()
 r7 = run(cfg7, "--auto")
@@ -158,13 +158,13 @@ home = tmp / "h9"
 (home / ".claude").mkdir(parents=True)
 e = dict(os.environ, HOME=str(home), CLAUDE_PLUGIN_ROOT=str(ROOT))
 e.pop("CLAUDE_CONFIG_DIR", None)
-k1 = subprocess.run(["bash", str(KERNEL)], env=e, text=True, capture_output=True, timeout=60,
+k1 = subprocess.run(["bash", str(ROOT / "scripts" / "py.sh"), str(KERNEL)], env=e, text=True, capture_output=True, timeout=60,
                     input=json.dumps({"source": "startup", "cwd": str(tmp)}))
 s9 = settings(home / ".claude").get("statusLine") or {}
 check("A6 SessionStart startup → statusLine scritta in settings.json e riga STATUSLINE al modello",
       "statusline-ctx.sh" in s9.get("command", "") and "STATUSLINE installed in settings.json (auto)" in k1.stdout,
       f"{s9} | {k1.stdout[-300:]}")
-k2 = subprocess.run(["bash", str(KERNEL)], env=e, text=True, capture_output=True, timeout=60,
+k2 = subprocess.run(["bash", str(ROOT / "scripts" / "py.sh"), str(KERNEL)], env=e, text=True, capture_output=True, timeout=60,
                     input=json.dumps({"source": "startup", "cwd": str(tmp)}))
 check("A7 seconda sessione → nessuna riga STATUSLINE",
       "STATUSLINE installed" not in k2.stdout, k2.stdout[-300:])

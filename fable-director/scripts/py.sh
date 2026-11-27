@@ -10,7 +10,8 @@
 # Order: $FD_PYTHON (override) → python3 not under WindowsApps → cached path (Windows) → probe python3, python, py -3.
 # The probe costs ~0.1-0.3 s on Windows, so its result is cached in ~/.claude/fable-director/python-path.
 # Also: Windows Python writes pipes and files in cp1252 → PYTHONUTF8/PYTHONIOENCODING force UTF-8.
-# With no Python at all: one line on stderr, exit 0 — a hook must not turn into an error on every event.
+# With no Python at all: one line on stdout, exit 0 — a hook must not turn into an error on every event,
+# and on stdout SessionStart and UserPromptSubmit hand it to the model (1.65.4: the kernel is Python now).
 
 _fd_py_resolve() {
   [ -n "${FD_PYTHON:-}" ] && return 0
@@ -58,7 +59,7 @@ if [ "${BASH_SOURCE[0]}" != "$0" ]; then
 fi
 
 [ -n "${FD_PYTHON:-}" ] || {
-  echo "fable-director: no Python 3 found, tried python3, python and py -3: install Python 3.8+ from python.org, until then gates, telemetry and statusline stay off" >&2
+  echo "fable-director: no Python 3 found, tried python3, python and py -3: install Python 3.8+ from python.org, until then gates, telemetry and statusline stay off"
   exit 0
 }
 exec "$FD_PYTHON" "$@"

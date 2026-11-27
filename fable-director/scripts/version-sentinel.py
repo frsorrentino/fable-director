@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sentinella versione cache (SessionStart, via session-kernel.sh).
+"""Sentinella versione cache (SessionStart, via session-kernel.py).
 
 Claude Code copia il plugin nella cache all'install e non la ricontrolla mai:
 con un marketplace locale la cache resta silenziosamente indietro rispetto

@@ -2,7 +2,7 @@
 """soft-deps-sync.py — add the plugin's shipped soft-dependency entries to the
 user's registry, once, never overwriting.
 
-Called by session-kernel.sh at SessionStart. ~/.claude/fable-director/
+Called by session-kernel.py at SessionStart. ~/.claude/fable-director/
 soft-deps.json is the USER's file (route-hint.py reads it, the kernel points
 the model at it): the plugin cannot ship it whole without clobbering local
 entries. So this script:

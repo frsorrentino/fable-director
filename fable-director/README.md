@@ -56,7 +56,7 @@ time by a model rather than by code.
 
 | Piece | Role |
 |---|---|
-| `hooks/hooks.json` + `scripts/session-kernel.sh` | Injects the kernel at every SessionStart (~500 tokens with header and playbook pointer): 6 routing axes + never-delegate + pointer to the full policy |
+| `hooks/hooks.json` + `scripts/session-kernel.py` (through `scripts/py.sh`) | Injects the kernel at every SessionStart (~500 tokens with header and playbook pointer): 6 routing axes + never-delegate + pointer to the full policy |
 | `kernel.md` | The kernel text |
 | `skills/delega-efficiente/SKILL.md` | Full policy, loaded on-demand: delegation contract, falsifiable pre-budget (3× threshold, anti-Goodhart), rule-of-3 with best-of-3, script promotion, playbook rules, telemetry |
 | `skills/delega-efficiente/tools/session-cost-report.py` | Token report per model/main/subagents from JSONL transcripts; cache/delegation metrics (alarms, not targets); reads the budget file on its own and prints ≥3× flags |

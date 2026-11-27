@@ -6,12 +6,13 @@ cartella calcolata (COMMAND_PATH_COMPUTED): gli script lanciati dagli hook
 nominano file, e leggono la radice da CLAUDE_PLUGIN_ROOT.
 
   R1 hooks.json: ogni ${CLAUDE_PLUGIN_ROOT} è seguito da /<percorso di un file>
-  R2 session-kernel.sh, detach.sh, statusline-install.sh: niente dirname, niente cd,
+  R2 detach.sh, statusline-install.sh (il kernel e' Python dalla 1.65.4): niente dirname, niente cd,
      niente "${CLAUDE_PLUGIN_ROOT}" o "${CLAUDE_PLUGIN_ROOT}/scripts" come argomento
   R3 statusline-install.sh con CLAUDE_PLUGIN_ROOT: statusLine = bash "<radice>/scripts/statusline-ctx.sh"
   R4 senza CLAUDE_PLUGIN_ROOT, lanciato col percorso assoluto: stesso comando
   R5 senza CLAUDE_PLUGIN_ROOT, lanciato con un percorso relativo: percorso reso assoluto
   R6 session-kernel su Windows simulato: la riga FD Windows nomina py.sh e scripts/NAME.py
+  R8 SessionStart lancia session-kernel.py tramite py.sh, nessun kernel shell (1.65.4)
   R7 niente here-document negli script degli hook, commenti compresi; la fusione della statusLine
      e' un file (scripts/statusline-merge.py) lanciato per percorso letterale (1.65.3)
 
@@ -43,7 +44,7 @@ bad = [c for c in cmds for m in re.finditer(r"\$\{CLAUDE_PLUGIN_ROOT\}(.?)([^\"\
 check("R1 hooks.json: ${CLAUDE_PLUGIN_ROOT} always followed by a file path", not bad and cmds, bad)
 
 offenders = {}
-for name in ("session-kernel.sh", "detach.sh", "statusline-install.sh"):
+for name in ("detach.sh", "statusline-install.sh"):
     code = "\n".join(l for l in (SCRIPTS / name).read_text(encoding="utf-8").splitlines()
                      if not l.lstrip().startswith("#"))
     hits = [p for p in ("dirname", "cd \"", "cd $", '"${CLAUDE_PLUGIN_ROOT}"',
@@ -54,7 +55,7 @@ check("R2 hook scripts compute no folder and pass none", not offenders, offender
 
 heredocs = {n: [i for i, l in enumerate((SCRIPTS / n).read_text(encoding="utf-8").splitlines(), 1)
                  if "<<" in l]
-            for n in ("session-kernel.sh", "statusline-install.sh", "detach.sh")}
+            for n in ("statusline-install.sh", "detach.sh")}
 inst = (SCRIPTS / "statusline-install.sh").read_text(encoding="utf-8")
 check("R7 no here-document in hook scripts, comments included; the statusLine merge is a file (1.65.3)",
       not any(heredocs.values()) and (SCRIPTS / "statusline-merge.py").is_file()
@@ -94,12 +95,17 @@ home = Path(tempfile.mkdtemp(prefix="fd-rootargs-k-"))
 env = dict(os.environ, HOME=str(home), USERPROFILE=str(home), CLAUDE_PLUGIN_ROOT=str(ROOT),
            OSTYPE="msys")
 env.pop("CLAUDE_CONFIG_DIR", None)
-k = subprocess.run(["bash", "-c", f'OSTYPE=msys; . "{SCRIPTS / "session-kernel.sh"}"'],
+k = subprocess.run(["bash", str(SCRIPTS / "py.sh"), str(SCRIPTS / "session-kernel.py")],
                    capture_output=True, text=True, env=env, input="{}", timeout=120)
 line = next((l for l in k.stdout.splitlines() if l.startswith("FD Windows:")), "")
 check("R6 Windows kernel line names py.sh and scripts/NAME.py",
       f'bash "{SCRIPTS.as_posix()}/py.sh" "{SCRIPTS.as_posix()}/NAME.py" ARGS' in line,
       line or k.stdout[-400:])
+
+ss = [h["command"] for g in hooks["hooks"]["SessionStart"] for h in g["hooks"]]
+check("R8 SessionStart runs the Python kernel through py.sh; no shell kernel left (1.65.4)",
+      'bash "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" "${CLAUDE_PLUGIN_ROOT}/scripts/session-kernel.py"' in ss
+      and not (SCRIPTS / "session-kernel.sh").exists() and (SCRIPTS / "session-kernel.py").is_file(), ss)
 
 print(f"\n{len(passed)} passed, {len(failed)} failed")
 sys.exit(1 if failed else 0)

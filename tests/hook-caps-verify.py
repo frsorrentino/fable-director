@@ -106,7 +106,8 @@ def run_kernel(home, plugin_root=ROOT):
     e.pop("CLAUDE_CONFIG_DIR", None)
     payload = json.dumps({"hook_event_name": "SessionStart", "session_id": "s1",
                           "cwd": "/tmp/fd-caps-cwd", "source": "startup"})
-    p = subprocess.run(["bash", str(SCRIPTS / "session-kernel.sh")], env=e, text=True,
+    p = subprocess.run(["bash", str(SCRIPTS / "py.sh"), str(Path(plugin_root) / "scripts" / "session-kernel.py")],
+                       env=e, text=True,
                        input=payload, capture_output=True, timeout=60)
     return p.stdout
 
@@ -141,7 +142,7 @@ print(f"      evidenza: output utente nuovo {len(out)} char (cap 8000)")
 def fat_plugin(kernel_chars):
     tmp = Path(tempfile.mkdtemp(prefix="fd-caps-plugin"))
     (tmp / "scripts").mkdir()
-    for f in ("session-kernel.sh", "session-hindsight.py", "version-sentinel.py"):
+    for f in ("session-kernel.py", "py.sh", "session-hindsight.py", "version-sentinel.py"):
         shutil.copy(SCRIPTS / f, tmp / "scripts" / f)
     (tmp / "kernel.md").write_text("K" * kernel_chars + "\n")
     return tmp

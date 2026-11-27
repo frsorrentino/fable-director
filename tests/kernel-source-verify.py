@@ -25,7 +25,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent / "fable-director"
-SCRIPT = ROOT / "scripts" / "session-kernel.sh"
+SCRIPT = ROOT / "scripts" / "session-kernel.py"
 FAILS = []
 
 
@@ -39,7 +39,7 @@ def check(name, ok, detail=""):
 def run(home, payload, cwd="/tmp/fd-kernel-cwd"):
     e = dict(os.environ, HOME=str(home), CLAUDE_PLUGIN_ROOT=str(ROOT))
     e.pop("CLAUDE_CONFIG_DIR", None)
-    p = subprocess.run(["bash", str(SCRIPT)], env=e, text=True,
+    p = subprocess.run(["bash", str(ROOT / "scripts" / "py.sh"), str(SCRIPT)], env=e, text=True,
                        input=payload, capture_output=True, timeout=120)
     return p.stdout
 

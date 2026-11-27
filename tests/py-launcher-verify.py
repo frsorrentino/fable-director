@@ -11,7 +11,7 @@ ed esce 9009/49. Qui lo si simula su Linux con uno stub in una cartella WindowsA
   L5 sourced: FD_PYTHON esportato; senza Python ritorna 1 senza uscire
   L6 hooks.json: nessun python3 nudo, ogni comando passa da py.sh
   L7 command body e skill: nessun python3 (observe.md e' generato da claude-observe)
-  L8 session-kernel senza Python: kernel intero + avviso, niente domanda XF, contatore intatto
+  L8 session-kernel senza Python (1.65.4: e' Python): niente kernel, l'avviso di py.sh su stdout, niente domanda XF, contatore intatto
   L9 statusline senza Python: una riga che lo dice, exit 0
   L10 un hook vero (perimeter-gate) dietro lo stub, via py.sh: exit 0, niente messaggio dello Store
 """
@@ -87,8 +87,8 @@ try:
 
     # L3
     r = run([BASH, str(PYSH), "-c", "print(1)"], f"{store}:{bare}", home)
-    check("L3 nessun Python: exit 0, stdout vuoto, una riga su stderr",
-          r.returncode == 0 and r.stdout == "" and r.stderr.count("\n") == 1 and "no Python 3 found" in r.stderr,
+    check("L3 nessun Python: exit 0, una riga su stdout (1.65.4: la vede il modello), stderr vuoto",
+          r.returncode == 0 and r.stderr == "" and r.stdout.count("\n") == 1 and "no Python 3 found" in r.stdout,
           repr((r.returncode, r.stdout, r.stderr)))
 
     # L4
@@ -136,11 +136,14 @@ try:
     # L8
     h8 = tmp / "h8"
     h8.mkdir()
-    r = run([BASH, str(PLUGIN / "scripts" / "session-kernel.sh")], f"{store}:{bare}", h8, stdin='{"source":"startup"}')
+    r = run([BASH, str(PYSH), str(PLUGIN / "scripts" / "session-kernel.py")], f"{store}:{bare}", h8,
+            stdin='{"source":"startup"}')
     xf_count = h8 / ".claude" / "fable-director" / "xf-onboarding-count"
-    check("L8a kernel senza Python: esce intero", r.returncode == 0 and "FABLE-DIRECTOR KERNEL" in r.stdout
-          and "Before delegating" in r.stdout, repr((r.returncode, r.stdout[-300:], r.stderr[-300:])))
-    check("L8b kernel senza Python: avviso gate spenti", "NO PYTHON 3" in r.stdout, r.stdout[-300:])
+    check("L8a kernel senza Python: exit 0, niente kernel (e' Python dalla 1.65.4)",
+          r.returncode == 0 and "FABLE-DIRECTOR KERNEL" not in r.stdout,
+          repr((r.returncode, r.stdout[-300:], r.stderr[-300:])))
+    check("L8b kernel senza Python: l'avviso di py.sh arriva su stdout, gate spenti",
+          "no Python 3 found" in r.stdout and "gates, telemetry and statusline stay off" in r.stdout, r.stdout[-300:])
     check("L8c kernel senza Python: niente domanda XF, contatore intatto",
           "XF ONBOARDING" not in r.stdout and not xf_count.exists())
     check("L8d kernel senza Python: niente messaggio dello Store", STORE_MSG not in r.stdout + r.stderr, r.stderr[-300:])

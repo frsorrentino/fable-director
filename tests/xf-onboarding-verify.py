@@ -19,7 +19,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 PLUGIN = REPO / "fable-director"
-KERNEL = PLUGIN / "scripts" / "session-kernel.sh"
+KERNEL = PLUGIN / "scripts" / "session-kernel.py"
 
 passed = failed = 0
 
@@ -36,7 +36,7 @@ def check(name, cond, detail=""):
 
 def run(home):
     return subprocess.run(
-        ["bash", str(KERNEL)],
+        ["bash", str(PLUGIN / "scripts" / "py.sh"), str(KERNEL)],
         env={"HOME": str(home), "CLAUDE_PLUGIN_ROOT": str(PLUGIN),
              "PATH": "/usr/bin:/bin"},
         # stdin esplicito: il kernel fa `cat` se stdin non e' un tty — con la

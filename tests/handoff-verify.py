@@ -220,7 +220,7 @@ def main():
     st7 = fd(h7) / "handoffs" / slug(proj)
     st7.mkdir(parents=True)
     (st7 / f"{today}.md").write_text("# handoff\n")
-    r = run(["bash", str(SCRIPTS / "session-kernel.sh")], h7,
+    r = run(["bash", str(SCRIPTS / "py.sh"), str(SCRIPTS / "session-kernel.py")], h7,
             stdin=json.dumps({"source": "startup", "cwd": str(proj), "session_id": "s7"}))
     check("H7 SessionStart: handoff line present, onboarding block still present, under the cap",
           f"Handoff {today}:" in r.stdout and "XF ONBOARDING" in r.stdout
