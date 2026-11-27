@@ -44,7 +44,7 @@ fd_core() {
       FD_WIN_PY="$(printf '%s' "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" | tr '\\' '/')"
       # Ogni argomento nomina un file, mai la cartella da sola (1.65.1).
       FD_WIN_NAME="$(printf '%s' "${CLAUDE_PLUGIN_ROOT}/scripts/NAME.py" | tr '\\' '/')"
-      printf '\nFD Windows: run every plugin script as bash "%s" "%s" ARGS — never python3 or the bare path, since python3 here is the Microsoft Store alias.\n' "$FD_WIN_PY" "$FD_WIN_NAME" ;;
+      printf '\nFD Windows: run every plugin script through the plugin launcher py.sh, never python3 or the bare path, since python3 here is the Microsoft Store alias.\n'
   esac
 
   # Sentinella versione: avvisa se la cache in esecuzione è più vecchia della
@@ -141,9 +141,8 @@ if [ "$XF_SKIP" = "0" ] && [ ! -f "$XF_CFG" ] && [ ! -f "$XF_DONE" ]; then
   if [ "$N" -lt 3 ]; then
     # Testo su una riga con printf (1.65.3), niente here-document: i valori
     # entrano come argomenti, il testo stampato resta lo stesso.
-    printf -v FD_XF '\nXF ONBOARDING — ASK THE USER NOW, attempt %s/3: external free-tier executors are not configured. Before anything else, ask ONE multiple-choice question with the AskUserQuestion tool, or a plain question if unavailable: header "Executors"; question "fable-director can route non-quality-sensitive batch work and cross-family verification to free external models, at zero Claude tokens. Connect one now?"; options (1) "Gemini — free API key" (Google AI Studio, daily-reset limits), (2) "Codex CLI — ChatGPT plan" (usage included in the plan), (3) "Both", (4) "No — don'\''t ask again". On 1-3: run bash "%s" "%s" --doctor and follow its guidance. On 4: run touch "%s" so this never reappears. If the user skips it, do nothing — asked again next session, 3 times at most.' \
-      "$((N + 1))" "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" \
-      "${CLAUDE_PLUGIN_ROOT}/scripts/external-exec.py" "$XF_DONE"
+    printf -v FD_XF '\nXF ONBOARDING — ASK THE USER NOW, attempt %s/3: external free-tier executors are not configured. Before anything else, ask ONE multiple-choice question with the AskUserQuestion tool, or a plain question if unavailable: header "Executors"; question "fable-director can route non-quality-sensitive batch work and cross-family verification to free external models, at zero Claude tokens. Connect one now?"; options (1) "Gemini — free API key" (Google AI Studio, daily-reset limits), (2) "Codex CLI — ChatGPT plan" (usage included in the plan), (3) "Both", (4) "No — don'\''t ask again". On 1-3: run the external-exec doctor and follow its guidance. On 4: create the onboarding done marker so this never reappears. If the user skips it, do nothing — asked again next session, 3 times at most.' \
+      "$((N + 1))"
     # Il blocco entra solo se resta sotto il cap: altrimenti verrebbe troncato
     # a meta' e la domanda non arriverebbe mai — e il tentativo NON si consuma.
     if [ $(( ${#FD_OUT} + ${#FD_XF} + 1 )) -le "$FD_CAP_CHARS" ]; then
@@ -162,7 +161,7 @@ fi
 case "${OSTYPE:-}" in
   msys*|cygwin*|win*) ;;
   *)
-    FD_SP="$(printf '\nFD scripts, not on PATH: python3 "%s"' "${CLAUDE_PLUGIN_ROOT}/scripts/fd-telemetry.py")"
+    FD_SP="$(printf '\nFD scripts, not on PATH: run them through the plugin launcher py.sh.')"
     if [ $(( ${#FD_OUT} + ${#FD_SP} + 1 )) -le "$FD_CAP_CHARS" ]; then
       FD_OUT="${FD_OUT}"$'\n'"${FD_SP}"
     fi ;;
